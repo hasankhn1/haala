@@ -36,8 +36,12 @@ export const API_URL =
 export const API_PREFIX = '/api/v1';
 export const API_BASE = `${API_URL}${API_PREFIX}`;
 
-/** Fallback delivery location when the user hasn't picked one (DHA Phase 5, Lahore). */
-export const DEFAULT_LOCATION = { lat: 31.4697, lng: 74.4111 };
+/**
+ * Fallback delivery location when the user hasn't picked one — DHA Peshawar,
+ * inside the DHA store's delivery radius so a fresh install can shop
+ * immediately instead of hitting "we don't deliver here yet".
+ */
+export const DEFAULT_LOCATION = { lat: 33.9793, lng: 71.6903 };
 
 /**
  * The delivery promise shown across the app (Home value prop, cart, product
