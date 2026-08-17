@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "Haala",
+    "slug": "haala-customer",
+    "scheme": "haala",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "backgroundColor": "#F8FAFC",
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Haala uses your location to find the nearest store and set your delivery address."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "1.9.24"
+          }
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.haala.customer",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Haala uses your location to find the nearest store and set your delivery address."
+      }
+    },
+    "android": {
+      "package": "com.haala.customer",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F172A"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    }
+  }
+}
