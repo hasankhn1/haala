@@ -53,43 +53,104 @@ export const SEED_USERS = [
     phone: '+923004445566',
     email: null,
     role: 'rider' as const,
-    homeStoreCode: 'LHR-DHA5',
+    homeStoreCode: 'PEW-DHA',
   },
   {
     name: 'Usman Tariq',
     phone: '+923007778899',
     email: null,
     role: 'rider' as const,
-    homeStoreCode: 'LHR-GULBERG',
+    homeStoreCode: 'PEW-HYT',
   },
   { name: 'Ops Admin', phone: '+923009990000', email: 'admin@haala.test', role: 'admin' as const },
 ] as const;
 
-/** Dark stores. Coordinates are real Lahore locations. */
+/**
+ * Dark stores — Peshawar.
+ *
+ * Coordinates are approximate centres for each area and are the thing that
+ * decides serviceability, so verify them against a map before any real pilot;
+ * they're editable in the ops dashboard (Stores screen) without a redeploy.
+ */
 export const SEED_STORES = [
   {
-    name: 'Haala — DHA Phase 5',
-    code: 'LHR-DHA5',
-    addressLine: 'Commercial Broadway, DHA Phase 5',
-    area: 'DHA Phase 5',
-    city: 'Lahore',
-    latitude: 31.4697,
-    longitude: 74.4111,
-    deliveryRadiusMeters: 5000,
+    name: 'Haala — DHA Peshawar',
+    code: 'PEW-DHA',
+    addressLine: 'Sector B, Commercial Area, DHA Phase 1',
+    area: 'DHA Peshawar',
+    city: 'Peshawar',
+    latitude: 33.9793,
+    longitude: 71.6903,
+    deliveryRadiusMeters: 6000,
   },
   {
-    name: 'Haala — Gulberg',
-    code: 'LHR-GULBERG',
-    addressLine: 'Main Boulevard, Gulberg III',
-    area: 'Gulberg',
-    city: 'Lahore',
-    latitude: 31.5204,
-    longitude: 74.3587,
-    deliveryRadiusMeters: 5000,
+    name: 'Haala — Hayatabad',
+    code: 'PEW-HYT',
+    addressLine: 'Phase 3, Main Boulevard',
+    area: 'Hayatabad',
+    city: 'Peshawar',
+    latitude: 33.9962,
+    longitude: 71.4419,
+    deliveryRadiusMeters: 6000,
   },
 ] as const;
 
 export const SEED_CATEGORIES: SeedCategory[] = [
+  {
+    slug: 'dry-fruits',
+    name: 'Dry Fruits',
+    imageUrl: null,
+    products: [
+      {
+        slug: 'almonds',
+        name: 'Almonds (Badam)',
+        unit: '250 g',
+        price: 1250,
+        description: 'Whole almonds, graded and sorted.',
+        imageUrl: '/static/products/almonds.jpg',
+      },
+      {
+        slug: 'walnuts',
+        name: 'Walnuts (Akhrot)',
+        unit: '250 g',
+        price: 950,
+        description: 'Shelled walnut halves from the northern valleys.',
+        imageUrl: '/static/products/walnuts.jpg',
+      },
+      {
+        slug: 'pistachios',
+        name: 'Pistachios (Pista)',
+        unit: '250 g',
+        price: 1850,
+        description: 'Roasted and salted pistachios.',
+        imageUrl: '/static/products/pistachios.jpg',
+      },
+      {
+        slug: 'dried-apricots',
+        name: 'Dried Apricots (Khubani)',
+        unit: '250 g',
+        price: 620,
+        description: 'Sun-dried Hunza apricots.',
+        imageUrl: '/static/products/dried-apricots.jpg',
+      },
+      {
+        slug: 'raisins',
+        name: 'Raisins (Kishmish)',
+        unit: '250 g',
+        price: 450,
+        description: 'Golden seedless raisins.',
+        imageUrl: '/static/products/raisins.jpg',
+      },
+      {
+        slug: 'dried-figs',
+        name: 'Dried Figs (Anjeer)',
+        unit: '250 g',
+        price: 1400,
+        description: 'Soft dried figs.',
+        imageUrl: '/static/products/dried-figs.jpg',
+      },
+    ],
+  },
   {
     slug: 'fruits-vegetables',
     name: 'Fruits & Vegetables',
@@ -374,6 +435,14 @@ export const SEED_CATEGORIES: SeedCategory[] = [
         price: 60,
         description: 'Free-flowing iodised salt.',
         imageUrl: '/static/products/salt.jpg',
+      },
+      {
+        slug: 'green-tea',
+        name: 'Green Tea (Qehwa)',
+        unit: '200 g',
+        price: 480,
+        description: 'Loose-leaf green tea for qehwa.',
+        imageUrl: '/static/products/green-tea.jpg',
       },
       {
         slug: 'black-tea',
