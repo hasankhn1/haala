@@ -1,0 +1,384 @@
+/*
+ * Onyx & Ink, translated to CSS custom properties.
+ *
+ * The values are copied from `@haala/design-tokens` deliberately rather than
+ * generated: this is a stylesheet, and a build step to emit four dozen custom
+ * properties would cost more than it saves. If the palette moves, it moves
+ * here too — `packages/design-tokens/DESIGN.md` is the source of truth.
+ */
+:root {
+  --onyx-50: #f8fafc;
+  --onyx-100: #f1f5f9;
+  --onyx-200: #e2e8f0;
+  --onyx-300: #cbd5e1;
+  --onyx-400: #94a3b8;
+  --onyx-500: #64748b;
+  --onyx-700: #334155;
+  --onyx-800: #1e293b;
+  --onyx-900: #0f172a;
+
+  --ink-50: #eef2ff;
+  --ink-900: #1e1b4b;
+
+  --green-50: #dcfce7;
+  --green-500: #16a34a;
+  --green-700: #166534;
+  --red-50: #fef2f2;
+  --red-600: #ba1a1a;
+  --amber-50: #fffbeb;
+  --amber-600: #d97706;
+
+  --bg: var(--onyx-50);
+  --surface: #ffffff;
+  --muted: var(--onyx-100);
+  --border: var(--onyx-200);
+  --text: var(--onyx-900);
+  --text-secondary: var(--onyx-500);
+
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --shadow-card: 0 10px 30px rgba(15, 23, 42, 0.04);
+  --shadow-raised: 0 12px 32px rgba(15, 23, 42, 0.1);
+
+  --sidebar-width: 232px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    'Plus Jakarta Sans',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+h1 {
+  font-size: 24px;
+  font-weight: 600;
+}
+h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────── */
+.shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  background: var(--onyx-900);
+  color: #fff;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+.sidebar .brand {
+  font-size: 18px;
+  font-weight: 700;
+  padding: 0 12px 20px;
+  letter-spacing: -0.02em;
+}
+.sidebar a {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  color: rgba(255, 255, 255, 0.66);
+  font-weight: 500;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sidebar a:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+.sidebar a[aria-current='page'] {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.sidebar .spacer {
+  flex: 1;
+}
+.sidebar .who {
+  padding: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+}
+
+.main {
+  padding: 28px 32px 64px;
+  max-width: 1400px;
+  width: 100%;
+}
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.page-head p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+}
+
+/* ── Surfaces ───────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card);
+  padding: 20px;
+}
+.toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+/* ── Table ──────────────────────────────────────────────────────────── */
+.table-wrap {
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card);
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+tbody tr:last-child td {
+  border-bottom: none;
+}
+tbody tr:hover {
+  background: var(--onyx-50);
+}
+td.num,
+th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Controls ───────────────────────────────────────────────────────── */
+.btn {
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  font-weight: 600;
+  font-size: 13px;
+  background: var(--onyx-900);
+  color: #fff;
+  transition: opacity 0.15s;
+}
+.btn:hover:not(:disabled) {
+  opacity: 0.88;
+}
+.btn.secondary {
+  background: transparent;
+  border-color: var(--onyx-900);
+  color: var(--onyx-900);
+}
+.btn.ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+.btn.sm {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+.btn.danger {
+  background: var(--red-600);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+input,
+select {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  outline: none;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+input:focus,
+select:focus {
+  background: var(--surface);
+  border-color: var(--onyx-900);
+}
+input.inline {
+  padding: 5px 8px;
+  width: 96px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Badges ─────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: var(--radius-xs);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.badge.neutral {
+  background: var(--onyx-100);
+  color: var(--onyx-700);
+}
+.badge.ink {
+  background: var(--ink-50);
+  color: var(--ink-900);
+}
+.badge.dark {
+  background: var(--onyx-900);
+  color: #fff;
+}
+.badge.good {
+  background: var(--green-50);
+  color: var(--green-700);
+}
+.badge.bad {
+  background: var(--red-50);
+  color: var(--red-600);
+}
+.badge.warn {
+  background: var(--amber-50);
+  color: var(--amber-600);
+}
+
+/* ── Misc ───────────────────────────────────────────────────────────── */
+.muted {
+  color: var(--text-secondary);
+}
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.stat {
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card);
+  padding: 16px;
+}
+.stat .value {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.stat .label {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+.error-banner {
+  background: var(--red-50);
+  color: var(--red-600);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-weight: 500;
+}
+
+/* Login */
+.login-wrap {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-raised);
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}

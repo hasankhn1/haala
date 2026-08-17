@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "Haala Rider",
+    "slug": "haala-rider",
+    "scheme": "haalarider",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "backgroundColor": "#F8FAFC",
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Haala Rider shares your location with the customer while you are delivering their order."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "1.9.24"
+          }
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.haala.rider",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Haala Rider shares your location with the customer while you are delivering their order."
+      }
+    },
+    "android": {
+      "package": "com.haala.rider",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F172A"
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    }
+  }
+}

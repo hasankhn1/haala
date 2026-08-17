@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: haala-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: haala
+      POSTGRES_PASSWORD: haala
+      POSTGRES_DB: haala
+    ports:
+      # Host port 5433 by default to avoid clashing with a local Postgres on 5432.
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - haala_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U haala"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: haala-redis
+    restart: unless-stopped
+    ports:
+      # Host port 6380 by default to avoid clashing with a local Redis on 6379.
+      - "${REDIS_PORT:-6380}:6379"
+    volumes:
+      - haala_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  haala_pg:
+  haala_redis:
