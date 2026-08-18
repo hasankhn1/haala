@@ -13,7 +13,9 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/db/seed.ts",
-    "test": "tsx --test \"src/**/*.test.ts\""
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "db:deploy": "node dist/db/migrate.js",
+    "db:migrate:local": "tsx src/db/migrate.ts"
   },
   "dependencies": {
     "@haala/shared": "workspace:*",

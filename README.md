@@ -7,10 +7,13 @@ A pnpm + Turborepo monorepo:
 - **`apps/api`** — Node.js + Express + TypeScript backend (Postgres + Redis, socket.io)
 - **`apps/customer`** — React Native (Expo) customer app
 - **`apps/rider`** — React Native (Expo) rider app
+- **`apps/dashboard`** — Next.js ops dashboard (analytics, orders, riders, pricing, promos)
 - **`packages/shared`** — domain types + zod API contracts
 - **`packages/design-tokens`** — the design system tokens
+- **`packages/ui`** — shared React Native component library
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full technical design.
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full technical design, and
+[DEPLOYMENT.md](./DEPLOYMENT.md) for shipping it to Railway.
 
 ## Quick start
 
@@ -26,6 +29,9 @@ pnpm dev:api                         # API on http://localhost:4000
 
 Health check: `curl http://localhost:4000/health`
 
+`db:push` is the local workflow. Production applies **generated migrations**
+only — `push` infers changes and will drop a column against real data.
+
 ## Common commands
 
 | Command | What it does |
@@ -33,7 +39,10 @@ Health check: `curl http://localhost:4000/health`
 | `pnpm dev:api` | Run the API in watch mode |
 | `pnpm build` | Build all packages + api |
 | `pnpm typecheck` | Typecheck the whole workspace |
+| `pnpm test` | Run the test suite (money conversion, promo pricing guards) |
 | `pnpm infra:up` / `infra:down` | Start/stop Postgres + Redis |
 | `pnpm --filter @haala/api db:studio` | Drizzle Studio (browse the DB) |
 | `pnpm --filter @haala/customer start` | Run the customer app |
 | `pnpm --filter @haala/rider start` | Run the rider app |
+| `pnpm --filter @haala/dashboard dev` | Run the ops dashboard on :3000 |
+| `pnpm --filter @haala/api db:generate` | Generate a migration after a schema change |

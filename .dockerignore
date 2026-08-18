@@ -1,0 +1,46 @@
+# The API Dockerfile does `COPY . .`, so without this the image would carry the
+# entire dev tree — node_modules, generated Android projects and every Gradle
+# intermediate. Keep this in step with .gitignore for anything build-related.
+
+# Dependencies — reinstalled inside the image from the lockfile.
+node_modules
+**/node_modules
+.pnpm-store
+
+# Build output
+dist
+**/dist
+.next
+**/.next
+.turbo
+**/.turbo
+*.tsbuildinfo
+
+# Generated native projects (CNG regenerates these; they are gitignored too).
+apps/*/android
+apps/*/ios
+apps/*/.expo
+**/.expo
+
+# Local env — secrets come from Railway's environment, never from the image.
+.env
+.env.*
+!.env.example
+
+# Version control and editor state
+.git
+.gitignore
+.github
+.vscode
+.idea
+.claude
+
+# Local infra: the deployed API uses Railway's Postgres and Redis.
+docker-compose.yml
+
+# Docs and scratch
+*.md
+!README.md
+coverage
+*.log
+.DS_Store

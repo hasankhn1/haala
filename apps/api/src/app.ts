@@ -65,7 +65,12 @@ export const createApp = (): Express => {
    */
   app.use(
     '/static',
-    express.static(path.join(process.cwd(), 'public'), {
+    // Resolved from this file, not `process.cwd()`. In dev the process runs from
+    // `apps/api` so cwd happened to work, but in the container the working
+    // directory is the repo root — which silently served 404s for every product
+    // image. `__dirname` is `apps/api/src` under tsx and `apps/api/dist` once
+    // compiled, so `../public` is correct in both.
+    express.static(path.resolve(__dirname, '../public'), {
       maxAge: '7d',
       fallthrough: true,
     }),

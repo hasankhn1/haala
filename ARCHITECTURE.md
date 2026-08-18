@@ -61,13 +61,13 @@ follows its shape.
 `orders` · `payments` · `riders` · `delivery` · `promotions` · `notifications` ·
 `analytics`
 
-Implemented: **auth**, **users**, **payments** (abstraction + COD + stub), the
-full **customer core** — **addresses**, **stores** (serviceability),
-**catalog** (products + per-store inventory), **inventory** (+ reservation
-helpers), **cart**, **orders** (transactional placement/cancel/status + live
-timeline) — and **fulfilment**: **riders** (profile, availability, location) and
-**delivery** (claim + workflow). Still scaffolded (return `501` with planned
-endpoints): **promotions**, **notifications**, **analytics**.
+All implemented. **auth**, **users**, **payments** (abstraction + COD + stub +
+Safepay), the full **customer core** — **addresses**, **stores**
+(serviceability), **catalog** (products + per-store inventory), **inventory**
+(+ reservation helpers), **cart**, **orders** (transactional placement/cancel/
+status + live timeline) — **fulfilment**: **riders** (profile, availability,
+location) and **delivery** (claim + workflow) — and **growth**: **promotions**,
+**notifications** (inbox + Expo push), **analytics**.
 
 ### Fulfilment
 
@@ -112,6 +112,39 @@ All responses use the envelope from `@haala/shared`:
 - `authenticate` populates `req.auth = { userId, role }`; `authorize(...roles)`
   gates by role.
 
+### Promotions
+
+Discounts are computed in exactly one place — `promotionService.quote()` —
+called both by `POST /promotions/validate` for the cart preview and by
+`placeOrder` for the actual charge, so what a customer is quoted cannot diverge
+from what they are billed.
+
+Quoting inside placement takes a row lock, so two simultaneous checkouts can't
+both consume the last use of a limited code. Per-customer limits are enforced by
+`promotion_redemptions` rows rather than the `usedCount` aggregate, because a
+counter cannot express "one per customer"; cancelling an order releases the
+redemption so a cancelled order doesn't burn someone's first-order offer.
+
+`free_delivery` zeroes the delivery fee rather than adding a discount equal to
+it, so a receipt reads "Delivery: Free" instead of implying a coupon.
+
+### Notifications
+
+`notificationService.create()` writes an inbox row, emits
+`notification:created` over socket.io, and pushes to the user's devices via
+Expo's HTTP API. It never throws — it is called alongside order transitions, and
+a push failure must not surface as a failed delivery.
+
+Which transitions notify is deliberate: `placed`, `confirmed` and `preparing`
+are silent, because on a 15-minute promise they fire within seconds of each other
+and three buzzes for one order teaches people to mute the app. `arrived` gets its
+own push from the delivery side — it has no order-status equivalent and is the
+moment that most needs one.
+
+Riders are notified when an order reaches `packed`, scoped exactly as the
+claimable pool is, so nobody is told about a pickup they can't take. Tokens Expo
+reports as `DeviceNotRegistered` are deleted rather than retried forever.
+
 ### Payments
 
 `PaymentProvider` is the only seam checkout/order logic depends on:
@@ -147,7 +180,10 @@ repository call so they commit or roll back atomically:
 ## Data model
 
 Money is stored as **integer paisa** everywhere (never floats); formatted only
-at display via `formatPKR`. UUID primary keys; `snake_case` columns.
+at display via `formatPKR`. The delivery-fee rule lives once, in
+`@haala/shared`'s `pricing.ts`, imported by the API, the customer app and promo
+quoting — it used to be duplicated, which is one edit away from quoting a total
+we don't charge. UUID primary keys; `snake_case` columns.
 
 Core tables: `users`, `addresses`, `stores`, `categories`, `products`,
 `inventory` (per-store stock with reserved qty), `carts`/`cart_items`,
@@ -183,10 +219,21 @@ Rider app: Expo Router shell, sign-in, online/offline shift toggle, order queue,
 step-by-step delivery run with navigation hand-off and COD capture, history.
 Customer app: real courier on the tracking screen with a live map pin.
 
-**Phase 3 — Growth (in progress)**
-Done: **ops dashboard** (`apps/dashboard`) — order pipeline with pack-to-release,
-rider roster + store assignment, per-store pricing/stock, staff accounts.
-Remaining: promotions, notifications (push), analytics, online payment provider.
+**Phase 3 — Growth (done)**
+**Ops dashboard** (`apps/dashboard`) — analytics home, order pipeline with
+pack-to-release, rider roster + store assignment, per-store pricing/stock, promo
+codes, staff accounts.
+**Promotions** — percentage / fixed / free-delivery codes with usage and
+per-customer limits, quoted in the cart and re-priced at placement.
+**Notifications** — inbox + Expo push to both apps, on customer-visible order
+transitions and to riders when an order becomes claimable.
+**Analytics** — `/analytics/overview`: volume, money, the two fulfilment timings,
+live pipeline, top products, rider and store breakdowns, promo usage.
+**Online payments** — Safepay behind the existing `PaymentProvider` seam.
+
+**Deployment** — see [DEPLOYMENT.md](DEPLOYMENT.md). The API deploys to Railway
+from `apps/api/Dockerfile`; migrations run as a pre-deploy step from generated
+SQL, never `db:push`.
 
 ### Ops dashboard
 
@@ -211,5 +258,13 @@ pnpm --filter @haala/api db:push   # apply schema
 pnpm --filter @haala/api db:seed   # optional dev data
 pnpm build                    # build shared packages
 pnpm dev:api                  # http://localhost:4000/api/v1 (GET /health)
+pnpm test                     # 31 tests (money conversion, promo pricing guards)
 # apps:  pnpm --filter @haala/customer start   |   --filter @haala/rider start
+# dashboard: pnpm --filter @haala/dashboard dev   (http://localhost:3000)
 ```
+
+`db:push` is the local workflow. **Production runs generated migrations only** —
+`push` infers changes and will drop a column against real data. After a schema
+change, run `pnpm --filter @haala/api db:generate` and commit the SQL.
+
+Deployment: [DEPLOYMENT.md](DEPLOYMENT.md).
