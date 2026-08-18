@@ -231,6 +231,11 @@ export const deliveryService = {
       const claimed = await deliveryRepository.claim(orderId, riderUserId, codAmount, tx);
       if (!claimed) throw AppError.conflict('Another rider just took this order');
       await riderRepository.setAvailability(rider.id, RiderAvailability.Busy, tx);
+      // `orders.rider_id` existed in the schema but nothing ever wrote it, so it
+      // was permanently NULL — a trap for anyone who reasonably assumed the
+      // column meant what it says. The assignment stays authoritative; this is
+      // the denormalised convenience copy it was declared to be.
+      await orderRepository.setRider(orderId, riderUserId, tx);
       return claimed;
     });
 

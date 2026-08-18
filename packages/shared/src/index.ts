@@ -13,3 +13,4 @@ export * from './contracts/delivery';
 export * from './contracts/ops';
 export * from './contracts/promotions';
 export * from './contracts/notifications';
+export * from './contracts/analytics';

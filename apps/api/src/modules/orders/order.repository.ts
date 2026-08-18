@@ -85,6 +85,14 @@ export const orderRepository = {
     return new Map(rows.map((r) => [r.orderId, Number(r.units)]));
   },
 
+  /** Denormalised copy of who is carrying the order; see `deliveryService.claim`. */
+  async setRider(orderId: string, riderUserId: string, ex: Executor = db): Promise<void> {
+    await ex
+      .update(orders)
+      .set({ riderId: riderUserId, updatedAt: new Date() })
+      .where(eq(orders.id, orderId));
+  },
+
   async updateStatus(
     id: string,
     status: OrderStatus,

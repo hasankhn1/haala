@@ -3,5 +3,5 @@ import { readSession } from '@/lib/session';
 
 export default function Index() {
   const { accessToken } = readSession();
-  redirect(accessToken ? '/orders' : '/login');
+  redirect(accessToken ? '/dashboard' : '/login');
 }
