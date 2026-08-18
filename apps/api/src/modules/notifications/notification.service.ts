@@ -217,7 +217,7 @@ export const notificationService = {
     await notificationRepository.upsertToken(userId, token, platform);
   },
 
-  async unregisterToken(token: string): Promise<void> {
-    await notificationRepository.deleteToken(token);
+  async unregisterToken(userId: string, token: string): Promise<void> {
+    await notificationRepository.deleteToken(userId, token);
   },
 };

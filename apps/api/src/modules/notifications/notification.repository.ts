@@ -89,10 +89,27 @@ export const notificationRepository = {
       });
   },
 
-  async deleteToken(token: string, ex: Executor = db): Promise<void> {
-    await ex.delete(pushTokens).where(eq(pushTokens.token, token));
+  /**
+   * Remove one device token belonging to `userId`.
+   *
+   * Scoped to the owner: without the `userId` predicate any authenticated user
+   * could pass someone else's token and silence their order notifications.
+   * Device handover doesn't need an unscoped delete — `upsertToken` already
+   * reassigns ownership via the token unique index when a second person signs
+   * in on the same handset.
+   */
+  async deleteToken(userId: string, token: string, ex: Executor = db): Promise<void> {
+    await ex
+      .delete(pushTokens)
+      .where(and(eq(pushTokens.token, token), eq(pushTokens.userId, userId)));
   },
 
+  /**
+   * Bulk delete by token alone, deliberately unscoped. This is server-initiated
+   * pruning of tokens Expo reported as `DeviceNotRegistered` — the authority is
+   * Expo's response, not a user request, and a dead token belongs to nobody
+   * worth notifying.
+   */
   async deleteTokens(tokens: string[], ex: Executor = db): Promise<void> {
     if (tokens.length === 0) return;
     await ex.delete(pushTokens).where(inArray(pushTokens.token, tokens));

@@ -27,12 +27,17 @@ export const notificationController = {
   },
 
   /**
-   * Called on sign-out. Not scoped to the caller's own token on purpose: the
-   * token identifies a device, and the point is to stop this handset receiving
-   * the departing user's notifications.
+   * Called on sign-out, to stop this handset receiving the departing user's
+   * notifications.
+   *
+   * Scoped to the caller. An earlier version deleted by token alone, reasoning
+   * that a token identifies a device rather than a person — but that let any
+   * authenticated user silence another user's notifications by passing their
+   * token, and bought nothing: the device-handover case is already handled by
+   * the upsert on the token's unique index when the next person signs in.
    */
   async unregisterToken(req: Request, res: Response): Promise<void> {
-    await notificationService.unregisterToken(req.body.token);
+    await notificationService.unregisterToken(req.auth!.userId, req.body.token);
     sendSuccess(res, { success: true });
   },
 };
