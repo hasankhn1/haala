@@ -50,11 +50,9 @@ export const DEFAULT_LOCATION = { lat: 33.9793, lng: 71.6903 };
 export const ETA_MINUTES = 15;
 
 /**
- * Delivery-fee preview (paisa). Mirrors the server's Orders service; the server
- * remains the source of truth — this is only for showing an estimate pre-order.
+ * Delivery-fee preview. Re-exported from `@haala/shared` so the app and the
+ * API cannot disagree about the rule — the fee used to be duplicated here as
+ * its own constants, which is one edit away from quoting a total we don't charge.
+ * The server still re-prices every order at placement.
  */
-export const DELIVERY_FEE = 7900; // PKR 79
-export const FREE_DELIVERY_THRESHOLD = 200000; // PKR 2,000
-
-export const estimateDeliveryFee = (subtotal: number): number =>
-  subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE;
+export { DELIVERY_FEE, FREE_DELIVERY_THRESHOLD, deliveryFeeFor as estimateDeliveryFee } from '@haala/shared';

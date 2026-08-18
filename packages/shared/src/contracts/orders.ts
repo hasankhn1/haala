@@ -5,12 +5,18 @@ import {
   type DeliveryStatus,
   type PaymentStatus,
 } from '../enums';
+import { promoCodeSchema } from './promotions';
 import type { RiderPublicView } from './riders';
 
 export const placeOrderSchema = z.object({
   addressId: z.string().uuid(),
   paymentMethod: z.enum([PaymentMethod.Cod, PaymentMethod.Online]),
   notes: z.string().max(240).optional(),
+  /**
+   * Optional promo code. Re-priced server-side at placement — the cart's quote
+   * is a preview, never the charge.
+   */
+  promoCode: promoCodeSchema.optional(),
 });
 export type PlaceOrderInput = z.infer<typeof placeOrderSchema>;
 
@@ -66,6 +72,8 @@ export interface OrderView {
   deliveryFee: number;
   discount: number;
   total: number;
+  /** The promo code applied at order time, if any. */
+  promoCode: string | null;
   deliveryAddress: OrderAddress;
   notes: string | null;
   items: OrderItemView[];

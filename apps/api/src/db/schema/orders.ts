@@ -39,6 +39,14 @@ export const orders = pgTable(
     discount: integer().notNull().default(0),
     total: integer().notNull(),
 
+    /**
+     * Snapshot of the promo code applied, alongside the other order-time
+     * snapshots in this table. The authoritative promotion → order link lives
+     * in `promotion_redemptions`; this is here so a receipt renders without a
+     * join and still reads correctly if the promotion is later deleted.
+     */
+    promoCode: text(),
+
     deliveryAddress: jsonb().$type<AddressSnapshot>().notNull(),
     notes: text(),
     /** Guards against duplicate order creation on retry. */

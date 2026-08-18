@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatPKR, type PaymentMethod, type PlaceOrderResult } from '@haala/shared';
 import {
@@ -17,7 +17,7 @@ import {
   useToast,
 } from '@haala/ui';
 import { ApiError } from '../../src/api/client';
-import { addressesApi, ordersApi } from '../../src/api/endpoints';
+import { addressesApi, ordersApi, promotionsApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
 import { ETA_MINUTES, estimateDeliveryFee } from '../../src/config';
 import { haptics } from '../../src/lib/haptics';
@@ -43,6 +43,9 @@ export default function CartScreen() {
   const [method, setMethod] = useState<PaymentMethod>('cod');
   const [sheet, setSheet] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [promoInput, setPromoInput] = useState('');
+  const [appliedCode, setAppliedCode] = useState<string | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
   const idempotencyKey = useRef(`co-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
   // Default to the user's default address once loaded.
@@ -55,14 +58,56 @@ export default function CartScreen() {
   const data = cart.data;
   const selected = addresses.data?.find((a) => a.id === addressId) ?? null;
   const subtotal = data?.subtotal ?? 0;
-  const deliveryFee = estimateDeliveryFee(subtotal);
-  const total = subtotal + deliveryFee;
   const isEmpty = !!data && data.items.length === 0;
+
+  /**
+   * Re-price the applied promo whenever the subtotal moves. Editing quantities
+   * changes what a percentage code is worth, and can drop the cart below a
+   * code's minimum spend — a discount frozen at apply-time would then show a
+   * number the server won't honour.
+   */
+  const promo = useQuery({
+    queryKey: [...qk.promo(appliedCode ?? ''), subtotal],
+    queryFn: () => promotionsApi.validate(appliedCode as string),
+    enabled: !!appliedCode && subtotal > 0,
+    retry: false,
+  });
+
+  // A code that stops qualifying is dropped rather than left showing stale money.
+  useEffect(() => {
+    if (promo.error) {
+      setPromoError(promo.error instanceof ApiError ? promo.error.message : 'Promo code no longer applies');
+      setAppliedCode(null);
+    }
+  }, [promo.error]);
+
+  const quote = appliedCode && promo.data ? promo.data : null;
+  const deliveryFee = quote ? quote.deliveryFee : estimateDeliveryFee(subtotal);
+  const discount = quote?.discount ?? 0;
+  const total = subtotal + deliveryFee - discount;
+
+  const applyPromo = () => {
+    const code = promoInput.trim().toUpperCase();
+    if (!code) return;
+    setPromoError(null);
+    setAppliedCode(code);
+    setPromoInput('');
+  };
+
+  const clearPromo = () => {
+    setAppliedCode(null);
+    setPromoError(null);
+    setPromoInput('');
+  };
 
   const place = useMutation({
     mutationFn: () =>
       ordersApi.place(
-        { addressId: addressId as string, paymentMethod: method },
+        {
+          addressId: addressId as string,
+          paymentMethod: method,
+          ...(quote ? { promoCode: quote.code } : {}),
+        },
         idempotencyKey.current,
       ),
     onSuccess: (res: PlaceOrderResult) => {
@@ -228,6 +273,55 @@ export default function CartScreen() {
             />
           </View>
 
+          {/* Promo code */}
+          <Text variant="labelCaps" color="textSecondary" style={styles.eyebrow}>
+            Promo code
+          </Text>
+          <View style={styles.card}>
+            {quote ? (
+              <View style={styles.promoApplied}>
+                <View style={styles.promoTag}>
+                  <Ionicons name="pricetag" size={16} color={theme.colors.success} />
+                  <Text variant="bodyStrong">{quote.code}</Text>
+                </View>
+                <View style={styles.flex}>
+                  <Text variant="bodySm" color="textSecondary" numberOfLines={2}>
+                    {quote.message}
+                  </Text>
+                </View>
+                <Pressable onPress={clearPromo} hitSlop={10} accessibilityLabel="Remove promo code">
+                  <Ionicons name="close-circle" size={20} color={theme.colors.textTertiary} />
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.promoRow}>
+                <TextInput
+                  style={styles.promoInput}
+                  value={promoInput}
+                  onChangeText={setPromoInput}
+                  placeholder="Enter code"
+                  placeholderTextColor={theme.colors.textTertiary}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  onSubmitEditing={applyPromo}
+                  returnKeyType="done"
+                />
+                <Button
+                  label={promo.isFetching ? 'Checking…' : 'Apply'}
+                  variant="secondary"
+                  size="sm"
+                  disabled={!promoInput.trim() || promo.isFetching}
+                  onPress={applyPromo}
+                />
+              </View>
+            )}
+            {promoError ? (
+              <Text variant="caption" color="error">
+                {promoError}
+              </Text>
+            ) : null}
+          </View>
+
           {/* Order summary */}
           <View style={[styles.card, styles.summary]}>
             <Text variant="labelCaps" color="textSecondary">
@@ -238,6 +332,13 @@ export default function CartScreen() {
               label="Delivery Fee"
               value={deliveryFee === 0 ? 'Free' : formatPKR(deliveryFee)}
             />
+            {discount > 0 ? (
+              <SummaryRow
+                label={`Discount (${quote?.code})`}
+                value={`− ${formatPKR(discount)}`}
+                positive
+              />
+            ) : null}
             <View style={styles.hairline} />
             <View style={styles.totalRow}>
               <Text variant="bodyStrong">Total</Text>
@@ -358,13 +459,24 @@ function PaymentTile({
   );
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
+function SummaryRow({
+  label,
+  value,
+  positive = false,
+}: {
+  label: string;
+  value: string;
+  /** Money coming *off* the bill — the one place green earns its keep. */
+  positive?: boolean;
+}) {
   return (
     <View style={styles.summaryRow}>
-      <Text variant="body" color="textSecondary">
+      <Text variant="body" color="textSecondary" numberOfLines={1} style={styles.flex}>
         {label}
       </Text>
-      <Text variant="body">{value}</Text>
+      <Text variant="body" color={positive ? 'success' : 'textPrimary'}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -438,6 +550,26 @@ const styles = StyleSheet.create({
     ...theme.elevation.card,
   },
   payCheck: { position: 'absolute', top: theme.spacing.sm, right: theme.spacing.sm },
+
+  promoRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md },
+  promoInput: {
+    flex: 1,
+    height: theme.controlHeight.sm,
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: theme.typography.fontSize.body,
+    color: theme.colors.textPrimary,
+    padding: 0,
+  },
+  promoApplied: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md },
+  promoTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    backgroundColor: theme.colors.surfaceMuted,
+    borderRadius: theme.radii.xs,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: 4,
+  },
 
   summary: { marginTop: theme.spacing.lg },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },

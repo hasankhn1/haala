@@ -1,4 +1,4 @@
-import type { AddCartItemInput, CartView } from '@haala/shared';
+import { deliveryFeeFor, type AddCartItemInput, type CartView } from '@haala/shared';
 import { AppError } from '../../common/errors';
 import { availableToSell, inventoryRepository } from '../inventory/inventory.repository';
 import { catalogRepository } from '../catalog/catalog.repository';
@@ -37,6 +37,16 @@ export const cartService = {
       itemCount: viewItems.reduce((n, i) => n + i.quantity, 0),
       subtotal: viewItems.reduce((sum, i) => sum + i.lineTotal, 0),
     };
+  },
+
+  /**
+   * Server-side totals for the caller's cart. Promo validation prices against
+   * this rather than a client-supplied subtotal — otherwise a crafted request
+   * could quote a percentage discount against an invented total.
+   */
+  async totals(userId: string): Promise<{ subtotal: number; deliveryFee: number }> {
+    const cart = await this.getCart(userId);
+    return { subtotal: cart.subtotal, deliveryFee: deliveryFeeFor(cart.subtotal) };
   },
 
   async addItem(userId: string, input: AddCartItemInput): Promise<CartView> {

@@ -3,8 +3,14 @@ import { eq, inArray } from 'drizzle-orm';
 import { rupees } from '@haala/shared';
 import { logger } from '../common/logger';
 import { closeDb, db } from './client';
-import { categories, inventory, products, riders, stores, users } from './schema';
-import { SEED_CATEGORIES, SEED_PASSWORD, SEED_STORES, SEED_USERS } from './seed-data';
+import { categories, inventory, products, promotions, riders, stores, users } from './schema';
+import {
+  SEED_CATEGORIES,
+  SEED_PASSWORD,
+  SEED_PROMOTIONS,
+  SEED_STORES,
+  SEED_USERS,
+} from './seed-data';
 
 /**
  * Dev seed: dark stores, the full category tree and catalogue, plus per-store
@@ -186,12 +192,34 @@ const seed = async (): Promise<void> => {
     }
   }
 
+  // Launch promo codes. Upserted on `code` like everything else, but note the
+  // `set` deliberately omits `usedCount` — re-seeding must not wipe redemptions
+  // that real customers have already made.
+  for (const promo of SEED_PROMOTIONS) {
+    await db
+      .insert(promotions)
+      .values(promo)
+      .onConflictDoUpdate({
+        target: promotions.code,
+        set: {
+          type: promo.type,
+          value: promo.value,
+          minOrderTotal: promo.minOrderTotal,
+          maxDiscount: promo.maxDiscount,
+          usageLimit: promo.usageLimit,
+          perUserLimit: promo.perUserLimit,
+          isActive: promo.isActive,
+        },
+      });
+  }
+
   logger.info(
     {
       stores: storeRows.length,
       categories: SEED_CATEGORIES.length,
       products: productCount,
       inventoryRows: stockRows,
+      promotions: SEED_PROMOTIONS.length,
     },
     'Seed complete ✔',
   );

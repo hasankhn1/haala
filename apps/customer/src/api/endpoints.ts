@@ -13,6 +13,7 @@ import type {
   PlaceOrderInput,
   PlaceOrderResult,
   ProductView,
+  PromoQuoteView,
   RegisterInput,
   StoreView,
 } from '@haala/shared';
@@ -58,6 +59,15 @@ export const addressesApi = {
   list: () => api.get<AddressView[]>('/addresses'),
   create: (input: CreateAddressInput) => api.post<AddressView>('/addresses', input),
   setDefault: (id: string) => api.post<AddressView>(`/addresses/${id}/default`),
+};
+
+export const promotionsApi = {
+  /**
+   * Price a code against the server's view of the cart. The server re-prices at
+   * placement, so this is a preview — but it comes from the same `quote()` the
+   * charge uses, so the two cannot disagree.
+   */
+  validate: (code: string) => api.post<PromoQuoteView>('/promotions/validate', { code }),
 };
 
 export const ordersApi = {

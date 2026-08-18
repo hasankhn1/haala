@@ -1,5 +1,6 @@
 export * from './enums';
 export * from './money';
+export * from './pricing';
 export * from './http';
 export * from './contracts/auth';
 export * from './contracts/addresses';
@@ -10,3 +11,4 @@ export * from './contracts/orders';
 export * from './contracts/riders';
 export * from './contracts/delivery';
 export * from './contracts/ops';
+export * from './contracts/promotions';

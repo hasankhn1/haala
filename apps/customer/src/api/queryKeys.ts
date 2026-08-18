@@ -8,5 +8,6 @@ export const qk = {
   cart: ['cart'] as const,
   addresses: ['addresses'] as const,
   orders: ['orders'] as const,
+  promo: (code: string) => ['promo', code] as const,
   order: (id: string) => ['order', id] as const,
 };

@@ -866,3 +866,36 @@ export const SEED_CATEGORIES: SeedCategory[] = [
 
 /** 82 products across 6 categories. */
 export const SEED_PRODUCT_COUNT = 82;
+
+/**
+ * Launch promotions for the DHA Peshawar pilot.
+ *
+ * `HAALA100` is the one that matters: the community poll showed 55 of ~72
+ * residents currently doing a supermarket round trip and only 2 already
+ * ordering online, so the barrier is the first order, not price sensitivity —
+ * a waived delivery fee removes the reason not to try it once. One per
+ * customer, deliberately, since it's an acquisition offer rather than a
+ * standing discount.
+ */
+export const SEED_PROMOTIONS = [
+  {
+    code: 'HAALA100',
+    type: 'free_delivery' as const,
+    value: 0,
+    minOrderTotal: null,
+    maxDiscount: null,
+    usageLimit: null,
+    perUserLimit: 1,
+    isActive: true,
+  },
+  {
+    code: 'PESHAWAR10',
+    type: 'percentage' as const,
+    value: 10,
+    minOrderTotal: 100_000, // Rs 1,000 — keeps 10% off from undercutting small baskets
+    maxDiscount: 30_000, // capped at Rs 300
+    usageLimit: null,
+    perUserLimit: 2,
+    isActive: true,
+  },
+];

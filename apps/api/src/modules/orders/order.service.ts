@@ -3,7 +3,7 @@ import {
   ORDER_STATUS_FLOW,
   OrderStatus,
   PaymentStatus,
-  rupees,
+  deliveryFeeFor,
   type OrderStatus as OrderStatusT,
   type OrderView,
   type OrderSummaryView,
@@ -26,10 +26,9 @@ import { storeRepository } from '../stores/store.repository';
 import { userRepository } from '../users/user.repository';
 import { emitToOrder, emitToUser } from '../../realtime/gateway';
 import { RealtimeEvents } from '../../realtime/events';
+import { promotionService } from '../promotions/promotion.service';
 import { orderRepository } from './order.repository';
 
-const DELIVERY_FEE = rupees(79);
-const FREE_DELIVERY_THRESHOLD = rupees(2000);
 const CANCELLABLE: ReadonlySet<OrderStatusT> = new Set([
   OrderStatus.Placed,
   OrderStatus.Confirmed,
@@ -99,8 +98,21 @@ export const orderService = {
       }
 
       const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
-      const deliveryFee = subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE;
-      const discount = 0; // promotions land in Phase 3
+      const baseDeliveryFee = deliveryFeeFor(subtotal);
+
+      // Re-price the promo here, inside the transaction and holding a row lock,
+      // rather than trusting whatever the cart previewed. `lock: true` is what
+      // stops two simultaneous checkouts both consuming the last use of a
+      // limited code — the same reasoning as locking the inventory rows above.
+      const promo = input.promoCode
+        ? await promotionService.quote(userId, input.promoCode, subtotal, baseDeliveryFee, {
+            lock: true,
+            ex: tx,
+          })
+        : null;
+
+      const deliveryFee = promo?.deliveryFee ?? baseDeliveryFee;
+      const discount = promo?.discount ?? 0;
       const total = subtotal + deliveryFee - discount;
 
       const created = await orderRepository.create(
@@ -114,6 +126,7 @@ export const orderService = {
           deliveryFee,
           discount,
           total,
+          promoCode: promo?.code ?? null,
           deliveryAddress: {
             label: address.label,
             line1: address.line1,
@@ -152,6 +165,11 @@ export const orderService = {
         },
         tx,
       );
+
+      // The redemption row is what makes per-user limits enforceable, so it has
+      // to commit with the order — an order without one is a discount the
+      // customer can claim again.
+      if (promo) await promotionService.redeem(promo, userId, created.id, tx);
 
       const payment = await paymentService.initiate(
         {
@@ -207,6 +225,7 @@ export const orderService = {
       for (const it of items) {
         await inventoryRepository.release(order.storeId, it.productId, it.quantity, tx);
       }
+      await promotionService.releaseForOrder(orderId, tx);
       await orderRepository.updateStatus(orderId, OrderStatus.Cancelled, {}, tx);
       await orderRepository.addStatusHistory(
         {
@@ -262,6 +281,9 @@ export const orderService = {
         for (const it of items) {
           await inventoryRepository.release(order.storeId, it.productId, it.quantity, tx);
         }
+        // Hand the promo back too, or a cancelled order permanently burns the
+        // customer's one-per-person launch offer.
+        await promotionService.releaseForOrder(orderId, tx);
       }
       await orderRepository.updateStatus(orderId, input.status, patch, tx);
       await orderRepository.addStatusHistory(
@@ -351,6 +373,7 @@ export const orderService = {
       deliveryFee: order.deliveryFee,
       discount: order.discount,
       total: order.total,
+      promoCode: order.promoCode,
       deliveryAddress: order.deliveryAddress,
       notes: order.notes,
       items: items.map((it) => ({
