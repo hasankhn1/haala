@@ -1,4 +1,4 @@
-import { and, asc, count, eq } from 'drizzle-orm';
+import { and, asc, count, eq, isNull, or } from 'drizzle-orm';
 import { DeliveryStatus, type RiderAvailability } from '@haala/shared';
 import { db, type Executor } from '../../db/client';
 import {
@@ -41,6 +41,26 @@ export const riderRepository = {
   },
 
   /** Every rider with their user row — the ops roster. */
+  /**
+   * Riders who should be told a pickup just became claimable at `storeId`.
+   *
+   * Mirrors the scoping in `deliveryService.eligibleStores` from the other
+   * direction: riders assigned to this store, plus unassigned riders (whose
+   * scope is proximity, filtered by the caller). Only `available` riders — a
+   * busy rider can't claim, and an offline one isn't working.
+   */
+  async availableForStore(storeId: string, ex: Executor = db): Promise<Rider[]> {
+    return ex
+      .select()
+      .from(riders)
+      .where(
+        and(
+          eq(riders.availability, 'available'),
+          or(eq(riders.storeId, storeId), isNull(riders.storeId)),
+        ),
+      );
+  },
+
   async listAllWithUsers(ex: Executor = db): Promise<RiderWithUser[]> {
     return ex
       .select({ rider: riders, user: users })

@@ -12,6 +12,7 @@ import type {
   Paginated,
   PlaceOrderInput,
   PlaceOrderResult,
+  NotificationListView,
   ProductView,
   PromoQuoteView,
   RegisterInput,
@@ -59,6 +60,16 @@ export const addressesApi = {
   list: () => api.get<AddressView[]>('/addresses'),
   create: (input: CreateAddressInput) => api.post<AddressView>('/addresses', input),
   setDefault: (id: string) => api.post<AddressView>(`/addresses/${id}/default`),
+};
+
+export const notificationsApi = {
+  list: () => api.get<NotificationListView>('/notifications'),
+  markRead: (id: string) => api.post<{ success: boolean }>(`/notifications/${id}/read`),
+  markAllRead: () => api.post<{ success: boolean; count: number }>('/notifications/read-all'),
+  registerPushToken: (token: string, platform: 'ios' | 'android') =>
+    api.post<{ success: boolean }>('/notifications/push-token', { token, platform }),
+  unregisterPushToken: (token: string) =>
+    api.del<{ success: boolean }>('/notifications/push-token', { token }),
 };
 
 export const promotionsApi = {

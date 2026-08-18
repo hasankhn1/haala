@@ -15,6 +15,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ToastProvider, setImageBaseUrl, theme } from '@haala/ui';
 import { AuthProvider, useAuth } from '../src/auth/AuthContext';
+import { usePushRegistration } from '../src/lib/usePushRegistration';
 import { API_URL } from '../src/config';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -34,6 +35,10 @@ const queryClient = new QueryClient({
 function SplashGate({ fontsReady, children }: { fontsReady: boolean; children: ReactNode }) {
   const { status } = useAuth();
   const ready = fontsReady && status !== 'loading';
+
+  // The claimable pool is first-come, so a rider who misses the push loses the
+  // order — this is the app where notifications carry real weight.
+  usePushRegistration(status === 'authenticated');
   useEffect(() => {
     if (ready) SplashScreen.hideAsync().catch(() => undefined);
   }, [ready]);

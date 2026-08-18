@@ -10,6 +10,7 @@ import {
 import type { AuthUser, LoginInput, RegisterInput } from '@haala/shared';
 import { setAccessToken, setUnauthorizedHandler } from '../api/client';
 import { authApi } from '../api/endpoints';
+import { unregisterPushToken } from '../lib/usePushRegistration';
 import { tokenStore } from './tokenStore';
 
 type Status = 'loading' | 'authenticated' | 'unauthenticated';
@@ -89,6 +90,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStatus('authenticated');
       },
       async logout() {
+        // Drop the push token first: this needs the still-valid access token,
+        // and skipping it would leave the next person on this handset receiving
+        // the departing user's order updates.
+        await unregisterPushToken();
         const stored = await tokenStore.load();
         if (stored) await authApi.logout(stored.refreshToken).catch(() => undefined);
         await tokenStore.clear();

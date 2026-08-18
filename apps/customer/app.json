@@ -23,6 +23,13 @@
             "kotlinVersion": "1.9.24"
           }
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#0F172A",
+          "defaultChannel": "default"
+        }
       ]
     ],
     "ios": {

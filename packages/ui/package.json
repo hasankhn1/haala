@@ -18,7 +18,10 @@
     "@expo/vector-icons": "*",
     "react": "*",
     "react-native": "*",
-    "react-native-safe-area-context": "*"
+    "react-native-safe-area-context": "*",
+    "expo-constants": "*",
+    "expo-device": "*",
+    "expo-notifications": "*"
   },
   "devDependencies": {
     "@expo/vector-icons": "^14.0.4",
@@ -26,6 +29,9 @@
     "react": "18.3.1",
     "react-native": "0.76.5",
     "react-native-safe-area-context": "4.12.0",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "expo-constants": "~17.0.3",
+    "expo-device": "~7.0.3",
+    "expo-notifications": "~0.29.14"
   }
 }

@@ -38,3 +38,10 @@ export const deliveryApi = {
   collectCod: (id: string) =>
     api.post<DeliveryAssignmentView>(`/delivery/assignments/${id}/collect-cod`),
 };
+
+export const notificationsApi = {
+  registerPushToken: (token: string, platform: 'ios' | 'android') =>
+    api.post<{ success: boolean }>('/notifications/push-token', { token, platform }),
+  unregisterPushToken: (token: string) =>
+    api.del<{ success: boolean }>('/notifications/push-token', { token }),
+};

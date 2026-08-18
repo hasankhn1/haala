@@ -26,6 +26,7 @@ import { storeRepository } from '../stores/store.repository';
 import { userRepository } from '../users/user.repository';
 import { emitToOrder, emitToUser } from '../../realtime/gateway';
 import { RealtimeEvents } from '../../realtime/events';
+import { notificationService } from '../notifications/notification.service';
 import { promotionService } from '../promotions/promotion.service';
 import { orderRepository } from './order.repository';
 
@@ -39,10 +40,21 @@ const CANCELLABLE: ReadonlySet<OrderStatusT> = new Set([
 const generateOrderNumber = (): string =>
   `HAALA-${randomBytes(4).readUInt32BE(0).toString(36).toUpperCase().padStart(6, '0').slice(-6)}`;
 
-const emitStatus = (order: Pick<Order, 'id' | 'userId' | 'status'>): void => {
+const emitStatus = (order: Pick<Order, 'id' | 'userId' | 'status' | 'orderNumber'>): void => {
   const payload = { orderId: order.id, status: order.status, at: new Date().toISOString() };
   emitToUser(order.userId, RealtimeEvents.OrderStatusUpdated, payload);
   emitToOrder(order.id, RealtimeEvents.OrderStatusUpdated, payload);
+
+  // Notify outside any transaction and without awaiting: a push is a courtesy,
+  // and Expo being slow must never hold up — or roll back — a delivered order.
+  // `notifyOrderStatus` swallows its own errors and is silent for statuses with
+  // no customer-facing copy.
+  void notificationService.notifyOrderStatus(
+    order.userId,
+    order.id,
+    order.orderNumber,
+    order.status,
+  );
 };
 
 export const orderService = {
@@ -298,6 +310,18 @@ export const orderService = {
 
     const updated = (await orderRepository.findById(orderId)) as Order;
     emitStatus(updated);
+
+    // Packing is what puts an order in the claimable pool, so this is the
+    // moment riders need to hear about. Fire-and-forget for the same reason as
+    // the customer pushes.
+    if (input.status === OrderStatus.Packed) {
+      void notificationService.notifyRidersOfClaimableOrder(
+        updated.storeId,
+        updated.id,
+        updated.orderNumber,
+      );
+    }
+
     return this.buildView(updated);
   },
 

@@ -66,5 +66,6 @@ export const api = {
   post: <T>(path: string, body?: unknown, headers?: Record<string, string>) =>
     raw<T>(path, { method: 'POST', body, headers }),
   patch: <T>(path: string, body?: unknown) => raw<T>(path, { method: 'PATCH', body }),
-  del: <T>(path: string) => raw<T>(path, { method: 'DELETE' }),
+  /** `body` is optional but supported — de-registering a push token sends one. */
+  del: <T>(path: string, body?: unknown) => raw<T>(path, { method: 'DELETE', body }),
 };

@@ -15,6 +15,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ToastProvider, setImageBaseUrl, theme } from '@haala/ui';
 import { AuthProvider, useAuth } from '../src/auth/AuthContext';
+import { usePushRegistration } from '../src/lib/usePushRegistration';
 import { API_URL } from '../src/config';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -38,6 +39,11 @@ const queryClient = new QueryClient({
 function SplashGate({ fontsReady, children }: { fontsReady: boolean; children: ReactNode }) {
   const { status } = useAuth();
   const ready = fontsReady && status !== 'loading';
+
+  // Sits inside the provider so it can react to sign-in, and above the Stack so
+  // a notification tap can navigate regardless of which screen is showing.
+  usePushRegistration(status === 'authenticated');
+
   useEffect(() => {
     if (ready) SplashScreen.hideAsync().catch(() => undefined);
   }, [ready]);

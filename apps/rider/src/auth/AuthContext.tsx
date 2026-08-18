@@ -10,6 +10,7 @@ import {
 import { UserRole, type AuthUser, type LoginInput } from '@haala/shared';
 import { ApiError, setAccessToken, setUnauthorizedHandler } from '../api/client';
 import { authApi } from './../api/endpoints';
+import { unregisterPushToken } from '../lib/usePushRegistration';
 import { tokenStore } from './tokenStore';
 
 type Status = 'loading' | 'authenticated' | 'unauthenticated';
@@ -91,6 +92,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStatus('authenticated');
       },
       async logout() {
+        // Before the tokens go: this call needs the still-valid access token,
+        // and a stale token would keep buzzing this handset with pool alerts.
+        await unregisterPushToken();
         const stored = await tokenStore.load();
         if (stored) await authApi.logout(stored.refreshToken).catch(() => undefined);
         await tokenStore.clear();

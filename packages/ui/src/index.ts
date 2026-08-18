@@ -1,6 +1,7 @@
 export { theme } from '@haala/design-tokens';
 
 export * from './imageSource';
+export * from './pushToken';
 export * from './Text';
 export * from './Button';
 export * from './IconButton';

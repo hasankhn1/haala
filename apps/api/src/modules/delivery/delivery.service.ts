@@ -18,6 +18,8 @@ import { db } from '../../db/client';
 import type { DeliveryAssignment, Order, Store } from '../../db/schema';
 import { RealtimeEvents } from '../../realtime/events';
 import { emitToOrder, emitToUser } from '../../realtime/gateway';
+import { notificationService } from '../notifications/notification.service';
+import { RIDER_PICKUP_RADIUS_METERS } from './delivery.constants';
 import { orderRepository } from '../orders/order.repository';
 import { orderService } from '../orders/order.service';
 import { riderRepository } from '../riders/rider.repository';
@@ -35,14 +37,6 @@ const ORDER_STATUS_FOR: Partial<Record<DeliveryStatusT, UpdateOrderStatusInput['
   [DeliveryStatus.EnRouteToCustomer]: OrderStatus.OutForDelivery,
   [DeliveryStatus.Completed]: OrderStatus.Delivered,
 };
-
-/**
- * How far an *unassigned* rider may be from a store and still be offered its
- * pickups. Riders with a home store ignore this — their assignment is the
- * scope. Generous enough to cover a city sector, tight enough that a rider is
- * never offered a pickup across town.
- */
-const RIDER_PICKUP_RADIUS_METERS = 8_000;
 
 /** Assignment states in which the rider counts as busy. */
 const BUSY_STATUSES: DeliveryStatusT[] = [
@@ -62,6 +56,19 @@ const emitDelivery = (assignment: DeliveryAssignment, customerUserId: string): v
   };
   emitToOrder(assignment.orderId, RealtimeEvents.DeliveryStatusUpdated, payload);
   emitToUser(customerUserId, RealtimeEvents.DeliveryStatusUpdated, payload);
+
+  // `arrived` has no order-status equivalent, so it would otherwise be the one
+  // moment worth a buzz that never sent one — the rider is at the door and the
+  // customer may be inside with the phone in their pocket.
+  if (assignment.status === DeliveryStatus.Arrived) {
+    void notificationService.create({
+      userId: customerUserId,
+      title: 'Your rider has arrived',
+      body: 'They are outside with your order.',
+      type: 'order_update',
+      data: { orderId: assignment.orderId, status: assignment.status },
+    });
+  }
 };
 
 export const deliveryService = {
