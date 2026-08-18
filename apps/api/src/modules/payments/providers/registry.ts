@@ -3,6 +3,7 @@ import { config } from '../../../config';
 import { AppError } from '../../../common/errors';
 import type { PaymentProvider } from './payment-provider.interface';
 import { codProvider } from './cod.provider';
+import { safepayProvider } from './safepay.provider';
 import { stubOnlineProvider } from './stub-online.provider';
 
 /**
@@ -18,7 +19,10 @@ const register = (provider: PaymentProvider): void => {
 
 register(codProvider);
 register(stubOnlineProvider);
-// register(safepayProvider); // ← future online providers plug in here
+register(safepayProvider);
+// Additional gateways (JazzCash, Easypaisa) plug in here — one class each,
+// selected at runtime via PAYMENT_ONLINE_PROVIDER. Nothing in checkout or
+// orders needs to change.
 
 export const paymentRegistry = {
   get(key: string): PaymentProvider {

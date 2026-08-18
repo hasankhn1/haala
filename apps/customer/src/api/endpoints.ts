@@ -13,6 +13,7 @@ import type {
   PlaceOrderInput,
   PlaceOrderResult,
   NotificationListView,
+  PaymentStatus,
   ProductView,
   PromoQuoteView,
   RegisterInput,
@@ -70,6 +71,18 @@ export const notificationsApi = {
     api.post<{ success: boolean }>('/notifications/push-token', { token, platform }),
   unregisterPushToken: (token: string) =>
     api.del<{ success: boolean }>('/notifications/push-token', { token }),
+};
+
+export const paymentsApi = {
+  /**
+   * Ask the server to re-check the gateway. Called after the hosted checkout
+   * closes — the browser returning proves only that a tab shut, so the client
+   * never asserts success. The webhook remains authoritative; this exists so a
+   * customer who paid isn't left staring at "pending".
+   */
+  verify: (orderId: string) =>
+    api.post<{ status: PaymentStatus }>(`/payments/${orderId}/verify`),
+  status: (orderId: string) => api.get<{ status: PaymentStatus }>(`/payments/${orderId}/status`),
 };
 
 export const promotionsApi = {

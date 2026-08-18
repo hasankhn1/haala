@@ -18,6 +18,7 @@ import {
 } from '@haala/ui';
 import { ApiError } from '../../src/api/client';
 import { addressesApi, ordersApi, promotionsApi } from '../../src/api/endpoints';
+import { runOnlineCheckout } from '../../src/lib/onlineCheckout';
 import { qk } from '../../src/api/queryKeys';
 import { ETA_MINUTES, estimateDeliveryFee } from '../../src/config';
 import { haptics } from '../../src/lib/haptics';
@@ -110,10 +111,22 @@ export default function CartScreen() {
         },
         idempotencyKey.current,
       ),
-    onSuccess: (res: PlaceOrderResult) => {
-      haptics.success();
+    onSuccess: async (res: PlaceOrderResult) => {
       qc.invalidateQueries({ queryKey: qk.cart });
       qc.invalidateQueries({ queryKey: qk.orders });
+
+      // An online order comes back with a hosted-checkout handoff. The order
+      // already exists at this point either way, so whatever happens next we
+      // land on the confirmation screen rather than losing the order.
+      const outcome = await runOnlineCheckout(res);
+      if (outcome.kind === 'resolved' && outcome.status === 'failed') {
+        haptics.error();
+        toast.show('Payment was not completed. You can retry from your orders.', 'error');
+      } else {
+        haptics.success();
+      }
+
+      qc.invalidateQueries({ queryKey: qk.order(res.order.id) });
       router.replace(
         `/order/confirmed?id=${res.order.id}&number=${encodeURIComponent(res.order.orderNumber)}`,
       );

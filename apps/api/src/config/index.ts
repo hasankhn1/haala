@@ -27,6 +27,13 @@ export const config = {
   },
   payments: {
     onlineProvider: env.PAYMENT_ONLINE_PROVIDER,
+    safepay: {
+      apiKey: env.SAFEPAY_API_KEY,
+      secretKey: env.SAFEPAY_SECRET_KEY,
+      webhookSecret: env.SAFEPAY_WEBHOOK_SECRET,
+      baseUrl: env.SAFEPAY_BASE_URL.replace(/\/$/, ''),
+      environment: env.SAFEPAY_ENVIRONMENT,
+    },
   },
 } as const;
 

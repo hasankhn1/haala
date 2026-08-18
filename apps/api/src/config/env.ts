@@ -24,6 +24,15 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().default('*'),
 
   PAYMENT_ONLINE_PROVIDER: z.string().default('stub'),
+
+  // Safepay. Optional so a dev environment boots on the stub provider; the
+  // provider itself fails loudly if it's selected without credentials, which is
+  // better than silently taking payments nowhere.
+  SAFEPAY_API_KEY: z.string().optional(),
+  SAFEPAY_SECRET_KEY: z.string().optional(),
+  SAFEPAY_WEBHOOK_SECRET: z.string().optional(),
+  SAFEPAY_BASE_URL: z.string().url().default('https://sandbox.api.getsafepay.com'),
+  SAFEPAY_ENVIRONMENT: z.enum(['sandbox', 'production']).default('sandbox'),
 });
 
 const parsed = envSchema.safeParse(process.env);
