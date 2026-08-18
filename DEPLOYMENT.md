@@ -83,25 +83,74 @@ pnpm --filter @haala/api db:generate   # commit the generated SQL
 
 ### One-time: seeding
 
+Seed **inside** the container, using the compiled script:
+
 ```bash
-railway run --service api pnpm --filter @haala/api db:seed
+railway ssh --service api
+node apps/api/dist/db/seed.js
 ```
+
+Not `railway run … db:seed`. `railway run` injects Railway's variables but runs
+the command on **your machine**, and `DATABASE_URL` points at
+`postgres.railway.internal`, which only resolves inside Railway's network — so
+it fails on DNS. (`db:seed` also runs through `tsx`, which the production image
+prunes; `dist/db/seed.js` is the compiled equivalent and needs nothing extra.)
+If you do want to seed from your Mac, use the Postgres service's
+`DATABASE_PUBLIC_URL` — the TCP-proxy address — rather than the internal one.
 
 The seed is idempotent (upserts on natural keys) and does **not** reset
 `usedCount` on promotions, so re-running it won't wipe real redemptions.
 
 ## 4. Apps
 
-Set the API origin at build time. `API_BASE` appends `/api/v1` itself, so this
-is the bare origin:
+Builds come from `apps/<app>/eas.json`. Both apps ship two profiles: `preview`
+(internal-distribution **APK**, the one to sideload onto a phone) and
+`production` (**app-bundle** for Play). Neither app has `expo-dev-client` or
+`expo-updates`, so there is deliberately no `development` profile and no OTA
+channel — a new build is the only way to ship a change.
+
+The API origin lives in each profile's `env` block, and must be edited from
+`https://REPLACE-WITH-RAILWAY-DOMAIN` to the real Railway domain before
+building. `API_BASE` appends `/api/v1` itself, so this is the **bare origin**.
 
 ```bash
-EXPO_PUBLIC_API_URL=https://<api-domain> npx eas build -p android --profile production
+cd apps/customer
+npx eas-cli@latest build -p android --profile preview
 ```
+
+**Do not** pass the origin as a shell variable — `EXPO_PUBLIC_API_URL=… eas
+build` only sets it on your Mac, and the build runs on Expo's servers, so the
+variable never arrives. `apps/customer/.env` doesn't reach the builder either:
+it is gitignored, and EAS uploads by `.gitignore`. Both failures are silent —
+`config.ts` falls back to `http://localhost:4000`, so you get an APK that
+installs, opens, and cannot sign in. `eas.json` `env` (or `eas env:create`) is
+the only mechanism that survives the trip.
 
 An HTTPS origin also removes the two things that made release builds unusable:
 no `adb reverse` tunnel, and no need for a cleartext-traffic exemption (which
 only ever existed in the debug manifest).
+
+### Push notifications need the EAS project id
+
+`getExpoPushToken()` reads `expoConfig.extra.eas.projectId` and returns `null`
+without it — permission is requested, no token is registered, and no push ever
+arrives. `eas init` writes that id into `app.json`; until it has run, the
+notification inbox works but push does not. This is why the pilot build should
+be an EAS build rather than a local Gradle APK.
+
+### The tracking map needs a Google Maps key
+
+`react-native-maps` on Android renders **grey tiles with no map** unless
+`android.config.googleMaps.apiKey` is set in `apps/customer/app.json`. It is
+currently unset, and it affects only the order-tracking screen. Get a key from
+the Google Cloud console with the *Maps SDK for Android* enabled, then add:
+
+```json
+"android": {
+  "package": "com.haala.customer",
+  "config": { "googleMaps": { "apiKey": "AIza..." } }
+}
+```
 
 ## 5. Dashboard
 
