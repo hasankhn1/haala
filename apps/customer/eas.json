@@ -5,20 +5,22 @@
   },
   "build": {
     "preview": {
+      "environment": "preview",
       "distribution": "internal",
       "android": {
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://REPLACE-WITH-RAILWAY-DOMAIN"
+        "EXPO_PUBLIC_API_URL": "https://haala-production.up.railway.app"
       }
     },
     "production": {
+      "environment": "production",
       "android": {
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://REPLACE-WITH-RAILWAY-DOMAIN"
+        "EXPO_PUBLIC_API_URL": "https://haala-production.up.railway.app"
       }
     }
   },
