@@ -19,8 +19,10 @@ export interface ThumbProps {
    */
   fill?: boolean;
   /**
-   * How the photo fits its box. Product shots read better `contain`ed on the
-   * neutral ground than cropped, so that's the default.
+   * How the photo fits its box. `cover` by default: the comps show full-bleed
+   * photography in the rounded well, and `contain` left a clay bar above and
+   * below every landscape shot. Pass `contain` where the whole product must be
+   * visible — packaging with text on it, for instance.
    */
   resizeMode?: 'cover' | 'contain';
 }
@@ -76,7 +78,7 @@ export function Thumb({
   size = 64,
   radius = theme.radii.md,
   fill = false,
-  resizeMode = 'contain',
+  resizeMode = 'cover',
 }: ThumbProps) {
   const [failed, setFailed] = useState(false);
 

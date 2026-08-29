@@ -166,10 +166,10 @@ export const textStyles = {
   },
   /** Prominent price emphasis inline. */
   price: {
-    fontFamily: fontFamily.bold,
+    fontFamily: fontFamily.extrabold,
     fontSize: fontSize.title,
-    lineHeight: 24,
-    fontWeight: fontWeight.bold,
+    lineHeight: 18,
+    fontWeight: fontWeight.extrabold,
     letterSpacing: -0.14,
   },
 } as const satisfies Record<string, TextStyle>;
