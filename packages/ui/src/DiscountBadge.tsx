@@ -8,15 +8,19 @@ export interface DiscountBadgeProps {
 }
 
 /**
- * Discount marker. Onyx-tonal rather than a loud red pill: the saving is stated
- * in ink on a pale slate ground so it reads as information, not a sticker.
+ * Discount marker — Basket's sun-yellow "Save 20%" tag.
+ *
+ * Yellow is reserved for savings and progress across the system, so a deal
+ * reads the same wherever it appears: product grids, the shelf rails, the
+ * cart, and the free-delivery bar on Home. It sits on ink text rather than
+ * white because yellow-on-white fails contrast at this size.
  */
 export function DiscountBadge({ percent }: DiscountBadgeProps) {
   if (percent <= 0) return null;
   return (
     <View style={styles.badge}>
-      <Text variant="labelSm" color="onPrimary">
-        -{Math.round(percent)}%
+      <Text variant="labelSm" style={styles.label}>
+        Save {Math.round(percent)}%
       </Text>
     </View>
   );
@@ -28,10 +32,11 @@ export const discountPercent = (price: number, original?: number): number =>
 
 const styles = StyleSheet.create({
   badge: {
-    backgroundColor: theme.colors.primary,
+    backgroundColor: theme.colors.promo,
     borderRadius: theme.radii.xs,
-    paddingHorizontal: theme.spacing.sm,
-    paddingVertical: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
     alignSelf: 'flex-start',
   },
+  label: { color: theme.colors.onPromo },
 });

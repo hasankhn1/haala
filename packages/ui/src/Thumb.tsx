@@ -33,15 +33,15 @@ const EMOJI: Array<[RegExp, string]> = [
 ];
 
 /**
- * Onyx keeps a restricted palette, so image fallbacks sit on neutral slate
- * grounds — varied only in tone, never in hue. Colour here would be the
- * loudest thing on a product grid.
+ * Image fallbacks sit on warm clay grounds, varied only in tone. The faintest
+ * ember wash is included because Basket's category tiles use it — but colour
+ * beyond that would make a missing photo the loudest thing on a product grid.
  */
 const TINTS = [
-  theme.palette.onyx[50],
-  theme.palette.onyx[100],
-  theme.palette.onyx[200],
-  theme.palette.ink[50],
+  theme.palette.clay[50],
+  theme.palette.clay[100],
+  theme.palette.clay[200],
+  theme.palette.ember[50],
 ];
 
 const emojiFor = (name: string): string => {

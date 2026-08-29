@@ -1,7 +1,7 @@
 /**
- * Spacing & shape. Onyx & Ink runs on a **linear 8px rhythm** with 4px
- * half-steps, and favours negative space over dividers — generous section gaps
- * are load-bearing here, not decoration.
+ * Spacing & shape. The 8px rhythm with 4px half-steps carries over from the
+ * previous system unchanged — Basket differs in colour and roundness, not in
+ * measure. Sections still breathe; dividers are still avoided.
  */
 export const space = {
   0: 0,
@@ -46,17 +46,17 @@ export const layout = {
 } as const;
 
 /**
- * Corner radii. The system is `ROUND_FOUR`: chips 4, cards/buttons/inputs 8,
- * media 12, hero surfaces 16, sheets 24. Pills survive only for scrolling
- * category filters and avatars.
+ * Corner radii. Basket is a **round** system — the comp uses pills for every
+ * chip, tag and control, 13–16px for cards and 18–26px for hero surfaces.
+ * Softness is doing the same job the old system asked of whitespace.
  */
 export const radii = {
   none: 0,
-  xs: 4, // chips
-  sm: 8, // cards, buttons, inputs
-  md: 12, // media, thumbnails
-  lg: 16, // hero banners, bottom-sheet cards
-  xl: 24, // sheets
+  xs: 10, // small tags, badges
+  sm: 14, // buttons, inputs, search field
+  md: 16, // cards, banner tiles
+  lg: 20, // media, category tiles
+  xl: 26, // hero header sweep, sheets
   pill: 999,
   full: 9999,
 } as const;
