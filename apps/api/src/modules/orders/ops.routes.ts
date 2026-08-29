@@ -157,11 +157,11 @@ router.patch(
 );
 
 router.patch(
-  '/stores/:storeId/inventory/:productId',
+  '/stores/:storeId/inventory/:variantId',
   validate({ body: updateInventorySchema }),
   asyncHandler(async (req, res) => {
-    const { storeId, productId } = req.params as { storeId: string; productId: string };
-    await opsCatalogService.updateInventory(storeId, productId, req.body);
+    const { storeId, variantId } = req.params as { storeId: string; variantId: string };
+    await opsCatalogService.updateInventory(storeId, variantId, req.body);
     sendSuccess(res, { ok: true });
   }),
 );

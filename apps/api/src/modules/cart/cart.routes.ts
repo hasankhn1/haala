@@ -12,11 +12,11 @@ router.use(authenticate);
 router.get('/', asyncHandler(cartController.get));
 router.post('/items', validate({ body: addCartItemSchema }), asyncHandler(cartController.addItem));
 router.patch(
-  '/items/:productId',
+  '/items/:variantId',
   validate({ body: updateCartItemSchema }),
   asyncHandler(cartController.updateItem),
 );
-router.delete('/items/:productId', asyncHandler(cartController.removeItem));
+router.delete('/items/:variantId', asyncHandler(cartController.removeItem));
 router.delete('/', asyncHandler(cartController.clear));
 
 export const cartRoutes = router;

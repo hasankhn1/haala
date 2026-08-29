@@ -124,7 +124,7 @@ export default function CartScreen() {
                       {item.name}
                     </Text>
                     <Pressable
-                      onPress={() => remove.mutate(item.productId)}
+                      onPress={() => remove.mutate(item.variantId)}
                       hitSlop={10}
                       accessibilityLabel={`Remove ${item.name}`}
                     >
@@ -139,8 +139,8 @@ export default function CartScreen() {
                       size="sm"
                       onChange={(next) =>
                         next === 0
-                          ? remove.mutate(item.productId)
-                          : update.mutate({ productId: item.productId, quantity: next })
+                          ? remove.mutate(item.variantId)
+                          : update.mutate({ variantId: item.variantId, quantity: next })
                       }
                       loading={update.isPending || remove.isPending}
                     />
@@ -175,7 +175,11 @@ export default function CartScreen() {
                     imageUrl={u.imageUrl}
                     onPress={() => router.push(`/product/${u.id}`)}
                     onAdd={() =>
-                      add.mutate({ storeId: storeId as string, productId: u.id, quantity: 1 })
+                      add.mutate({
+                        storeId: storeId as string,
+                        variantId: u.defaultVariantId as string,
+                        quantity: 1,
+                      })
                     }
                   />
                 ))}

@@ -1,11 +1,13 @@
 import { boolean, integer, pgTable, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { timestamps } from './_helpers';
-import { products } from './catalog';
+import { productVariants } from './variants';
 import { stores } from './stores';
 
 /**
- * Per-store stock. `quantityReserved` is held during checkout so two customers
- * can't buy the last unit; available-to-sell = quantityAvailable - quantityReserved.
+ * Per-store stock, **per variant** — 500g and 1kg are separately counted, which
+ * is the whole point of having variants. `quantityReserved` is held during
+ * checkout so two customers can't buy the last unit; available-to-sell =
+ * quantityAvailable - quantityReserved.
  * `price` overrides the product base price for this store when set.
  *
  * `isAvailable` suspends a line without destroying its count — produce that
@@ -19,16 +21,16 @@ export const inventory = pgTable(
     storeId: uuid()
       .notNull()
       .references(() => stores.id, { onDelete: 'cascade' }),
-    productId: uuid()
+    variantId: uuid()
       .notNull()
-      .references(() => products.id, { onDelete: 'cascade' }),
+      .references(() => productVariants.id, { onDelete: 'cascade' }),
     quantityAvailable: integer().notNull().default(0),
     quantityReserved: integer().notNull().default(0),
     isAvailable: boolean().notNull().default(true),
     price: integer(),
     ...timestamps(),
   },
-  (t) => [uniqueIndex('inventory_store_product_uq').on(t.storeId, t.productId)],
+  (t) => [uniqueIndex('inventory_store_variant_uq').on(t.storeId, t.variantId)],
 );
 
 export type Inventory = typeof inventory.$inferSelect;

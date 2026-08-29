@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { FlatList, Image, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { FlatList, Image, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatPKR, type ProductView } from '@haala/shared';
 import {
@@ -37,6 +37,13 @@ export default function ProductDetailScreen() {
   const { cart, qtyByProduct, busy, addOne, setQty } = useProductActions(storeId);
 
   /**
+   * The size being bought. Defaults to the first variant — they arrive ordered
+   * by `sortOrder`, so that is the product's default. Stock, price and the
+   * basket line all hang off this, not off the product.
+   */
+  const [variantId, setVariantId] = useState<string | null>(null);
+
+  /**
    * The comp calls this rail "Frequently bought together", which implies a
    * recommender we do not have. Other products from the same category is the
    * honest version of the same idea and uses the catalogue we already load.
@@ -51,8 +58,10 @@ export default function ProductDetailScreen() {
     enabled: !!storeId && !!product.data?.categoryId,
   });
   const relatedItems = (related.data?.items ?? []).filter((r) => r.id !== id).slice(0, 8);
-  const qty = qtyByProduct.get(id) ?? 0;
   const p = product.data;
+  const variants = p?.variants ?? [];
+  const selected = variants.find((v) => v.id === variantId) ?? variants[0] ?? null;
+  const qty = selected ? (qtyByProduct.get(selected.id) ?? 0) : 0;
 
   const cartCount = cart.data?.itemCount ?? 0;
 
@@ -123,6 +132,48 @@ export default function ProductDetailScreen() {
             {p ? <ProductBody product={p} /> : null}
           </StateView>
 
+          {/* Pick a size — only when there is a choice to make. */}
+          {variants.length > 1 ? (
+            <View style={styles.sizes}>
+              <Text variant="h3">Pick a size</Text>
+              <View style={styles.sizeRow}>
+                {variants.map((v) => {
+                  const on = selected?.id === v.id;
+                  const perUnit = v.label !== v.unit ? v.unit : null;
+                  return (
+                    <Pressable
+                      key={v.id}
+                      onPress={() => setVariantId(v.id)}
+                      style={[styles.sizeCard, on && styles.sizeCardOn]}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                    >
+                      <Text variant="bodyStrong">{v.label}</Text>
+                      {perUnit ? (
+                        <Text variant="caption" color="textSecondary">
+                          {perUnit}
+                        </Text>
+                      ) : null}
+                      <View style={styles.sizePrice}>
+                        <Text variant="bodyStrong">{formatPKR(v.price)}</Text>
+                        {v.basePrice > v.price ? (
+                          <Text variant="caption" color="textTertiary" style={styles.strike}>
+                            {formatPKR(v.basePrice)}
+                          </Text>
+                        ) : null}
+                      </View>
+                      {!v.inStock ? (
+                        <Text variant="caption" color="error">
+                          Out of stock
+                        </Text>
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+
           {relatedItems.length > 0 ? (
             <View style={styles.related}>
               <Text variant="h3">More in this aisle</Text>
@@ -141,12 +192,16 @@ export default function ProductDetailScreen() {
                     original={item.basePrice}
                     imageUrl={item.imageUrl}
                     inStock={item.inStock}
-                    quantity={qtyByProduct.get(item.id) ?? 0}
+                    quantity={qtyByProduct.get(item.defaultVariantId ?? "") ?? 0}
                     busy={false}
                     onPress={() => router.push(`/product/${item.id}`)}
-                    onAdd={() => addOne(item.id)}
-                    onIncrement={() => setQty(item.id, (qtyByProduct.get(item.id) ?? 0) + 1)}
-                    onDecrement={() => setQty(item.id, (qtyByProduct.get(item.id) ?? 0) - 1)}
+                    onAdd={() => addOne(item.defaultVariantId)}
+                    onIncrement={() =>
+                        setQty(item.defaultVariantId ?? "", (qtyByProduct.get(item.defaultVariantId ?? "") ?? 0) + 1)
+                      }
+                    onDecrement={() =>
+                        setQty(item.defaultVariantId ?? "", (qtyByProduct.get(item.defaultVariantId ?? "") ?? 0) - 1)
+                      }
                   />
                 )}
               />
@@ -182,9 +237,9 @@ export default function ProductDetailScreen() {
           <View style={styles.actionRow}>
             <QuantityStepper
               value={qty > 0 ? qty : pending}
-              onChange={(next) => (qty > 0 ? setQty(id, next) : setPending(next))}
+              onChange={(next) => (qty > 0 && selected ? setQty(selected.id, next) : setPending(next))}
               min={qty > 0 ? 0 : 1}
-              max={Math.max(p.availableQty, 1)}
+              max={Math.max(selected?.availableQty ?? p.availableQty, 1)}
               loading={busy}
             />
             <View style={styles.flex}>
@@ -192,7 +247,7 @@ export default function ProductDetailScreen() {
                 /* In the cart: confirm it, and show the line total so the
                    amount tracks the stepper the customer is still adjusting. */
                 <Button
-                  label={`Added to cart  ·  ${formatPKR(p.price * qty)}`}
+                  label={`Added to cart  ·  ${formatPKR((selected?.price ?? p.price) * qty)}`}
                   onPress={() => router.push('/(tabs)/cart')}
                   loading={busy}
                   leadingIcon={
@@ -201,8 +256,8 @@ export default function ProductDetailScreen() {
                 />
               ) : (
                 <Button
-                  label={`Add  ·  ${formatPKR(p.price * pending)}`}
-                  onPress={() => addOne(id, pending)}
+                  label={`Add  ·  ${formatPKR((selected?.price ?? p.price) * pending)}`}
+                  onPress={() => addOne(selected?.id ?? null, pending)}
                   loading={busy}
                   leadingIcon={
                     <Icon name="cart-outline" size={18} color={theme.colors.onPrimary} />
@@ -326,6 +381,18 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { paddingBottom: 120 },
 
+  sizes: { marginTop: theme.spacing.xl, gap: theme.spacing.md },
+  sizeRow: { flexDirection: 'row', gap: theme.spacing.md },
+  sizeCard: {
+    flex: 1,
+    borderRadius: theme.radii.sm,
+    borderWidth: 2,
+    borderColor: theme.colors.border,
+    padding: theme.spacing.md,
+    gap: 5,
+  },
+  sizeCardOn: { borderColor: theme.colors.primary, backgroundColor: theme.colors.infoSoft },
+  sizePrice: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   related: { marginTop: theme.spacing.xl, gap: theme.spacing.md },
   relatedRow: { gap: theme.spacing.md, paddingRight: theme.layout.margin },
   cartBadge: {

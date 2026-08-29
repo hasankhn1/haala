@@ -3,6 +3,7 @@ export * from './users';
 export * from './addresses';
 export * from './stores';
 export * from './catalog';
+export * from './variants';
 export * from './inventory';
 export * from './cart';
 export * from './orders';

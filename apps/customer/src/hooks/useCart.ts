@@ -35,14 +35,15 @@ export function useCartMutations() {
 
   const add = useMutation({ mutationFn: (input: AddCartItemInput) => cartApi.addItem(input), onSuccess });
 
+  // Lines are addressed by variant: two sizes of one product are two lines.
   const update = useMutation({
-    mutationFn: (vars: { productId: string; quantity: number }) =>
-      cartApi.updateItem(vars.productId, vars.quantity),
+    mutationFn: (vars: { variantId: string; quantity: number }) =>
+      cartApi.updateItem(vars.variantId, vars.quantity),
     onMutate: (vars) =>
       optimistic((cart) => ({
         ...cart,
         items: cart.items.map((i) =>
-          i.productId === vars.productId ? { ...i, quantity: vars.quantity } : i,
+          i.variantId === vars.variantId ? { ...i, quantity: vars.quantity } : i,
         ),
       })),
     onError: rollback,
@@ -50,9 +51,9 @@ export function useCartMutations() {
   });
 
   const remove = useMutation({
-    mutationFn: (productId: string) => cartApi.removeItem(productId),
-    onMutate: (productId) =>
-      optimistic((cart) => ({ ...cart, items: cart.items.filter((i) => i.productId !== productId) })),
+    mutationFn: (variantId: string) => cartApi.removeItem(variantId),
+    onMutate: (variantId) =>
+      optimistic((cart) => ({ ...cart, items: cart.items.filter((i) => i.variantId !== variantId) })),
     onError: rollback,
     onSuccess,
   });

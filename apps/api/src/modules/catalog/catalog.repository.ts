@@ -1,7 +1,7 @@
 import { and, asc, count, eq, ilike, sql } from 'drizzle-orm';
 import type { ProductsQuery } from '@haala/shared';
 import { db, type Executor } from '../../db/client';
-import { categories, inventory, products, type Category } from '../../db/schema';
+import { categories, inventory, productVariants, products, type Category } from '../../db/schema';
 
 export interface ProductWithStock {
   id: string;
@@ -14,10 +14,17 @@ export interface ProductWithStock {
   basePrice: number;
   price: number;
   availableQty: number;
+  defaultVariantId: string | null;
 }
 
 /** Effective price = store override if present, else base price. */
-const priceExpr = sql<number>`coalesce(${inventory.price}, ${products.basePrice})`;
+/**
+ * Effective price: the store's override if it has one, else the variant's own
+ * base price — which is NOT NULL, so there is no third fallback. Falling back to
+ * `products.basePrice` would both price a 1kg bag at the 500g price and force
+ * every query using this expression to join `products`.
+ */
+const priceExpr = sql<number>`coalesce(${inventory.price}, ${productVariants.basePrice})`;
 // SQL mirror of `availableToSell` (inventory.repository.ts): a line ops has
 // suspended reads as zero stock, so `inStock` goes false across listing, search
 // and product detail from this one expression.
@@ -45,9 +52,20 @@ export const catalogRepository = {
     if (query.q) conditions.push(ilike(products.name, `%${query.q}%`));
     const where = and(...conditions);
 
+    /**
+     * A card shows one price and one stock figure, so the listing resolves each
+     * product's **default variant**: `sortOrder = 0`, of which a partial unique
+     * index guarantees exactly one per product. Loading every variant here
+     * would multiply each product row by its variant count; the PDP fetches the
+     * full set on its own.
+     */
     const joinOn = and(
-      eq(inventory.productId, products.id),
+      eq(inventory.variantId, productVariants.id),
       eq(inventory.storeId, query.storeId),
+    );
+    const defaultVariantOn = and(
+      eq(productVariants.productId, products.id),
+      eq(productVariants.sortOrder, 0),
     );
 
     const rows = await ex
@@ -60,10 +78,12 @@ export const catalogRepository = {
         imageUrl: products.imageUrl,
         categoryId: products.categoryId,
         basePrice: products.basePrice,
+        defaultVariantId: productVariants.id,
         price: priceExpr,
         availableQty: availableExpr,
       })
       .from(products)
+      .leftJoin(productVariants, defaultVariantOn)
       .leftJoin(inventory, joinOn)
       .where(where)
       .orderBy(asc(products.name))
@@ -90,15 +110,76 @@ export const catalogRepository = {
         imageUrl: products.imageUrl,
         categoryId: products.categoryId,
         basePrice: products.basePrice,
+        defaultVariantId: productVariants.id,
         price: priceExpr,
         availableQty: availableExpr,
       })
       .from(products)
       .leftJoin(
+        productVariants,
+        and(eq(productVariants.productId, products.id), eq(productVariants.sortOrder, 0)),
+      )
+      .leftJoin(
         inventory,
-        and(eq(inventory.productId, products.id), eq(inventory.storeId, storeId)),
+        and(eq(inventory.variantId, productVariants.id), eq(inventory.storeId, storeId)),
       )
       .where(and(eq(products.id, productId), eq(products.isActive, true)))
+      .limit(1);
+    return row;
+  },
+
+  /** Every sellable size of a product, cheapest-first by `sortOrder`. */
+  async variantsForProduct(productId: string, storeId: string, ex: Executor = db) {
+    return ex
+      .select({
+        id: productVariants.id,
+        productId: productVariants.productId,
+        label: productVariants.label,
+        unit: productVariants.unit,
+        basePrice: productVariants.basePrice,
+        sortOrder: productVariants.sortOrder,
+        price: priceExpr,
+        availableQty: availableExpr,
+      })
+      .from(productVariants)
+      .leftJoin(
+        inventory,
+        and(eq(inventory.variantId, productVariants.id), eq(inventory.storeId, storeId)),
+      )
+      .where(and(eq(productVariants.productId, productId), eq(productVariants.isActive, true)))
+      .orderBy(asc(productVariants.sortOrder));
+  },
+
+  /**
+   * One variant priced and stocked at a store — what the cart needs to know
+   * before it will hold a line.
+   */
+  async findVariantForStore(variantId: string, storeId: string, ex: Executor = db) {
+    const [row] = await ex
+      .select({
+        id: productVariants.id,
+        productId: productVariants.productId,
+        label: productVariants.label,
+        unit: productVariants.unit,
+        name: products.name,
+        imageUrl: products.imageUrl,
+        basePrice: productVariants.basePrice,
+        price: priceExpr,
+        availableQty: availableExpr,
+      })
+      .from(productVariants)
+      .innerJoin(products, eq(products.id, productVariants.productId))
+      .leftJoin(
+        inventory,
+        and(eq(inventory.variantId, productVariants.id), eq(inventory.storeId, storeId)),
+      )
+      .where(
+        and(
+          eq(productVariants.id, variantId),
+          eq(productVariants.isActive, true),
+          eq(products.isActive, true),
+        ),
+      )
       .limit(1);
     return row;
   },

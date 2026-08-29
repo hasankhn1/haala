@@ -34,6 +34,10 @@ export type UpdateInventoryInput = z.infer<typeof updateInventorySchema>;
 
 /** One product with its stock/pricing at a single store. */
 export interface OpsCatalogRow {
+  /** Stock and price overrides are per variant, so a row is a variant. */
+  variantId: string;
+  /** e.g. "500 g" — shown beside the product name. */
+  variantLabel: string;
   productId: string;
   name: string;
   slug: string;

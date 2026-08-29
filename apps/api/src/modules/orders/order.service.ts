@@ -106,21 +106,21 @@ export const orderService = {
     const user = await userRepository.findById(userId);
     if (!user) throw AppError.unauthorized();
 
-    const productIds = lines.map((l) => l.productId);
+    const variantIds = lines.map((l) => l.variantId);
 
     const { order, checkout } = await db.transaction(async (tx) => {
       // Lock the inventory rows so concurrent checkouts can't oversell.
-      const invRows = await inventoryRepository.lockForStore(storeId, productIds, tx);
-      const invByProduct = new Map(invRows.map((r) => [r.productId, r]));
+      const invRows = await inventoryRepository.lockForStore(storeId, variantIds, tx);
+      const invByVariant = new Map(invRows.map((r) => [r.variantId, r]));
 
       for (const line of lines) {
-        const inv = invByProduct.get(line.productId);
+        const inv = invByVariant.get(line.variantId);
         if (!inv || availableToSell(inv) < line.quantity) {
           throw AppError.outOfStock(`"${line.product.name}" is out of stock`);
         }
       }
       for (const line of lines) {
-        await inventoryRepository.reserve(storeId, line.productId, line.quantity, tx);
+        await inventoryRepository.reserve(storeId, line.variantId, line.quantity, tx);
       }
 
       const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
@@ -179,9 +179,12 @@ export const orderService = {
       await orderRepository.addItems(
         lines.map((l) => ({
           orderId: created.id,
-          productId: l.productId,
+          // `productId` stays the historical anchor — analytics groups by it —
+          // while `variantId` records which size was actually sold.
+          productId: l.product.id,
+          variantId: l.variantId,
           name: l.product.name,
-          unit: l.product.unit,
+          unit: l.variant.label,
           quantity: l.quantity,
           unitPrice: l.unitPrice,
           lineTotal: l.unitPrice * l.quantity,

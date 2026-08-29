@@ -53,13 +53,13 @@ export default function CatalogPage() {
 
   const saveInventory = useMutation({
     mutationFn: (vars: {
-      productId: string;
+      variantId: string;
       quantityAvailable?: number;
       isAvailable?: boolean;
       price?: number | null;
     }) => {
-      const { productId, ...body } = vars;
-      return api.patch(`/ops/stores/${storeId}/inventory/${productId}`, body);
+      const { variantId, ...body } = vars;
+      return api.patch(`/ops/stores/${storeId}/inventory/${variantId}`, body);
     },
     onSuccess: () => {
       setError(null);
@@ -172,9 +172,14 @@ export default function CatalogPage() {
               </tr>
             ) : (
               visible.map((r) => (
-                <tr key={r.productId}>
+                <tr key={r.variantId}>
                   <td>
-                    <div style={{ fontWeight: 600 }}>{r.name}</div>
+                    <div style={{ fontWeight: 600 }}>
+                      {r.name}{' '}
+                      <span className="muted" style={{ fontWeight: 500 }}>
+                        · {r.variantLabel}
+                      </span>
+                    </div>
                     <div className="muted">{r.unit}</div>
                   </td>
                   <td className="muted">{r.categoryName}</td>
@@ -198,7 +203,7 @@ export default function CatalogPage() {
                       allowEmpty
                       placeholder="—"
                       onCommit={(paisa) =>
-                        saveInventory.mutate({ productId: r.productId, price: paisa })
+                        saveInventory.mutate({ variantId: r.variantId, price: paisa })
                       }
                     />
                   </td>
@@ -211,7 +216,7 @@ export default function CatalogPage() {
                     <NumberInput
                       value={r.quantityAvailable}
                       onCommit={(qty) =>
-                        saveInventory.mutate({ productId: r.productId, quantityAvailable: qty })
+                        saveInventory.mutate({ variantId: r.variantId, quantityAvailable: qty })
                       }
                     />
                   </td>
@@ -245,7 +250,7 @@ export default function CatalogPage() {
                       }
                       onClick={() =>
                         saveInventory.mutate({
-                          productId: r.productId,
+                          variantId: r.variantId,
                           isAvailable: !r.isAvailable,
                         })
                       }

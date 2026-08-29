@@ -1,6 +1,6 @@
 import { integer, pgTable, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { pk, timestamps } from './_helpers';
-import { products } from './catalog';
+import { productVariants } from './variants';
 import { stores } from './stores';
 import { users } from './users';
 
@@ -24,15 +24,15 @@ export const cartItems = pgTable(
     cartId: uuid()
       .notNull()
       .references(() => carts.id, { onDelete: 'cascade' }),
-    productId: uuid()
+    variantId: uuid()
       .notNull()
-      .references(() => products.id, { onDelete: 'cascade' }),
+      .references(() => productVariants.id, { onDelete: 'cascade' }),
     quantity: integer().notNull().default(1),
     /** Price snapshot in paisa at time of add. */
     unitPrice: integer().notNull(),
     ...timestamps(),
   },
-  (t) => [uniqueIndex('cart_items_cart_product_uq').on(t.cartId, t.productId)],
+  (t) => [uniqueIndex('cart_items_cart_variant_uq').on(t.cartId, t.variantId)],
 );
 
 export type Cart = typeof carts.$inferSelect;

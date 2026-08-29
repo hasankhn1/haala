@@ -22,6 +22,7 @@ const toProductView = (p: ProductWithStock): ProductView => ({
   price: Number(p.price),
   basePrice: p.basePrice,
   availableQty: Number(p.availableQty),
+  defaultVariantId: p.defaultVariantId ?? null,
   inStock: Number(p.availableQty) > 0,
 });
 
@@ -44,6 +45,21 @@ export const catalogService = {
   async getProduct(productId: string, storeId: string): Promise<ProductView> {
     const row = await catalogRepository.findProductForStore(productId, storeId);
     if (!row) throw AppError.notFound('Product not found');
-    return toProductView(row);
+
+    // Sizes come with the detail response and nowhere else — this is the only
+    // screen that offers a choice between them.
+    const variants = await catalogRepository.variantsForProduct(productId, storeId);
+    return {
+      ...toProductView(row),
+      variants: variants.map((v) => ({
+        id: v.id,
+        label: v.label,
+        unit: v.unit,
+        basePrice: v.basePrice,
+        price: Number(v.price),
+        availableQty: Number(v.availableQty),
+        inStock: Number(v.availableQty) > 0,
+      })),
+    };
   },
 };

@@ -10,7 +10,7 @@ import type {
 import { AppError } from '../../common/errors';
 import { logger } from '../../common/logger';
 import { db } from '../../db/client';
-import { categories, inventory, products, stores } from '../../db/schema';
+import { categories, inventory, productVariants, products, stores } from '../../db/schema';
 import { availableToSell } from '../inventory/inventory.repository';
 
 /**
@@ -71,29 +71,34 @@ export const opsCatalogService = {
    */
   async catalogForStore(storeId: string): Promise<OpsCatalogRow[]> {
     const rows = await db
-      .select({ product: products, category: categories, inv: inventory })
+      .select({ product: products, category: categories, variant: productVariants, inv: inventory })
       .from(products)
       .innerJoin(categories, eq(categories.id, products.categoryId))
+      // One row per sellable size — stock and price overrides are per variant,
+      // so an operator has to be able to set them per variant.
+      .innerJoin(productVariants, eq(productVariants.productId, products.id))
       .leftJoin(
         inventory,
-        and(eq(inventory.productId, products.id), eq(inventory.storeId, storeId)),
+        and(eq(inventory.variantId, productVariants.id), eq(inventory.storeId, storeId)),
       )
-      .orderBy(asc(categories.sortOrder), asc(products.name));
+      .orderBy(asc(categories.sortOrder), asc(products.name), asc(productVariants.sortOrder));
 
-    return rows.map(({ product, category, inv }) => {
+    return rows.map(({ product, category, variant, inv }) => {
       const storePrice = inv?.price ?? null;
       return {
+        variantId: variant.id,
+        variantLabel: variant.label,
         productId: product.id,
         name: product.name,
         slug: product.slug,
-        unit: product.unit,
+        unit: variant.unit,
         categoryId: category.id,
         categoryName: category.name,
         imageUrl: product.imageUrl,
         isActive: product.isActive,
-        basePrice: product.basePrice,
+        basePrice: variant.basePrice,
         storePrice,
-        effectivePrice: storePrice ?? product.basePrice,
+        effectivePrice: storePrice ?? variant.basePrice,
         quantityAvailable: inv?.quantityAvailable ?? 0,
         quantityReserved: inv?.quantityReserved ?? 0,
         // A product with no inventory row yet is treated as available: the
@@ -122,25 +127,29 @@ export const opsCatalogService = {
    */
   async updateInventory(
     storeId: string,
-    productId: string,
+    variantId: string,
     input: UpdateInventoryInput,
   ): Promise<void> {
     const store = await db.select().from(stores).where(eq(stores.id, storeId)).limit(1);
     if (store.length === 0) throw AppError.notFound('Store not found');
-    const product = await db.select().from(products).where(eq(products.id, productId)).limit(1);
-    if (product.length === 0) throw AppError.notFound('Product not found');
+    const variant = await db
+      .select()
+      .from(productVariants)
+      .where(eq(productVariants.id, variantId))
+      .limit(1);
+    if (variant.length === 0) throw AppError.notFound('Variant not found');
 
     await db
       .insert(inventory)
       .values({
         storeId,
-        productId,
+        variantId,
         quantityAvailable: input.quantityAvailable ?? 0,
         isAvailable: input.isAvailable ?? true,
         price: input.price ?? null,
       })
       .onConflictDoUpdate({
-        target: [inventory.storeId, inventory.productId],
+        target: [inventory.storeId, inventory.variantId],
         // Only overwrite what was actually sent, so editing the price doesn't
         // silently reset stock to zero.
         set: {
@@ -152,6 +161,6 @@ export const opsCatalogService = {
           updatedAt: new Date(),
         },
       });
-    logger.info({ storeId, productId, fields: Object.keys(input) }, 'Inventory updated by ops');
+    logger.info({ storeId, variantId, fields: Object.keys(input) }, 'Inventory updated by ops');
   },
 };

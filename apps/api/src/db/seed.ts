@@ -1,9 +1,10 @@
 import bcrypt from 'bcryptjs';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { rupees } from '@haala/shared';
 import { logger } from '../common/logger';
 import { closeDb, db } from './client';
-import { categories, inventory, products, promotions, riders, stores, users } from './schema';
+import { categories, inventory, productVariants,
+  products, promotions, riders, stores, users } from './schema';
 import {
   SEED_CATEGORIES,
   SEED_PASSWORD,
@@ -169,6 +170,32 @@ const seed = async (): Promise<void> => {
       if (!productRow) continue;
       productCount += 1;
 
+      /**
+       * Every product needs its default variant — `sortOrder: 0`, of which a
+       * partial unique index allows exactly one. Stock hangs off the variant,
+       * so without this there is nothing to stock.
+       */
+      await db
+        .insert(productVariants)
+        .values({
+          productId: productRow.id,
+          label: item.unit,
+          unit: item.unit,
+          basePrice,
+          sortOrder: 0,
+        })
+        .onConflictDoUpdate({
+          target: [productVariants.productId, productVariants.label],
+          set: { unit: item.unit, basePrice, isActive: true },
+        });
+
+      const [variantRow] = await db
+        .select()
+        .from(productVariants)
+        .where(and(eq(productVariants.productId, productRow.id), eq(productVariants.sortOrder, 0)))
+        .limit(1);
+      if (!variantRow) continue;
+
       for (const store of storeRows) {
         const r = hash(`${store.code}:${item.slug}`);
 
@@ -182,9 +209,9 @@ const seed = async (): Promise<void> => {
 
         await db
           .insert(inventory)
-          .values({ storeId: store.id, productId: productRow.id, quantityAvailable, price })
+          .values({ storeId: store.id, variantId: variantRow.id, quantityAvailable, price })
           .onConflictDoUpdate({
-            target: [inventory.storeId, inventory.productId],
+            target: [inventory.storeId, inventory.variantId],
             set: { quantityAvailable, price },
           });
         stockRows += 1;

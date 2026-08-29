@@ -125,15 +125,19 @@ export default function SearchScreen() {
                     original={item.basePrice}
                   imageUrl={item.imageUrl}
                   inStock={item.inStock}
-                  quantity={qtyByProduct.get(item.id) ?? 0}
+                  quantity={qtyByProduct.get(item.defaultVariantId ?? "") ?? 0}
                   busy={busyProductId === item.id}
                   onPress={() => {
                     addRecent(query);
                     router.push(`/product/${item.id}`);
                   }}
-                  onAdd={() => addOne(item.id)}
-                  onIncrement={() => setQty(item.id, (qtyByProduct.get(item.id) ?? 0) + 1)}
-                  onDecrement={() => setQty(item.id, (qtyByProduct.get(item.id) ?? 0) - 1)}
+                  onAdd={() => addOne(item.defaultVariantId)}
+                  onIncrement={() =>
+                        setQty(item.defaultVariantId ?? "", (qtyByProduct.get(item.defaultVariantId ?? "") ?? 0) + 1)
+                      }
+                  onDecrement={() =>
+                        setQty(item.defaultVariantId ?? "", (qtyByProduct.get(item.defaultVariantId ?? "") ?? 0) - 1)
+                      }
                 />
               </View>
             )}
