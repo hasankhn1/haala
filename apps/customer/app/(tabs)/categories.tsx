@@ -76,12 +76,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.sm,
     alignItems: 'center',
     gap: theme.spacing.sm,
-    minHeight: 128,
+    minHeight: 116,
   },
-  /** Same 74px tile as the Home rail, so the two entry points match. */
+  /** Same tile as the Home rail, so the two entry points match. */
   tileImage: {
-    width: 74,
-    height: 74,
+    width: 64,
+    height: 64,
     borderRadius: theme.radii.lg,
     backgroundColor: theme.colors.infoSoft,
     padding: 7,

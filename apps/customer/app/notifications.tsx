@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NotificationView } from '@haala/shared';
 import { EmptyState, Icon, type IconName, StateView, Text, theme } from '@haala/ui';
@@ -62,8 +62,17 @@ export default function NotificationsScreen() {
           Notifications
         </Text>
         {unread > 0 ? (
-          <Pressable onPress={() => markAll.mutate()} hitSlop={8}>
-            <Text variant="labelSm">MARK ALL READ</Text>
+          <Pressable
+            onPress={() => markAll.mutate()}
+            hitSlop={8}
+            disabled={markAll.isPending}
+            style={markAll.isPending && styles.pending}
+          >
+            {markAll.isPending ? (
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+            ) : (
+              <Text variant="labelSm">MARK ALL READ</Text>
+            )}
           </Pressable>
         ) : null}
       </View>
@@ -120,6 +129,7 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
+  pending: { opacity: 0.6 },
   safe: { flex: 1, backgroundColor: theme.colors.background },
   flex: { flex: 1 },
   header: {

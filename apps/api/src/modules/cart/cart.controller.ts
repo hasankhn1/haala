@@ -12,11 +12,11 @@ export const cartController = {
   async updateItem(req: Request, res: Response): Promise<void> {
     sendSuccess(
       res,
-      await cartService.updateItem(req.auth!.userId, req.params.productId!, req.body.quantity),
+      await cartService.updateItem(req.auth!.userId, req.params.variantId!, req.body.quantity),
     );
   },
   async removeItem(req: Request, res: Response): Promise<void> {
-    sendSuccess(res, await cartService.removeItem(req.auth!.userId, req.params.productId!));
+    sendSuccess(res, await cartService.removeItem(req.auth!.userId, req.params.variantId!));
   },
   async clear(req: Request, res: Response): Promise<void> {
     sendSuccess(res, await cartService.clear(req.auth!.userId));

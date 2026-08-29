@@ -130,7 +130,7 @@ function GridCard({
         ) : null}
       </View>
 
-      <Text variant="bodySm" numberOfLines={2} style={styles.name}>
+      <Text variant="bodySm" numberOfLines={2}>
         {name}
       </Text>
       <Text variant="caption" color="textSecondary" numberOfLines={1}>
@@ -208,7 +208,7 @@ function CompactCard({
         ) : null}
       </View>
 
-      <Text variant="bodySm" numberOfLines={2} style={styles.compactName}>
+      <Text variant="bodySm" numberOfLines={2}>
         {name}
       </Text>
       <PriceText amount={price} original={original} variant="price" />
@@ -301,8 +301,9 @@ function RowCard({
   );
 }
 
-/** Home's shelf rails. */
-export const COMPACT_CARD_WIDTH = 146;
+/** Home's shelf rails. Narrower than the comp's 146 so more of the shelf is
+ *  visible at once — the rail is for browsing, not for reading. */
+export const COMPACT_CARD_WIDTH = 126;
 /** The PDP's "more in this aisle" rail — the comps use a smaller tile there. */
 export const MINI_CARD_WIDTH = 120;
 /** The cart's "Forgot something?" rail. */
@@ -314,7 +315,7 @@ const priceLabel = (paisa: number): string =>
 
 const styles = StyleSheet.create({
   // Grid — no surface; the photo is the card.
-  grid: { gap: theme.spacing.sm },
+  grid: { gap: 6 },
   imageWrap: {
     width: '100%',
     height: 150,
@@ -333,10 +334,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  name: { minHeight: 36 },
 
   // Compact (shelf)
-  compact: { gap: theme.spacing.sm },
   compactImage: {
     width: '100%',
     borderRadius: theme.radii.md,
@@ -373,7 +372,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  compactName: { minHeight: 34 },
+  compact: { gap: 6 },
 
   // Row — the cart line. No panel: a sunken thumb well plus a hairline rule
   // is what separates one line from the next on a white canvas.

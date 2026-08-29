@@ -33,7 +33,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const categories = useQuery({ queryKey: qk.categories, queryFn: catalogApi.categories });
-  const { cart, qtyByProduct, busyProductId, addOne, setQty } = useProductActions(storeId);
+  const { cart, qtyByProduct, busyVariantId, addOne, setQty } = useProductActions(storeId);
 
   const shelfCategories = (categories.data ?? []).slice(0, SHELF_COUNT);
 
@@ -272,12 +272,16 @@ export default function HomeScreen() {
                     original={item.basePrice}
                       imageUrl={item.imageUrl}
                       inStock={item.inStock}
-                      quantity={qtyByProduct.get(item.id) ?? 0}
-                      busy={busyProductId === item.id}
+                      quantity={qtyByProduct.get(item.defaultVariantId ?? "") ?? 0}
+                      busy={busyVariantId === item.defaultVariantId}
                       onPress={() => router.push(`/product/${item.id}`)}
-                      onAdd={() => addOne(item.id)}
-                      onIncrement={() => setQty(item.id, (qtyByProduct.get(item.id) ?? 0) + 1)}
-                      onDecrement={() => setQty(item.id, (qtyByProduct.get(item.id) ?? 0) - 1)}
+                      onAdd={() => addOne(item.defaultVariantId)}
+                      onIncrement={() =>
+                        setQty(item.defaultVariantId ?? "", (qtyByProduct.get(item.defaultVariantId ?? "") ?? 0) + 1)
+                      }
+                      onDecrement={() =>
+                        setQty(item.defaultVariantId ?? "", (qtyByProduct.get(item.defaultVariantId ?? "") ?? 0) - 1)
+                      }
                     />
                   )}
                 />
@@ -407,10 +411,10 @@ const styles = StyleSheet.create({
   seeAll: { color: theme.colors.primaryPressed },
   // Rails bleed to the right screen edge; the section header stays on the grid.
   rail: { gap: theme.spacing.md, paddingRight: theme.layout.margin },
-  catTile: { width: 74, alignItems: 'center', gap: theme.spacing.sm },
+  catTile: { width: 64, alignItems: 'center', gap: theme.spacing.sm },
   catTileImage: {
-    width: 74,
-    height: 74,
+    width: 64,
+    height: 64,
     borderRadius: theme.radii.lg,
     backgroundColor: theme.colors.infoSoft,
     padding: 7,

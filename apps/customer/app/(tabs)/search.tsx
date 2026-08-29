@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { FlashList } from '@shopify/flash-list';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { ProductView } from '@haala/shared';
 import { Chip, EmptyState, Icon, ProductCard, SearchBar, Skeleton, Text, theme } from '@haala/ui';
@@ -25,7 +26,7 @@ export default function SearchScreen() {
   const [term, setTerm] = useState('');
   const debounced = useDebouncedValue(term, 300);
   const { recents, addRecent, removeRecent, clearRecents } = useSearchStore();
-  const { qtyByProduct, busyProductId, addOne, setQty } = useProductActions(storeId);
+  const { qtyByProduct, busyVariantId, addOne, setQty } = useProductActions(storeId);
 
   const query = debounced.trim();
   const active = query.length >= MIN_QUERY;
@@ -100,6 +101,8 @@ export default function SearchScreen() {
         </View>
       ) : results.isLoading ? (
         <GridSkeleton />
+      ) : results.isFetching && items.length === 0 ? (
+        <GridSkeleton />
       ) : items.length === 0 ? (
         <EmptyState
           emoji="🔍"
@@ -108,6 +111,16 @@ export default function SearchScreen() {
         />
       ) : (
         <View style={styles.flex}>
+          {/* Results are already on screen; a hairline bar says a newer set is
+              on its way without throwing the list away and re-skeletoning. */}
+          {results.isFetching ? (
+            <View style={styles.searching}>
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+              <Text variant="caption" color="textSecondary">
+                Searching…
+              </Text>
+            </View>
+          ) : null}
           <FlashList
             data={items}
             numColumns={2}
@@ -125,15 +138,19 @@ export default function SearchScreen() {
                     original={item.basePrice}
                   imageUrl={item.imageUrl}
                   inStock={item.inStock}
-                  quantity={qtyByProduct.get(item.id) ?? 0}
-                  busy={busyProductId === item.id}
+                  quantity={qtyByProduct.get(item.defaultVariantId ?? "") ?? 0}
+                  busy={busyVariantId === item.defaultVariantId}
                   onPress={() => {
                     addRecent(query);
                     router.push(`/product/${item.id}`);
                   }}
-                  onAdd={() => addOne(item.id)}
-                  onIncrement={() => setQty(item.id, (qtyByProduct.get(item.id) ?? 0) + 1)}
-                  onDecrement={() => setQty(item.id, (qtyByProduct.get(item.id) ?? 0) - 1)}
+                  onAdd={() => addOne(item.defaultVariantId)}
+                  onIncrement={() =>
+                        setQty(item.defaultVariantId ?? "", (qtyByProduct.get(item.defaultVariantId ?? "") ?? 0) + 1)
+                      }
+                  onDecrement={() =>
+                        setQty(item.defaultVariantId ?? "", (qtyByProduct.get(item.defaultVariantId ?? "") ?? 0) - 1)
+                      }
                 />
               </View>
             )}
@@ -162,6 +179,13 @@ function GridSkeleton() {
 }
 
 const styles = StyleSheet.create({
+  searching: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    paddingHorizontal: theme.layout.margin,
+    paddingBottom: theme.spacing.sm,
+  },
   safe: { flex: 1, backgroundColor: theme.colors.background },
   flex: { flex: 1 },
   header: { paddingHorizontal: theme.layout.margin, paddingVertical: theme.spacing.md },

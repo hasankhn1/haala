@@ -17,6 +17,19 @@ export interface CategoryView {
   sortOrder: number;
 }
 
+export interface ProductVariantView {
+  id: string;
+  /** e.g. "500 g" — the "Pick a size" label. */
+  label: string;
+  unit: string;
+  /** Catalogue price in paisa, before any store override. */
+  basePrice: number;
+  /** What this size costs at the current store, in paisa. */
+  price: number;
+  availableQty: number;
+  inStock: boolean;
+}
+
 export interface ProductView {
   id: string;
   name: string;
@@ -30,4 +43,16 @@ export interface ProductView {
   basePrice: number;
   inStock: boolean;
   availableQty: number;
+  /**
+   * The variant a product card adds to the basket — the default size whose
+   * price and stock this row already reports. A card cannot add a *product*:
+   * stock hangs off the variant.
+   */
+  defaultVariantId: string | null;
+  /**
+   * Every sellable size, cheapest-first. Present on the **detail** response
+   * only — the listing resolves each product's default variant instead, since
+   * loading every size would multiply each row by its variant count.
+   */
+  variants?: ProductVariantView[];
 }

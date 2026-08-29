@@ -10,9 +10,13 @@ export function useProductActions(storeId: string | null) {
   const cart = useCart();
   const { add, update } = useCartMutations();
 
+  /**
+   * Keyed by **variant**, because that is what a basket line holds — two sizes
+   * of the same product are two lines with two quantities.
+   */
   const qtyByProduct = useMemo(() => {
     const map = new Map<string, number>();
-    cart.data?.items.forEach((i) => map.set(i.productId, i.quantity));
+    cart.data?.items.forEach((i) => map.set(i.variantId, i.quantity));
     return map;
   }, [cart.data]);
 
@@ -21,16 +25,18 @@ export function useProductActions(storeId: string | null) {
     qtyByProduct,
     busy: add.isPending,
     /**
-     * The product with an add in flight, so a card can show a spinner on its
-     * own button instead of every card reacting to any add.
+     * The **variant** with an add in flight, so a card can spin its own button
+     * instead of every card reacting to any add. Named for what it holds: it
+     * was `busyProductId` and kept being compared against product ids, which
+     * silently meant no card ever showed a spinner.
      */
-    busyProductId: add.isPending ? (add.variables?.productId ?? null) : null,
-    /** Add `quantity` of a product to the cart (defaults to a single unit). */
-    addOne: (productId: string, quantity = 1) => {
-      if (!storeId) return;
+    busyVariantId: add.isPending ? (add.variables?.variantId ?? null) : null,
+    /** Add `quantity` of a **variant** to the cart (defaults to a single unit). */
+    addOne: (variantId: string | null, quantity = 1) => {
+      if (!storeId || !variantId) return;
       haptics.tap();
       add.mutate(
-        { storeId, productId, quantity },
+        { storeId, variantId, quantity },
         {
           // No success toast: the card flips to a stepper and the haptic already
           // fired, so a toast on every tap is three signals for one action — and
@@ -40,10 +46,10 @@ export function useProductActions(storeId: string | null) {
         },
       );
     },
-    setQty: (productId: string, quantity: number) => {
+    setQty: (variantId: string, quantity: number) => {
       haptics.select();
       update.mutate(
-        { productId, quantity },
+        { variantId, quantity },
         {
           onError: (e) =>
             toast.show(e instanceof ApiError ? e.message : 'Could not update cart', 'error'),

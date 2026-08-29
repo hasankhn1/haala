@@ -7,6 +7,6 @@ const router: Router = Router();
 
 router.use(authenticate);
 
-router.get('/:storeId/:productId', asyncHandler(inventoryController.availability));
+router.get('/:storeId/:variantId', asyncHandler(inventoryController.availability));
 
 export const inventoryRoutes = router;

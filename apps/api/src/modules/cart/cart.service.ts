@@ -10,28 +10,31 @@ export const cartService = {
     const items = await cartRepository.items(cart.id);
 
     // Availability at the cart's store, to flag lines that can't be checked out.
-    const stockByProduct = new Map<string, number>();
+    const stockByVariant = new Map<string, number>();
     if (cart.storeId && items.length > 0) {
       const rows = await inventoryRepository.findManyForStore(
         cart.storeId,
-        items.map((i) => i.productId),
+        items.map((i) => i.variantId),
       );
-      for (const r of rows) stockByProduct.set(r.productId, availableToSell(r));
+      for (const r of rows) stockByVariant.set(r.variantId, availableToSell(r));
     }
 
     const viewItems = items.map((i) => ({
-      productId: i.productId,
+      variantId: i.variantId,
+      productId: i.product.id,
       name: i.product.name,
-      unit: i.product.unit,
+      // The size, not the product's catalogue unit — a 1kg line must not
+      // render as "500 g" just because that is the product's default.
+      unit: i.variant.label,
       imageUrl: i.product.imageUrl,
       unitPrice: i.unitPrice,
       // The catalogue price before any store override or promotion, so the
       // cart can state what the customer is saving. `unitPrice` is what they
       // actually pay and remains the only number used in arithmetic.
-      basePrice: i.product.basePrice,
+      basePrice: i.variant.basePrice,
       quantity: i.quantity,
       lineTotal: i.unitPrice * i.quantity,
-      inStock: (stockByProduct.get(i.productId) ?? 0) >= i.quantity,
+      inStock: (stockByVariant.get(i.variantId) ?? 0) >= i.quantity,
     }));
 
     return {
@@ -54,8 +57,8 @@ export const cartService = {
   },
 
   async addItem(userId: string, input: AddCartItemInput): Promise<CartView> {
-    const product = await catalogRepository.findProductForStore(input.productId, input.storeId);
-    if (!product) throw AppError.notFound('Product not available at this store');
+    const variant = await catalogRepository.findVariantForStore(input.variantId, input.storeId);
+    if (!variant) throw AppError.notFound('This size is not available at this store');
 
     const cart = await cartRepository.getOrCreate(userId);
 
@@ -67,40 +70,40 @@ export const cartService = {
       await cartRepository.setStore(cart.id, input.storeId);
     }
 
-    const existing = await cartRepository.findItem(cart.id, input.productId);
+    const existing = await cartRepository.findItem(cart.id, input.variantId);
     const desiredQty = (existing?.quantity ?? 0) + input.quantity;
-    if (desiredQty > Number(product.availableQty)) {
-      throw AppError.outOfStock(`Only ${product.availableQty} in stock`);
+    if (desiredQty > Number(variant.availableQty)) {
+      throw AppError.outOfStock(`Only ${variant.availableQty} in stock`);
     }
 
-    await cartRepository.upsertItem(cart.id, input.productId, desiredQty, Number(product.price));
+    await cartRepository.upsertItem(cart.id, input.variantId, desiredQty, Number(variant.price));
     return this.getCart(userId);
   },
 
-  async updateItem(userId: string, productId: string, quantity: number): Promise<CartView> {
+  async updateItem(userId: string, variantId: string, quantity: number): Promise<CartView> {
     const cart = await cartRepository.getOrCreate(userId);
-    const existing = await cartRepository.findItem(cart.id, productId);
+    const existing = await cartRepository.findItem(cart.id, variantId);
     if (!existing) throw AppError.notFound('Item not in cart');
 
     if (quantity === 0) {
-      await cartRepository.removeItem(cart.id, productId);
+      await cartRepository.removeItem(cart.id, variantId);
       await this.resetStoreIfEmpty(cart.id);
       return this.getCart(userId);
     }
 
     if (cart.storeId) {
-      const inv = await inventoryRepository.findForStoreProduct(cart.storeId, productId);
+      const inv = await inventoryRepository.findForStoreVariant(cart.storeId, variantId);
       if (!inv || availableToSell(inv) < quantity) {
         throw AppError.outOfStock('Requested quantity is not available');
       }
     }
-    await cartRepository.upsertItem(cart.id, productId, quantity, existing.unitPrice);
+    await cartRepository.upsertItem(cart.id, variantId, quantity, existing.unitPrice);
     return this.getCart(userId);
   },
 
-  async removeItem(userId: string, productId: string): Promise<CartView> {
+  async removeItem(userId: string, variantId: string): Promise<CartView> {
     const cart = await cartRepository.getOrCreate(userId);
-    await cartRepository.removeItem(cart.id, productId);
+    await cartRepository.removeItem(cart.id, variantId);
     await this.resetStoreIfEmpty(cart.id);
     return this.getCart(userId);
   },

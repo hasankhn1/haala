@@ -51,9 +51,9 @@ export const catalogApi = {
 export const cartApi = {
   get: () => api.get<CartView>('/cart'),
   addItem: (input: AddCartItemInput) => api.post<CartView>('/cart/items', input),
-  updateItem: (productId: string, quantity: number) =>
-    api.patch<CartView>(`/cart/items/${productId}`, { quantity }),
-  removeItem: (productId: string) => api.del<CartView>(`/cart/items/${productId}`),
+  updateItem: (variantId: string, quantity: number) =>
+    api.patch<CartView>(`/cart/items/${variantId}`, { quantity }),
+  removeItem: (variantId: string) => api.del<CartView>(`/cart/items/${variantId}`),
   clear: () => api.del<CartView>('/cart'),
 };
 

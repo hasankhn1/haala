@@ -2,6 +2,7 @@ import { integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'dri
 import { pk, timestamps } from './_helpers';
 import { orderStatusEnum, paymentMethodEnum } from './enums';
 import { products } from './catalog';
+import { productVariants } from './variants';
 import { stores } from './stores';
 import { users } from './users';
 
@@ -73,6 +74,12 @@ export const orderItems = pgTable('order_items', {
   productId: uuid()
     .notNull()
     .references(() => products.id, { onDelete: 'restrict' }),
+  /**
+   * The variant sold. Nullable because orders placed before variants existed
+   * have none, and because `productId` — not this — is what analytics groups
+   * by and what the historical record hangs off.
+   */
+  variantId: uuid().references(() => productVariants.id, { onDelete: 'set null' }),
   // Snapshots so historical orders render correctly even if the product changes.
   name: text().notNull(),
   unit: text().notNull(),

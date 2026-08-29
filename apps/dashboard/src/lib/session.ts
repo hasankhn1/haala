@@ -51,4 +51,4 @@ export function readSession(): Partial<SessionTokens> {
 }
 
 /** Base URL of the Haala API, as seen from the Next **server**. */
-export const API_BASE = `${process.env.HAALA_API_URL ?? 'http://localhost:4000'}/api/v1`;
+export const API_BASE = `${process.env.HAALA_API_URL ?? 'https://haala-production.up.railway.app'}/api/v1`;
