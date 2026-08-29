@@ -103,7 +103,7 @@ export function useLocationBroadcast(enabled: boolean): BroadcastState {
           foregroundService: {
             notificationTitle: 'Haala Rider',
             notificationBody: 'Sharing your location for the current delivery',
-            notificationColor: '#0F172A',
+            notificationColor: '#FF5A1F',
           },
         });
         if (!cancelled) setState('broadcasting');

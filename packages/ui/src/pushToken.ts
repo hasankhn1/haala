@@ -38,8 +38,8 @@ const ensureAndroidChannel = async (): Promise<void> => {
     name: 'Order updates',
     importance: Notifications.AndroidImportance.HIGH,
     vibrationPattern: [0, 250, 250, 250],
-    // Onyx primary — the notification accent should match the app's identity.
-    lightColor: '#0F172A',
+    // Ember primary — the notification accent should match the app's identity.
+    lightColor: '#FF5A1F',
   });
 };
 

@@ -122,6 +122,7 @@ export default function SearchScreen() {
                   name={item.name}
                   unit={item.unit}
                   price={item.price}
+                    original={item.basePrice}
                   imageUrl={item.imageUrl}
                   inStock={item.inStock}
                   quantity={qtyByProduct.get(item.id) ?? 0}

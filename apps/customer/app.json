@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "backgroundColor": "#F8FAFC",
+    "backgroundColor": "#EDE7E0",
     "plugins": [
       "expo-router",
       [
@@ -27,7 +27,7 @@
       [
         "expo-notifications",
         {
-          "color": "#0F172A",
+          "color": "#FF5A1F",
           "defaultChannel": "default"
         }
       ]
@@ -42,7 +42,7 @@
     "android": {
       "package": "com.haala.customer",
       "adaptiveIcon": {
-        "backgroundColor": "#0F172A"
+        "backgroundColor": "#FF5A1F"
       },
       "permissions": [
         "ACCESS_COARSE_LOCATION",

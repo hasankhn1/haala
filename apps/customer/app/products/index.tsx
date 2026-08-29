@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { FlashList } from '@shopify/flash-list';
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatPKR, type ProductView } from '@haala/shared';
 import {
@@ -61,7 +61,10 @@ export default function ProductsScreen() {
     [categories.data, categoryId],
   );
 
-  const items = products.data?.items ?? [];
+  const [dealsOnly, setDealsOnly] = useState(false);
+  const all = products.data?.items ?? [];
+  const items = dealsOnly ? all.filter((p) => p.basePrice > p.price) : all;
+  const dealCount = all.filter((p) => p.basePrice > p.price).length;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -86,6 +89,19 @@ export default function ProductsScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.chips}
           >
+            {/* Savings first — the comp puts "Deals only" ahead of the
+                category filters because it is the one people reach for. */}
+            {dealCount > 0 ? (
+              <Pressable
+                onPress={() => setDealsOnly((v) => !v)}
+                style={[styles.dealsPill, dealsOnly && styles.dealsPillOn]}
+                accessibilityRole="button"
+              >
+                <Text variant="labelSm" style={dealsOnly ? styles.dealsOnText : undefined}>
+                  Deals only · {dealCount}
+                </Text>
+              </Pressable>
+            ) : null}
             <Chip
               label="All"
               shape="pill"
@@ -141,6 +157,7 @@ export default function ProductsScreen() {
                     name={item.name}
                     unit={item.unit}
                     price={item.price}
+                    original={item.basePrice}
                     imageUrl={item.imageUrl}
                     inStock={item.inStock}
                     quantity={qtyByProduct.get(item.id) ?? 0}
@@ -180,6 +197,20 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
   },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md },
+  /** Sun-yellow when on, hairline pill when off — savings colour is reserved. */
+  dealsPill: {
+    borderRadius: theme.radii.pill,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 7,
+    justifyContent: 'center',
+  },
+  dealsPillOn: {
+    backgroundColor: theme.colors.promo,
+    borderColor: theme.colors.promo,
+  },
+  dealsOnText: { color: theme.colors.onPromo },
   chips: { gap: theme.spacing.sm, paddingRight: theme.spacing.lg },
   list: { paddingHorizontal: theme.spacing.md, paddingBottom: 140 },
   cell: { flex: 1, padding: theme.spacing.sm },

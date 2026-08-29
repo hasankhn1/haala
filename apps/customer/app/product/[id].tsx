@@ -33,9 +33,11 @@ export default function ProductDetailScreen() {
     enabled: !!storeId && !!id,
   });
 
-  const { qtyByProduct, busy, addOne, setQty } = useProductActions(storeId);
+  const { cart, qtyByProduct, busy, addOne, setQty } = useProductActions(storeId);
   const qty = qtyByProduct.get(id) ?? 0;
   const p = product.data;
+
+  const cartCount = cart.data?.itemCount ?? 0;
 
   /** Quantity chosen on this screen before the item exists in the cart. */
   const [pending, setPending] = useState(1);
@@ -109,12 +111,20 @@ export default function ProductDetailScreen() {
       {/* Floating header — outside the scroll view so it stays put */}
       <SafeAreaView style={styles.header} edges={['top', 'left', 'right']} pointerEvents="box-none">
         <IconButton name="arrow-back" onPress={() => router.back()} accessibilityLabel="Back" />
-        <IconButton
-          name="share-outline"
-          onPress={share}
-          disabled={!p}
-          accessibilityLabel="Share product"
-        />
+        <View>
+          <IconButton
+            name="cart-outline"
+            onPress={() => router.push('/(tabs)/cart')}
+            accessibilityLabel="Your cart"
+          />
+          {cartCount > 0 ? (
+            <View style={styles.cartBadge} pointerEvents="none">
+              <Text variant="labelSm" color="onPrimary">
+                {cartCount}
+              </Text>
+            </View>
+          ) : null}
+        </View>
       </SafeAreaView>
 
       {/* Sticky action bar. Before the item is in the cart the stepper edits a
@@ -183,16 +193,17 @@ function ProductBody({ product: p }: { product: ProductView }) {
         {p.unit}
       </Text>
 
-      {/* Bento facts. Only things the catalog actually knows — the comp's
-          "Grass Fed / Organic" tiles have no equivalent field on ProductView. */}
-      <View style={styles.bento}>
-        <BentoTile icon="cube-outline" value={p.unit} label="Pack size" />
-        <BentoTile
+      {/* Trust pills. Basket states these as a soft ember row rather than a
+          tile grid — but the content is still only what the catalogue knows.
+          The comp's "Freshness promise" and "Best seller in Fruit" are claims
+          with nothing behind them, so they are not here. */}
+      <View style={styles.pills}>
+        <FactPill icon="cube-outline" label={p.unit} />
+        <FactPill
           icon={p.inStock ? 'checkmark-circle-outline' : 'close-circle-outline'}
-          value={p.inStock ? 'In stock' : 'Sold out'}
-          label={p.inStock ? `${p.availableQty} left` : 'Check back soon'}
+          label={p.inStock ? `In stock · ${p.availableQty} left` : 'Sold out'}
         />
-        <BentoTile icon="flash-outline" value={`${ETA_MINUTES} min`} label="Delivery" />
+        <FactPill icon="flash-outline" label={`${ETA_MINUTES} min delivery`} />
       </View>
 
       {p.description ? (
@@ -221,22 +232,11 @@ function ProductBody({ product: p }: { product: ProductView }) {
   );
 }
 
-function BentoTile({
-  icon,
-  value,
-  label,
-}: {
-  icon: IconName;
-  value: string;
-  label: string;
-}) {
+function FactPill({ icon, label }: { icon: IconName; label: string }) {
   return (
-    <View style={styles.tile}>
-      <Icon name={icon} size={22} color={theme.colors.primary} />
-      <Text variant="labelSm" align="center" numberOfLines={1}>
-        {value}
-      </Text>
-      <Text variant="caption" color="textSecondary" align="center" numberOfLines={1}>
+    <View style={styles.pill}>
+      <Icon name={icon} size={13} color={theme.colors.accent} />
+      <Text variant="labelSm" numberOfLines={1}>
         {label}
       </Text>
     </View>
@@ -259,11 +259,9 @@ function DetailSkeleton() {
     <View style={styles.skel}>
       <Skeleton width="75%" height={26} />
       <Skeleton width="35%" height={16} />
-      <View style={styles.bento}>
-        {[0, 1, 2].map((i) => (
-          <View key={i} style={styles.flex}>
-            <Skeleton height={86} radius={theme.radii.md} />
-          </View>
+      <View style={styles.pills}>
+        {[92, 116, 104].map((w) => (
+          <Skeleton key={w} width={w} height={28} radius={theme.radii.pill} />
         ))}
       </View>
       <Skeleton width="45%" height={20} />
@@ -281,6 +279,18 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { paddingBottom: 120 },
 
+  cartBadge: {
+    position: 'absolute',
+    right: -3,
+    top: -3,
+    minWidth: 18,
+    height: 18,
+    borderRadius: theme.radii.pill,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
   header: {
     position: 'absolute',
     top: 0,
@@ -334,15 +344,20 @@ const styles = StyleSheet.create({
   strike: { textDecorationLine: 'line-through' },
   unit: { marginTop: theme.spacing.xs },
 
-  bento: { flexDirection: 'row', gap: theme.spacing.md, marginTop: theme.spacing.xl },
-  tile: {
-    flex: 1,
-    backgroundColor: theme.colors.surfaceMuted,
-    borderRadius: theme.radii.md,
-    paddingVertical: theme.spacing.lg,
-    paddingHorizontal: theme.spacing.sm,
+  pills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.lg,
+  },
+  pill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
+    backgroundColor: theme.colors.infoSoft,
+    borderRadius: theme.radii.pill,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
   },
 
   block: { marginTop: theme.layout.sectionGap, gap: theme.spacing.md },

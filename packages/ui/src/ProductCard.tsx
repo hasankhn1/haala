@@ -41,7 +41,15 @@ export function ProductCard(props: ProductCardProps) {
   return <GridCard {...props} />;
 }
 
-/** White surface, 8px radius, ambient ink shadow, 40px solid-Onyx add button. */
+/**
+ * Basket's product card: no white surface at all. The photo is the card — a
+ * 16px-radius block on clay — with the saving badge pinned top-left and the
+ * add control floating over the bottom-right corner. Name, unit and price sit
+ * directly on the beige canvas underneath.
+ *
+ * Dropping the white panel is what lets a two-column grid breathe on a warm
+ * background; the old card needed its own surface to separate from near-white.
+ */
 function GridCard({
   name,
   unit,
@@ -65,7 +73,7 @@ function GridCard({
       style={({ pressed }) => [styles.grid, pressed && onPress ? { opacity: 0.92 } : null]}
     >
       <View style={styles.imageWrap}>
-        <Thumb imageUrl={imageUrl} name={name} fill radius={theme.radii.sm} />
+        <Thumb imageUrl={imageUrl} name={name} fill radius={theme.radii.md} />
         {off > 0 ? (
           <View style={styles.badgeTL}>
             <DiscountBadge percent={off} />
@@ -90,20 +98,11 @@ function GridCard({
             </Text>
           </View>
         ) : null}
-      </View>
-
-      <Text variant="bodyStrong" numberOfLines={2} style={styles.name}>
-        {name}
-      </Text>
-      <Text variant="caption" color="textSecondary">
-        {unit}
-      </Text>
-
-      <View style={styles.gridFooter}>
-        <PriceText amount={price} original={original} variant="price" />
-        <View style={styles.action}>
-          {inStock ? (
-            quantity > 0 ? (
+        {/* The add control floats on the photo rather than sitting in a footer
+            row — it keeps the text block below to pure information. */}
+        {inStock ? (
+          <View style={styles.actionFloat}>
+            {quantity > 0 ? (
               <QuantityStepper
                 value={quantity}
                 onChange={(next) => (next > quantity ? onIncrement?.() : onDecrement?.())}
@@ -113,17 +112,25 @@ function GridCard({
             ) : (
               <IconButton
                 name="add"
-                variant="primary"
-                size={20}
-                dimension={36}
+                size={19}
+                dimension={34}
+                color={theme.colors.primary}
                 onPress={onAdd}
                 loading={busy}
                 accessibilityLabel={`Add ${name} to cart`}
               />
-            )
-          ) : null}
-        </View>
+            )}
+          </View>
+        ) : null}
       </View>
+
+      <Text variant="bodySm" numberOfLines={2} style={styles.name}>
+        {name}
+      </Text>
+      <Text variant="caption" color="textSecondary" numberOfLines={1}>
+        {unit}
+      </Text>
+      <PriceText amount={price} original={original} variant="price" />
     </Pressable>
   );
 }
@@ -150,7 +157,7 @@ function CompactCard({
       style={({ pressed }) => [styles.compact, pressed && onPress ? { opacity: 0.92 } : null]}
     >
       <View style={styles.compactImage}>
-        <Thumb imageUrl={imageUrl} name={name} fill radius={theme.radii.xs} />
+        <Thumb imageUrl={imageUrl} name={name} fill radius={theme.radii.md} />
         {off > 0 ? (
           <View style={styles.badgeTL}>
             <DiscountBadge percent={off} />
@@ -163,40 +170,34 @@ function CompactCard({
             </Text>
           </View>
         ) : null}
-      </View>
-
-      <Text variant="labelSm" numberOfLines={2} style={styles.compactName}>
-        {name}
-      </Text>
-      <Text variant="caption" color="textSecondary" numberOfLines={1}>
-        {unit}
-      </Text>
-
-      <View style={styles.compactFooter}>
-        <Text variant="bodyStrong" numberOfLines={1} style={styles.flexShrink}>
-          {priceLabel(price)}
-        </Text>
         {inStock ? (
-          quantity > 0 ? (
-            <QuantityStepper
-              value={quantity}
-              onChange={(next) => (next > quantity ? onIncrement?.() : onDecrement?.())}
-              size="sm"
-              loading={busy}
-            />
-          ) : (
-            <IconButton
-              name="add"
-              variant="primary"
-              size={18}
-              dimension={30}
-              onPress={onAdd}
-              loading={busy}
-              accessibilityLabel={`Add ${name} to cart`}
-            />
-          )
+          <View style={styles.actionFloat}>
+            {quantity > 0 ? (
+              <QuantityStepper
+                value={quantity}
+                onChange={(next) => (next > quantity ? onIncrement?.() : onDecrement?.())}
+                size="sm"
+                loading={busy}
+              />
+            ) : (
+              <IconButton
+                name="add"
+                size={17}
+                dimension={34}
+                color={theme.colors.primary}
+                onPress={onAdd}
+                loading={busy}
+                accessibilityLabel={`Add ${name} to cart`}
+              />
+            )}
+          </View>
         ) : null}
       </View>
+
+      <Text variant="bodySm" numberOfLines={2} style={styles.compactName}>
+        {name}
+      </Text>
+      <PriceText amount={price} original={original} variant="price" />
     </Pressable>
   );
 }
@@ -252,54 +253,40 @@ function RowCard({
   );
 }
 
-/** Compact cards have no room for a struck-through original, so price only. */
-const priceLabel = (paisa: number): string =>
-  `Rs. ${Math.round(paisa / 100).toLocaleString('en-PK')}`;
-
-/** Fixed shelf-card width, matching the design's 132px rail rhythm. */
-export const COMPACT_CARD_WIDTH = 132;
+/** Fixed shelf-card width, matching the design's 146px rail rhythm. */
+export const COMPACT_CARD_WIDTH = 146;
 
 const styles = StyleSheet.create({
-  // Grid
-  grid: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.sm,
-    padding: theme.spacing.md,
-    ...theme.elevation.card,
+  // Grid — no surface; the photo is the card.
+  grid: { gap: theme.spacing.sm },
+  imageWrap: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.surfaceMuted,
+    overflow: 'hidden',
   },
-  imageWrap: { width: '100%', marginBottom: theme.spacing.sm },
+  /** Floating add control, over the photo's bottom-right corner. */
+  actionFloat: { position: 'absolute', right: 8, bottom: 8 },
   badgeTL: { position: 'absolute', top: 4, left: 4 },
   heart: { position: 'absolute', top: 2, right: 2 },
   oosOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: theme.colors.overlay,
-    borderRadius: theme.radii.sm,
+    borderRadius: theme.radii.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  name: { minHeight: 48 },
-  gridFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: theme.spacing.sm,
-    gap: theme.spacing.xs,
-  },
-  action: { minHeight: 36, justifyContent: 'center' },
+  name: { minHeight: 36 },
 
   // Compact (shelf)
-  compact: {
-    width: COMPACT_CARD_WIDTH,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.sm,
-    padding: theme.spacing.sm,
-    ...theme.elevation.card,
-  },
+  compact: { width: COMPACT_CARD_WIDTH, gap: theme.spacing.sm },
   compactImage: {
     width: '100%',
-    marginBottom: theme.spacing.sm,
+    height: COMPACT_CARD_WIDTH,
+    borderRadius: theme.radii.md,
     backgroundColor: theme.colors.surfaceMuted,
-    borderRadius: theme.radii.xs,
+    overflow: 'hidden',
   },
   oosOverlayCompact: {
     ...StyleSheet.absoluteFillObject,
@@ -308,15 +295,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  compactName: { minHeight: 32 },
-  compactFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: theme.spacing.sm,
-    gap: theme.spacing.xs,
-  },
-  flexShrink: { flexShrink: 1 },
+  compactName: { minHeight: 34 },
 
   // Row
   row: {
