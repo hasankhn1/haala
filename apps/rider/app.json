@@ -13,7 +13,9 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Haala Rider shares your location with the customer while you are delivering their order."
+          "locationAlwaysAndWhenInUsePermission": "Haala Rider shares your location with the customer while you are delivering their order.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       [
@@ -36,7 +38,11 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.haala.rider",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Haala Rider shares your location with the customer while you are delivering their order."
+        "NSLocationWhenInUseUsageDescription": "Haala Rider shares your location with the customer while you are delivering their order.",
+        "UIBackgroundModes": [
+          "location"
+        ],
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Haala Rider shares your location with the customer while you are delivering their order."
       }
     },
     "android": {
@@ -47,8 +53,9 @@
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
       ]
     },
     "extra": {
