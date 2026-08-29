@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 import { Text, theme } from '@haala/ui';
 
@@ -119,19 +120,54 @@ export interface MapPickerProps {
   style?: ViewStyle;
 }
 
+type MapViewInstance = InstanceType<MapsModule['default']>;
+
 /**
- * Address-picker map. The pin is a fixed overlay at the centre of the viewport
- * rather than a `Marker`, so the map slides underneath it — the standard
- * "drag the map, not the pin" interaction the comp shows.
+ * Address-picker map with a pin you pick up and drop.
+ *
+ * The pin used to be a fixed overlay at the centre of the viewport, with the
+ * map sliding underneath it. Dragging the marker itself is the more direct
+ * gesture — you move the thing you are aiming, not everything around it.
+ *
+ * `onCenterChange` keeps its meaning ("the delivery point moved") so the
+ * caller's debounce, reverse-geocode and serviceability check are untouched.
  */
 export function MapPicker({ center, onCenterChange, style }: MapPickerProps) {
+  const mapRef = useRef<MapViewInstance | null>(null);
+  const [pin, setPin] = useState<LatLng>(center);
+  /** The last point we told the parent about, so our own drag doesn't bounce back. */
+  const emitted = useRef<LatLng | null>(null);
+
+  // Follow the parent when *it* moves the point — the "use my location"
+  // button. `initialRegion` is read once, so without animating here that
+  // button silently updated the address while the map stayed put.
+  useEffect(() => {
+    const isOurOwnDrag =
+      emitted.current?.latitude === center.latitude &&
+      emitted.current?.longitude === center.longitude;
+    if (isOurOwnDrag) return;
+
+    setPin(center);
+    mapRef.current?.animateToRegion(
+      { ...center, latitudeDelta: REGION_PADDING, longitudeDelta: REGION_PADDING },
+      350,
+    );
+  }, [center.latitude, center.longitude]);
+
   if (!Maps) return <MapFallback style={style} />;
 
-  const { default: MapView, PROVIDER_DEFAULT } = Maps;
+  const { default: MapView, Marker, PROVIDER_DEFAULT } = Maps;
+
+  const move = (point: LatLng) => {
+    setPin(point);
+    emitted.current = point;
+    onCenterChange(point);
+  };
 
   return (
     <View style={[styles.map, style]}>
       <MapView
+        ref={mapRef}
         style={StyleSheet.absoluteFill}
         provider={PROVIDER_DEFAULT}
         initialRegion={{
@@ -139,27 +175,37 @@ export function MapPicker({ center, onCenterChange, style }: MapPickerProps) {
           latitudeDelta: REGION_PADDING,
           longitudeDelta: REGION_PADDING,
         }}
-        onRegionChangeComplete={(r: { latitude: number; longitude: number }) =>
-          onCenterChange({ latitude: r.latitude, longitude: r.longitude })
-        }
+        // Tapping the map moves the pin too: dragging is precise, tapping is
+        // quick, and someone reaching for a spot across the screen wants the
+        // second one.
+        onPress={(e: { nativeEvent: { coordinate: LatLng } }) => move(e.nativeEvent.coordinate)}
         rotateEnabled={false}
         pitchEnabled={false}
         toolbarEnabled={false}
         showsCompass={false}
         showsMyLocationButton={false}
-      />
-
-      {/* Fixed centre pin + label. `pointerEvents: none` so drags reach the map. */}
-      <View style={styles.pinLayer} pointerEvents="none">
-        <View style={styles.pinLabel}>
-          <Text variant="labelSm" color="onPrimary">
-            Delivery location
-          </Text>
-        </View>
-        <View style={styles.pinHalo}>
-          <View style={styles.pinDot} />
-        </View>
-      </View>
+      >
+        <Marker
+          coordinate={pin}
+          draggable
+          onDragEnd={(e: { nativeEvent: { coordinate: LatLng } }) => move(e.nativeEvent.coordinate)}
+          anchor={{ x: 0.5, y: 1 }}
+          // Custom marker views re-render constantly on Android unless this is
+          // off, which makes the drag stutter.
+          tracksViewChanges={false}
+        >
+          <View style={styles.pinLayer}>
+            <View style={styles.pinLabel}>
+              <Text variant="labelSm" color="onPrimary">
+                Delivery location
+              </Text>
+            </View>
+            <View style={styles.pinHalo}>
+              <View style={styles.pinDot} />
+            </View>
+          </View>
+        </Marker>
+      </MapView>
     </View>
   );
 }
@@ -215,7 +261,7 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.surface,
   },
 
-  pinLayer: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  pinLayer: { alignItems: 'center', justifyContent: 'flex-end' },
   pinLabel: {
     backgroundColor: theme.colors.primary,
     borderRadius: theme.radii.xs,
