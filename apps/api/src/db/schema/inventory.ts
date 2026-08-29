@@ -1,4 +1,4 @@
-import { integer, pgTable, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, integer, pgTable, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { timestamps } from './_helpers';
 import { products } from './catalog';
 import { stores } from './stores';
@@ -7,6 +7,10 @@ import { stores } from './stores';
  * Per-store stock. `quantityReserved` is held during checkout so two customers
  * can't buy the last unit; available-to-sell = quantityAvailable - quantityReserved.
  * `price` overrides the product base price for this store when set.
+ *
+ * `isAvailable` suspends a line without destroying its count — produce that
+ * spoiled this morning goes off sale and comes back tomorrow with the stock
+ * figure intact. Setting quantity to 0 would lose that number.
  */
 export const inventory = pgTable(
   'inventory',
@@ -20,6 +24,7 @@ export const inventory = pgTable(
       .references(() => products.id, { onDelete: 'cascade' }),
     quantityAvailable: integer().notNull().default(0),
     quantityReserved: integer().notNull().default(0),
+    isAvailable: boolean().notNull().default(true),
     price: integer(),
     ...timestamps(),
   },

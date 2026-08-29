@@ -18,7 +18,10 @@ export interface ProductWithStock {
 
 /** Effective price = store override if present, else base price. */
 const priceExpr = sql<number>`coalesce(${inventory.price}, ${products.basePrice})`;
-const availableExpr = sql<number>`greatest(coalesce(${inventory.quantityAvailable}, 0) - coalesce(${inventory.quantityReserved}, 0), 0)`;
+// SQL mirror of `availableToSell` (inventory.repository.ts): a line ops has
+// suspended reads as zero stock, so `inStock` goes false across listing, search
+// and product detail from this one expression.
+const availableExpr = sql<number>`case when coalesce(${inventory.isAvailable}, true) then greatest(coalesce(${inventory.quantityAvailable}, 0) - coalesce(${inventory.quantityReserved}, 0), 0) else 0 end`;
 
 export const catalogRepository = {
   async listCategories(ex: Executor = db): Promise<Category[]> {

@@ -73,7 +73,7 @@ export const inventoryRepository = {
       .where(and(eq(inventory.storeId, storeId), eq(inventory.productId, productId)));
   },
 
-  /** Admin/ops absolute or relative stock adjustment. */
+  /** Admin/ops absolute stock adjustment. */
   async setAvailable(storeId: string, productId: string, qty: number, ex: Executor = db): Promise<void> {
     await ex
       .update(inventory)
@@ -82,6 +82,16 @@ export const inventoryRepository = {
   },
 };
 
-/** Available-to-sell = on-hand minus what's already reserved. */
-export const availableToSell = (row: Pick<Inventory, 'quantityAvailable' | 'quantityReserved'>): number =>
-  Math.max(row.quantityAvailable - row.quantityReserved, 0);
+/**
+ * Available-to-sell = on-hand minus what's already reserved, and zero whenever
+ * ops has suspended the line.
+ *
+ * The flag is applied *here* rather than at each call site because this is what
+ * "sellable" means: the cart, the add-to-cart check and the order-placement
+ * check at `order.service.ts` all route through this, so a suspended item is
+ * refused at placement and not merely hidden from the listing. `availableExpr`
+ * in `catalog.repository.ts` is the SQL mirror of this same rule.
+ */
+export const availableToSell = (
+  row: Pick<Inventory, 'quantityAvailable' | 'quantityReserved' | 'isAvailable'>,
+): number => (row.isAvailable ? Math.max(row.quantityAvailable - row.quantityReserved, 0) : 0);

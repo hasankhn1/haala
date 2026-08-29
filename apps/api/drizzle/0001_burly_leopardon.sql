@@ -1,0 +1,1 @@
+ALTER TABLE "inventory" ADD COLUMN "is_available" boolean DEFAULT true NOT NULL;

@@ -55,6 +55,7 @@ export default function CatalogPage() {
     mutationFn: (vars: {
       productId: string;
       quantityAvailable?: number;
+      isAvailable?: boolean;
       price?: number | null;
     }) => {
       const { productId, ...body } = vars;
@@ -153,6 +154,7 @@ export default function CatalogPage() {
               <th className="num">Stock</th>
               <th className="num">Reserved</th>
               <th>State</th>
+              <th />
             </tr>
           </thead>
           <tbody>
@@ -218,13 +220,38 @@ export default function CatalogPage() {
                   <td>
                     {!r.isActive ? (
                       <span className="badge neutral">Hidden</span>
-                    ) : r.availableToSell === 0 ? (
+                    ) : !r.isAvailable ? (
+                      <span className="badge bad">Suspended</span>
+                    ) : r.quantityAvailable - r.quantityReserved <= 0 ? (
                       <span className="badge bad">Out of stock</span>
                     ) : r.availableToSell < 10 ? (
                       <span className="badge warn">Low</span>
                     ) : (
                       <span className="badge good">In stock</span>
                     )}
+                  </td>
+
+                  <td>
+                    {/* Suspending keeps `quantityAvailable` intact, so an item
+                        pulled for the day comes back with its count. */}
+                    <button
+                      type="button"
+                      className="btn ghost sm"
+                      disabled={!r.isActive || saveInventory.isPending}
+                      title={
+                        r.isAvailable
+                          ? 'Stop selling this item; its stock figure is kept'
+                          : 'Put this item back on sale'
+                      }
+                      onClick={() =>
+                        saveInventory.mutate({
+                          productId: r.productId,
+                          isAvailable: !r.isAvailable,
+                        })
+                      }
+                    >
+                      {r.isAvailable ? 'Mark out of stock' : 'Restore'}
+                    </button>
                   </td>
                 </tr>
               ))

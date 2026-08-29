@@ -24,6 +24,8 @@ export type UpdateProductInput = z.infer<typeof updateProductSchema>;
 export const updateInventorySchema = z
   .object({
     quantityAvailable: z.number().int().min(0).optional(),
+    /** Suspend or resume the line without touching its stock figure. */
+    isAvailable: z.boolean().optional(),
     /** Store-specific price in paisa; `null` clears the override. */
     price: z.number().int().min(0).nullable().optional(),
   })
@@ -49,6 +51,8 @@ export interface OpsCatalogRow {
   quantityAvailable: number;
   quantityReserved: number;
   /** Units that can still be sold right now. */
+  /** False when ops has suspended the line; stock figure is preserved. */
+  isAvailable: boolean;
   availableToSell: number;
 }
 

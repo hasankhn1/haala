@@ -96,6 +96,9 @@ export const opsCatalogService = {
         effectivePrice: storePrice ?? product.basePrice,
         quantityAvailable: inv?.quantityAvailable ?? 0,
         quantityReserved: inv?.quantityReserved ?? 0,
+        // A product with no inventory row yet is treated as available: the
+        // operator has simply not stocked it, not suspended it.
+        isAvailable: inv?.isAvailable ?? true,
         availableToSell: inv ? availableToSell(inv) : 0,
       };
     });
@@ -133,6 +136,7 @@ export const opsCatalogService = {
         storeId,
         productId,
         quantityAvailable: input.quantityAvailable ?? 0,
+        isAvailable: input.isAvailable ?? true,
         price: input.price ?? null,
       })
       .onConflictDoUpdate({
@@ -143,6 +147,7 @@ export const opsCatalogService = {
           ...(input.quantityAvailable !== undefined
             ? { quantityAvailable: input.quantityAvailable }
             : {}),
+          ...(input.isAvailable !== undefined ? { isAvailable: input.isAvailable } : {}),
           ...(input.price !== undefined ? { price: input.price } : {}),
           updatedAt: new Date(),
         },
