@@ -1,8 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,30 +8,22 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { formatPKR, type PaymentMethod, type PlaceOrderResult } from '@haala/shared';
+import { formatPKR } from '@haala/shared';
 import {
-  BottomSheet,
   Button,
   EmptyState,
   Icon,
   ProductCard,
-  type IconName,
   QuantityStepper,
   StateView,
   Text,
   theme,
   Thumb,
-  useToast,
 } from '@haala/ui';
-import { ApiError } from '../../src/api/client';
-import { addressesApi, catalogApi, ordersApi, promotionsApi } from '../../src/api/endpoints';
-import { runOnlineCheckout } from '../../src/lib/onlineCheckout';
-import { qk } from '../../src/api/queryKeys';
-import { ETA_MINUTES, FREE_DELIVERY_THRESHOLD, estimateDeliveryFee } from '../../src/config';
-import { DeliveryMap } from '../../src/components/DeliveryMap';
-import { useAuth } from '../../src/auth/AuthContext';
-import { haptics } from '../../src/lib/haptics';
+import { catalogApi } from '../../src/api/endpoints';
+import { ETA_MINUTES, estimateDeliveryFee } from '../../src/config';
 import { useCart, useCartMutations } from '../../src/hooks/useCart';
+import { useCheckoutDraft } from '../../src/store/useCheckoutDraft';
 import { useCurrentStore } from '../../src/store/useCurrentStore';
 
 /**
@@ -45,33 +35,13 @@ import { useCurrentStore } from '../../src/store/useCurrentStore';
  */
 export default function CartScreen() {
   const router = useRouter();
-  const qc = useQueryClient();
-  const toast = useToast();
 
   const cart = useCart();
   const { add, update, remove } = useCartMutations();
-  const addresses = useQuery({ queryKey: qk.addresses, queryFn: addressesApi.list });
-
-  const { user } = useAuth();
-  const [addressId, setAddressId] = useState<string | null>(null);
-  const [notes, setNotes] = useState('');
-  const [method, setMethod] = useState<PaymentMethod>('cod');
-  const [sheet, setSheet] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [promoInput, setPromoInput] = useState('');
-  const [appliedCode, setAppliedCode] = useState<string | null>(null);
-  const [promoError, setPromoError] = useState<string | null>(null);
-  const idempotencyKey = useRef(`co-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-
-  // Default to the user's default address once loaded.
-  useEffect(() => {
-    if (!addressId && addresses.data && addresses.data.length > 0) {
-      setAddressId((addresses.data.find((a) => a.isDefault) ?? addresses.data[0]).id);
-    }
-  }, [addresses.data, addressId]);
+  /** Written here, submitted from checkout. */
+  const { notes, setNotes } = useCheckoutDraft();
 
   const data = cart.data;
-  const selected = addresses.data?.find((a) => a.id === addressId) ?? null;
 
   /**
    * "Forgot something?" — the comp's upsell rail. Suggestions come from the
@@ -93,94 +63,19 @@ export default function CartScreen() {
   const isEmpty = !!data && data.items.length === 0;
 
   /**
-   * Re-price the applied promo whenever the subtotal moves. Editing quantities
-   * changes what a percentage code is worth, and can drop the cart below a
-   * code's minimum spend — a discount frozen at apply-time would then show a
-   * number the server won't honour.
+   * What the catalogue would have charged, minus what they actually pay.
+   * Display only — `subtotal` is the basis for every calculation and the server
+   * re-prices at placement regardless.
    */
-  const promo = useQuery({
-    queryKey: [...qk.promo(appliedCode ?? ''), subtotal],
-    queryFn: () => promotionsApi.validate(appliedCode as string),
-    enabled: !!appliedCode && subtotal > 0,
-    retry: false,
-  });
-
-  // A code that stops qualifying is dropped rather than left showing stale money.
-  useEffect(() => {
-    if (promo.error) {
-      setPromoError(promo.error instanceof ApiError ? promo.error.message : 'Promo code no longer applies');
-      setAppliedCode(null);
-    }
-  }, [promo.error]);
-
-  // What the catalogue would have charged, minus what they actually pay. The
-  // comp gives this its own emphasised line and it is the most persuasive
-  // number on the screen — but it is only ever display: `subtotal` remains the
-  // basis for every calculation, and the server re-prices at placement anyway.
   const savings = (data?.items ?? []).reduce(
     (sum, i) => sum + Math.max(i.basePrice - i.unitPrice, 0) * i.quantity,
     0,
   );
 
-  const quote = appliedCode && promo.data ? promo.data : null;
-  const deliveryFee = quote ? quote.deliveryFee : estimateDeliveryFee(subtotal);
-  const discount = quote?.discount ?? 0;
-  const total = subtotal + deliveryFee - discount;
+  // The basket previews the fee; vouchers and the final bill live on checkout.
+  const deliveryFee = estimateDeliveryFee(subtotal);
+  const total = subtotal + deliveryFee;
 
-  const applyPromo = () => {
-    const code = promoInput.trim().toUpperCase();
-    if (!code) return;
-    setPromoError(null);
-    setAppliedCode(code);
-    setPromoInput('');
-  };
-
-  const clearPromo = () => {
-    setAppliedCode(null);
-    setPromoError(null);
-    setPromoInput('');
-  };
-
-  const place = useMutation({
-    mutationFn: () =>
-      ordersApi.place(
-        {
-          addressId: addressId as string,
-          paymentMethod: method,
-          ...(notes.trim() ? { notes: notes.trim() } : {}),
-          ...(quote ? { promoCode: quote.code } : {}),
-        },
-        idempotencyKey.current,
-      ),
-    onSuccess: async (res: PlaceOrderResult) => {
-      qc.invalidateQueries({ queryKey: qk.cart });
-      qc.invalidateQueries({ queryKey: qk.orders });
-
-      // An online order comes back with a hosted-checkout handoff. The order
-      // already exists at this point either way, so whatever happens next we
-      // land on the confirmation screen rather than losing the order.
-      const outcome = await runOnlineCheckout(res);
-      if (outcome.kind === 'resolved' && outcome.status === 'failed') {
-        haptics.error();
-        toast.show('Payment was not completed. You can retry from your orders.', 'error');
-      } else {
-        haptics.success();
-      }
-
-      qc.invalidateQueries({ queryKey: qk.order(res.order.id) });
-      router.replace(
-        `/order/confirmed?id=${res.order.id}&number=${encodeURIComponent(res.order.orderNumber)}`,
-      );
-    },
-    onError: (e) => {
-      haptics.error();
-      const message = e instanceof ApiError ? e.message : 'Could not place order';
-      setError(message);
-      toast.show(message, 'error');
-    },
-  });
-
-  const canPlace = !!addressId && !!data && data.itemCount > 0 && !place.isPending;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -202,22 +97,25 @@ export default function CartScreen() {
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           {/* Items */}
           <View style={styles.titleRow}>
-            <Text variant="h2">Your Cart</Text>
-            <Text variant="bodySm" color="textSecondary">
-              {data?.itemCount ?? 0} {data?.itemCount === 1 ? 'Item' : 'Items'}
-            </Text>
+            <View>
+              <Text variant="h2">Your basket</Text>
+              <Text variant="bodySm" color="textSecondary">
+                {data?.itemCount ?? 0} {data?.itemCount === 1 ? 'item' : 'items'} ·{' '}
+                {ETA_MINUTES} min
+              </Text>
+            </View>
+            <Pressable style={styles.addMore} onPress={() => router.push('/products')}>
+              <Text variant="label" style={styles.addMoreText}>
+                + Add items
+              </Text>
+            </Pressable>
           </View>
 
           <View style={styles.items}>
             {data?.items.map((item) => (
               <View key={item.productId} style={styles.itemCard}>
                 <View style={styles.itemThumb}>
-                  <Thumb
-                    imageUrl={item.imageUrl}
-                    name={item.name}
-                    size={72}
-                    radius={theme.radii.sm}
-                  />
+                  <Thumb imageUrl={item.imageUrl} name={item.name} fill radius={theme.radii.sm} />
                 </View>
 
                 <View style={styles.itemBody}>
@@ -258,142 +156,6 @@ export default function CartScreen() {
             ))}
           </View>
 
-          {/* Delivery details */}
-          <Text variant="labelCaps" color="textSecondary" style={styles.eyebrow}>
-            Delivery details
-          </Text>
-          <View style={styles.card}>
-            {selected ? (
-              <>
-                {/* Where it's going, shown rather than described. The address
-                    already carries lat/lng, so this is the existing map with
-                    gestures off. */}
-                <View style={styles.mapStrip}>
-                  <DeliveryMap
-                    destination={{
-                      latitude: selected.latitude,
-                      longitude: selected.longitude,
-                    }}
-                  />
-                </View>
-
-                <View style={styles.addrRow}>
-                  <View style={styles.addrIcon}>
-                    <Icon name="home" size={18} color={theme.colors.primary} />
-                  </View>
-                  <View style={styles.flex}>
-                    <View style={styles.itemTop}>
-                      <Text variant="bodyStrong" style={styles.capitalize}>
-                        {selected.label}
-                      </Text>
-                      <Pressable onPress={() => setSheet(true)} hitSlop={8}>
-                        <Text variant="labelSm">EDIT</Text>
-                      </Pressable>
-                    </View>
-                    <Text variant="bodySm" color="textSecondary">
-                      {selected.line1}
-                      {selected.line2 ? `, ${selected.line2}` : ''}
-                      {'\n'}
-                      {selected.area}, {selected.city}
-                    </Text>
-                    {user?.phone ? (
-                      <Text variant="bodySm" color="textTertiary">
-                        {user.phone}
-                      </Text>
-                    ) : null}
-                  </View>
-                </View>
-
-                <View style={styles.hairline} />
-
-                <View style={styles.itemTop}>
-                  <View style={styles.etaLabel}>
-                    <Icon name="time-outline" size={16} color={theme.colors.textSecondary} />
-                    <Text variant="body" color="textSecondary">
-                      Estimated arrival in
-                    </Text>
-                  </View>
-                  <Text variant="h3">{ETA_MINUTES} mins</Text>
-                </View>
-              </>
-            ) : (
-              <Button
-                label="Add delivery address"
-                variant="secondary"
-                onPress={() => router.push('/address/select')}
-              />
-            )}
-          </View>
-
-          {/* Payment method */}
-          <Text variant="labelCaps" color="textSecondary" style={styles.eyebrow}>
-            Payment method
-          </Text>
-          <View style={styles.payRow}>
-            <PaymentTile
-              icon="cash-outline"
-              label="Cash on Delivery"
-              selected={method === 'cod'}
-              onPress={() => setMethod('cod')}
-            />
-            <PaymentTile
-              icon="card-outline"
-              label="Credit Card"
-              selected={method === 'online'}
-              onPress={() => setMethod('online')}
-            />
-          </View>
-
-          {/* Promo code */}
-          <Text variant="labelCaps" color="textSecondary" style={styles.eyebrow}>
-            Promo code
-          </Text>
-          <View style={styles.card}>
-            {quote ? (
-              <View style={styles.promoApplied}>
-                <View style={styles.promoTag}>
-                  <Icon name="pricetag" size={16} color={theme.colors.success} />
-                  <Text variant="bodyStrong">{quote.code}</Text>
-                </View>
-                <View style={styles.flex}>
-                  <Text variant="bodySm" color="textSecondary" numberOfLines={2}>
-                    {quote.message}
-                  </Text>
-                </View>
-                <Pressable onPress={clearPromo} hitSlop={10} accessibilityLabel="Remove promo code">
-                  <Icon name="close-circle" size={20} color={theme.colors.textTertiary} />
-                </Pressable>
-              </View>
-            ) : (
-              <View style={styles.promoRow}>
-                <TextInput
-                  style={styles.promoInput}
-                  value={promoInput}
-                  onChangeText={setPromoInput}
-                  placeholder="Enter code"
-                  placeholderTextColor={theme.colors.textTertiary}
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  onSubmitEditing={applyPromo}
-                  returnKeyType="done"
-                />
-                <Button
-                  label="Apply"
-                  loading={promo.isFetching}
-                  variant="secondary"
-                  size="sm"
-                  disabled={!promoInput.trim() || promo.isFetching}
-                  onPress={applyPromo}
-                />
-              </View>
-            )}
-            {promoError ? (
-              <Text variant="caption" color="error">
-                {promoError}
-              </Text>
-            ) : null}
-          </View>
-
           {/* Forgot something? */}
           {usuals.length > 0 ? (
             <View style={styles.usuals}>
@@ -418,29 +180,6 @@ export default function CartScreen() {
                   />
                 ))}
               </ScrollView>
-            </View>
-          ) : null}
-
-          {/* How close this basket is to free delivery. Same bar as Home, and
-              the same shared threshold the server prices against — the point is
-              that the customer sees the fee disappear before they commit. */}
-          {deliveryFee > 0 ? (
-            <View style={styles.freeDelivery}>
-              <View style={styles.freeDeliveryTop}>
-                <Text variant="labelSm" color="onPrimary" numberOfLines={1} style={styles.flex}>
-                  {formatPKR(Math.max(FREE_DELIVERY_THRESHOLD - subtotal, 0))} away from free
-                  delivery
-                </Text>
-                <Icon name="bicycle-outline" size={16} color={theme.colors.onPrimary} />
-              </View>
-              <View style={styles.freeDeliveryTrack}>
-                <View
-                  style={[
-                    styles.freeDeliveryFill,
-                    { width: `${Math.min(subtotal / FREE_DELIVERY_THRESHOLD, 1) * 100}%` },
-                  ]}
-                />
-              </View>
             </View>
           ) : null}
 
@@ -489,136 +228,28 @@ export default function CartScreen() {
               label="Delivery fee"
               value={deliveryFee === 0 ? 'Free' : formatPKR(deliveryFee)}
             />
-            {discount > 0 ? (
-              <SummaryRow
-                label={`Discount (${quote?.code})`}
-                value={`− ${formatPKR(discount)}`}
-                positive
-              />
-            ) : null}
             <View style={styles.hairline} />
             <View style={styles.totalRow}>
-              <Text variant="bodyStrong">Total</Text>
-              <Text variant="display">{formatPKR(total)}</Text>
+              <Text variant="title">Total</Text>
+              <Text variant="h2">{formatPKR(total)}</Text>
             </View>
           </View>
-
-          {error ? (
-            <Text variant="bodySm" color="error">
-              {error}
-            </Text>
-          ) : null}
         </ScrollView>
       </StateView>
 
-      {/* Sticky Place Order bar */}
+      {/* Sticky checkout bar */}
       {!isEmpty && data ? (
         <View style={styles.footer}>
-          <Pressable
-            accessibilityRole="button"
-            disabled={!canPlace}
-            onPress={() => {
-              setError(null);
-              place.mutate();
-            }}
-            style={({ pressed }) => [
-              styles.placeBtn,
-              pressed && { backgroundColor: theme.colors.primaryPressed },
-              !canPlace && styles.placeBtnDisabled,
-            ]}
-          >
-            <Text variant="title" color="onPrimary">
-              {place.isPending ? 'Placing…' : 'Place Order'}
-            </Text>
-            <View style={styles.placeRight}>
-              <Text variant="bodyStrong" color="onPrimary">
-                {formatPKR(total)}
-              </Text>
-              {/* The arrow becomes the spinner, so the bar keeps its width and
-                  the biggest action in the app shows that it is working. */}
-              {place.isPending ? (
-                <ActivityIndicator size="small" color={theme.colors.onPrimary} />
-              ) : (
-                <Icon name="arrow-forward" size={18} color={theme.colors.onPrimary} />
-              )}
-            </View>
-          </Pressable>
+          <Button
+            label={`Checkout · ${formatPKR(total)}`}
+            style={styles.cta}
+            onPress={() => router.push('/checkout')}
+            trailingIcon={<Icon name="arrow-forward" size={17} color={theme.colors.onPrimary} />}
+          />
         </View>
       ) : null}
 
-      <BottomSheet visible={sheet} onClose={() => setSheet(false)} title="Choose address">
-        {addresses.data?.map((a) => (
-          <Pressable
-            key={a.id}
-            style={styles.sheetRow}
-            onPress={() => {
-              setAddressId(a.id);
-              setSheet(false);
-            }}
-          >
-            <View style={styles.flex}>
-              <Text variant="bodyStrong" style={styles.capitalize}>
-                {a.label}
-              </Text>
-              <Text variant="bodySm" color="textSecondary">
-                {a.line1}, {a.area}
-              </Text>
-            </View>
-            {a.id === addressId ? (
-              <Icon name="checkmark-circle" size={20} color={theme.colors.primary} />
-            ) : null}
-          </Pressable>
-        ))}
-        <Button
-          label="Add new address"
-          variant="secondary"
-          onPress={() => {
-            setSheet(false);
-            router.push('/address/select');
-          }}
-        />
-      </BottomSheet>
     </SafeAreaView>
-  );
-}
-
-function PaymentTile({
-  icon,
-  label,
-  selected,
-  onPress,
-}: {
-  icon: IconName;
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      style={[styles.payTile, selected ? styles.payTileOn : styles.payTileOff]}
-    >
-      {selected ? (
-        <View style={styles.payCheck}>
-          <Icon name="checkmark-circle" size={16} color={theme.colors.primary} />
-        </View>
-      ) : null}
-      <Icon
-        name={icon}
-        size={28}
-        color={selected ? theme.colors.primary : theme.colors.textSecondary}
-      />
-      <Text
-        variant="bodySm"
-        color={selected ? 'textPrimary' : 'textSecondary'}
-        align="center"
-        numberOfLines={2}
-      >
-        {label}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -656,17 +287,32 @@ const styles = StyleSheet.create({
   },
   titleRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
 
-  items: { gap: theme.spacing.md },
+  items: {},
+  // The comp separates lines with a rule rather than boxing each one.
   itemCard: {
     flexDirection: 'row',
-    gap: theme.spacing.lg,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    padding: theme.spacing.lg,
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    paddingBottom: theme.spacing.lg,
+    marginBottom: theme.spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
   },
-  itemThumb: { backgroundColor: theme.colors.surfaceSunken, borderRadius: theme.radii.sm },
+  itemThumb: {
+    width: 66,
+    height: 66,
+    backgroundColor: theme.colors.surfaceSunken,
+    borderRadius: theme.radii.sm,
+    overflow: 'hidden',
+  },
+  addMore: {
+    borderWidth: 1.4,
+    borderColor: theme.colors.primary,
+    borderRadius: theme.radii.pill,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: 8,
+  },
+  addMoreText: { color: theme.colors.primaryPressed },
   itemBody: { flex: 1, justifyContent: 'space-between', gap: theme.spacing.sm },
   itemTop: {
     flexDirection: 'row',
@@ -676,7 +322,6 @@ const styles = StyleSheet.create({
   },
   itemBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 
-  eyebrow: { marginTop: theme.spacing.lg },
   card: {
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radii.md,
@@ -685,43 +330,8 @@ const styles = StyleSheet.create({
     padding: theme.spacing.lg,
     gap: theme.spacing.md,
   },
-  addrRow: { flexDirection: 'row', gap: theme.spacing.md },
-  mapStrip: {
-    height: 104,
-    borderRadius: theme.radii.md,
-    overflow: 'hidden',
-    marginBottom: theme.spacing.md,
-    backgroundColor: theme.colors.surfaceSunken,
-  },
-  addrIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.radii.pill,
-    backgroundColor: theme.colors.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   hairline: { height: 1, backgroundColor: theme.colors.border },
-  etaLabel: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
 
-  payRow: { flexDirection: 'row', gap: theme.spacing.md },
-  payTile: {
-    flex: 1,
-    borderRadius: theme.radii.sm,
-    paddingVertical: theme.spacing.xl,
-    paddingHorizontal: theme.spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: theme.spacing.sm,
-    borderWidth: 2,
-  },
-  payTileOn: { backgroundColor: theme.colors.accentSoft, borderColor: theme.colors.primary },
-  payTileOff: {
-    backgroundColor: theme.colors.surface,
-    borderColor: 'transparent',
-    ...theme.elevation.card,
-  },
-  payCheck: { position: 'absolute', top: theme.spacing.sm, right: theme.spacing.sm },
 
   promoRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md },
   promoInput: {
@@ -764,33 +374,10 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.regular,
     fontSize: 14,
   },
-  freeDelivery: {
-    marginTop: theme.spacing.lg,
-    backgroundColor: theme.colors.accent,
-    borderRadius: theme.radii.md,
-    padding: theme.spacing.md,
-    gap: theme.spacing.sm,
-  },
-  freeDeliveryTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: theme.spacing.sm,
-  },
-  freeDeliveryTrack: {
-    height: 6,
-    borderRadius: theme.radii.pill,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    overflow: 'hidden',
-  },
-  freeDeliveryFill: {
-    height: '100%',
-    borderRadius: theme.radii.pill,
-    backgroundColor: theme.colors.promo,
-  },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
 
+  cta: { borderRadius: theme.radii.pill, height: 52 },
   footer: {
     position: 'absolute',
     left: 0,
@@ -815,10 +402,4 @@ const styles = StyleSheet.create({
   placeBtnDisabled: { opacity: 0.4 },
   placeRight: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
 
-  sheetRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: theme.spacing.md,
-    gap: theme.spacing.md,
-  },
 });
