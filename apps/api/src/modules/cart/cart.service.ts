@@ -25,6 +25,10 @@ export const cartService = {
       unit: i.product.unit,
       imageUrl: i.product.imageUrl,
       unitPrice: i.unitPrice,
+      // The catalogue price before any store override or promotion, so the
+      // cart can state what the customer is saving. `unitPrice` is what they
+      // actually pay and remains the only number used in arithmetic.
+      basePrice: i.product.basePrice,
       quantity: i.quantity,
       lineTotal: i.unitPrice * i.quantity,
       inStock: (stockByProduct.get(i.productId) ?? 0) >= i.quantity,

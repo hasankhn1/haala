@@ -29,6 +29,8 @@ import { addressesApi, ordersApi, promotionsApi } from '../../src/api/endpoints'
 import { runOnlineCheckout } from '../../src/lib/onlineCheckout';
 import { qk } from '../../src/api/queryKeys';
 import { ETA_MINUTES, FREE_DELIVERY_THRESHOLD, estimateDeliveryFee } from '../../src/config';
+import { DeliveryMap } from '../../src/components/DeliveryMap';
+import { useAuth } from '../../src/auth/AuthContext';
 import { haptics } from '../../src/lib/haptics';
 import { useCart, useCartMutations } from '../../src/hooks/useCart';
 
@@ -48,7 +50,9 @@ export default function CartScreen() {
   const { update, remove } = useCartMutations();
   const addresses = useQuery({ queryKey: qk.addresses, queryFn: addressesApi.list });
 
+  const { user } = useAuth();
   const [addressId, setAddressId] = useState<string | null>(null);
+  const [notes, setNotes] = useState('');
   const [method, setMethod] = useState<PaymentMethod>('cod');
   const [sheet, setSheet] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +94,15 @@ export default function CartScreen() {
     }
   }, [promo.error]);
 
+  // What the catalogue would have charged, minus what they actually pay. The
+  // comp gives this its own emphasised line and it is the most persuasive
+  // number on the screen — but it is only ever display: `subtotal` remains the
+  // basis for every calculation, and the server re-prices at placement anyway.
+  const savings = (data?.items ?? []).reduce(
+    (sum, i) => sum + Math.max(i.basePrice - i.unitPrice, 0) * i.quantity,
+    0,
+  );
+
   const quote = appliedCode && promo.data ? promo.data : null;
   const deliveryFee = quote ? quote.deliveryFee : estimateDeliveryFee(subtotal);
   const discount = quote?.discount ?? 0;
@@ -115,6 +128,7 @@ export default function CartScreen() {
         {
           addressId: addressId as string,
           paymentMethod: method,
+          ...(notes.trim() ? { notes: notes.trim() } : {}),
           ...(quote ? { promoCode: quote.code } : {}),
         },
         idempotencyKey.current,
@@ -232,6 +246,18 @@ export default function CartScreen() {
           <View style={styles.card}>
             {selected ? (
               <>
+                {/* Where it's going, shown rather than described. The address
+                    already carries lat/lng, so this is the existing map with
+                    gestures off. */}
+                <View style={styles.mapStrip}>
+                  <DeliveryMap
+                    destination={{
+                      latitude: selected.latitude,
+                      longitude: selected.longitude,
+                    }}
+                  />
+                </View>
+
                 <View style={styles.addrRow}>
                   <View style={styles.addrIcon}>
                     <Icon name="home" size={18} color={theme.colors.primary} />
@@ -251,6 +277,11 @@ export default function CartScreen() {
                       {'\n'}
                       {selected.area}, {selected.city}
                     </Text>
+                    {user?.phone ? (
+                      <Text variant="bodySm" color="textTertiary">
+                        {user.phone}
+                      </Text>
+                    ) : null}
                   </View>
                 </View>
 
@@ -367,14 +398,49 @@ export default function CartScreen() {
             </View>
           ) : null}
 
+          {/* Special requests. `placeOrderSchema` has accepted `notes` (max
+              240) since the orders module was written and `orders.notes`
+              exists — the field was simply never exposed. */}
+          <View style={[styles.card, styles.summary]}>
+            <Text variant="labelCaps" color="textSecondary">
+              Any special requests?
+            </Text>
+            <TextInput
+              style={styles.notesInput}
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Riper bananas, no plastic bags…"
+              placeholderTextColor={theme.colors.textTertiary}
+              maxLength={240}
+              multiline
+            />
+          </View>
+
           {/* Order summary */}
           <View style={[styles.card, styles.summary]}>
             <Text variant="labelCaps" color="textSecondary">
               Order summary
             </Text>
-            <SummaryRow label="Subtotal" value={formatPKR(subtotal)} />
+            <SummaryRow label="Basket total" value={formatPKR(subtotal)} />
+            {savings > 0 ? (
+              <View style={styles.summaryRow}>
+                <View style={styles.savingsLabel}>
+                  <Text variant="bodySm" color="textSecondary">
+                    Savings
+                  </Text>
+                  <View style={styles.savingsBadge}>
+                    <Text variant="labelSm" style={styles.savingsBadgeText}>
+                      {Math.round((savings / (subtotal + savings)) * 100)}% off
+                    </Text>
+                  </View>
+                </View>
+                <Text variant="bodyStrong" color="success">
+                  − {formatPKR(savings)}
+                </Text>
+              </View>
+            ) : null}
             <SummaryRow
-              label="Delivery Fee"
+              label="Delivery fee"
               value={deliveryFee === 0 ? 'Free' : formatPKR(deliveryFee)}
             />
             {discount > 0 ? (
@@ -574,6 +640,13 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
   },
   addrRow: { flexDirection: 'row', gap: theme.spacing.md },
+  mapStrip: {
+    height: 104,
+    borderRadius: theme.radii.md,
+    overflow: 'hidden',
+    marginBottom: theme.spacing.md,
+    backgroundColor: theme.colors.surfaceSunken,
+  },
   addrIcon: {
     width: 40,
     height: 40,
@@ -625,6 +698,24 @@ const styles = StyleSheet.create({
   },
 
   summary: { marginTop: theme.spacing.lg },
+  savingsLabel: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
+  savingsBadge: {
+    backgroundColor: theme.colors.promo,
+    borderRadius: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  savingsBadgeText: { color: theme.colors.onPromo },
+  notesInput: {
+    minHeight: 64,
+    borderRadius: theme.radii.sm,
+    backgroundColor: theme.colors.surfaceMuted,
+    padding: theme.spacing.md,
+    textAlignVertical: 'top',
+    color: theme.colors.textPrimary,
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: 14,
+  },
   freeDelivery: {
     marginTop: theme.spacing.lg,
     backgroundColor: theme.colors.accent,

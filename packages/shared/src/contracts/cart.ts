@@ -18,7 +18,8 @@ export interface CartItemView {
   name: string;
   unit: string;
   imageUrl: string | null;
-  unitPrice: number; // paisa
+  unitPrice: number; // paisa — what the customer pays
+  basePrice: number; // paisa — catalogue price before overrides/promotions
   quantity: number;
   lineTotal: number; // paisa
   inStock: boolean;

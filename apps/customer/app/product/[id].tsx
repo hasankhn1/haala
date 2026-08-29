@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Image, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { FlatList, Image, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatPKR, type ProductView } from '@haala/shared';
 import {
@@ -9,6 +9,7 @@ import {
   Icon,
   IconButton,
   type IconName,
+  ProductCard,
   QuantityStepper,
   remoteImageSource,
   Skeleton,
@@ -34,6 +35,22 @@ export default function ProductDetailScreen() {
   });
 
   const { cart, qtyByProduct, busy, addOne, setQty } = useProductActions(storeId);
+
+  /**
+   * The comp calls this rail "Frequently bought together", which implies a
+   * recommender we do not have. Other products from the same category is the
+   * honest version of the same idea and uses the catalogue we already load.
+   */
+  const related = useQuery({
+    queryKey: qk.products(storeId ?? 'none', product.data?.categoryId ?? 'none'),
+    queryFn: () =>
+      catalogApi.products({
+        storeId: storeId as string,
+        categoryId: product.data?.categoryId as string,
+      }),
+    enabled: !!storeId && !!product.data?.categoryId,
+  });
+  const relatedItems = (related.data?.items ?? []).filter((r) => r.id !== id).slice(0, 8);
   const qty = qtyByProduct.get(id) ?? 0;
   const p = product.data;
 
@@ -105,6 +122,36 @@ export default function ProductDetailScreen() {
           >
             {p ? <ProductBody product={p} /> : null}
           </StateView>
+
+          {relatedItems.length > 0 ? (
+            <View style={styles.related}>
+              <Text variant="h3">More in this aisle</Text>
+              <FlatList
+                horizontal
+                data={relatedItems}
+                keyExtractor={(r) => r.id}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.relatedRow}
+                renderItem={({ item }) => (
+                  <ProductCard
+                    variant="compact"
+                    name={item.name}
+                    unit={item.unit}
+                    price={item.price}
+                    original={item.basePrice}
+                    imageUrl={item.imageUrl}
+                    inStock={item.inStock}
+                    quantity={qtyByProduct.get(item.id) ?? 0}
+                    busy={false}
+                    onPress={() => router.push(`/product/${item.id}`)}
+                    onAdd={() => addOne(item.id)}
+                    onIncrement={() => setQty(item.id, (qtyByProduct.get(item.id) ?? 0) + 1)}
+                    onDecrement={() => setQty(item.id, (qtyByProduct.get(item.id) ?? 0) - 1)}
+                  />
+                )}
+              />
+            </View>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -279,6 +326,8 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { paddingBottom: 120 },
 
+  related: { marginTop: theme.spacing.xl, gap: theme.spacing.md },
+  relatedRow: { gap: theme.spacing.md, paddingRight: theme.layout.margin },
   cartBadge: {
     position: 'absolute',
     right: -3,

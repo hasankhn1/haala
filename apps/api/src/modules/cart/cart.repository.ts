@@ -10,7 +10,7 @@ import {
 } from '../../db/schema';
 
 export type CartItemWithProduct = CartItem & {
-  product: Pick<Product, 'id' | 'name' | 'unit' | 'imageUrl'>;
+  product: Pick<Product, 'id' | 'name' | 'unit' | 'imageUrl' | 'basePrice'>;
 };
 
 export const cartRepository = {
@@ -43,6 +43,7 @@ export const cartRepository = {
           name: products.name,
           unit: products.unit,
           imageUrl: products.imageUrl,
+          basePrice: products.basePrice,
         },
       })
       .from(cartItems)
