@@ -47,6 +47,29 @@ const Maps: MapsModule | null = (() => {
 /** Padding around the fitted region, in degrees. Roughly a city block. */
 const REGION_PADDING = 0.012;
 
+/**
+ * How long to wait for the map to say it is ready before giving up on it.
+ *
+ * A map that never initialises used to render a blank grey box; with
+ * `loadingEnabled` it spins forever instead, which is worse — it promises
+ * something is coming. The usual cause is a missing or unauthorised Google Maps
+ * key, which is *always* the case in Expo Go: it ships its own key and ignores
+ * `app.config.js`. Falling back to the neutral panel keeps the rest of the
+ * screen useful instead of hanging on a promise the map can't keep.
+ */
+const MAP_READY_TIMEOUT_MS = 6_000;
+
+function useMapReady() {
+  const [ready, setReady] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
+  useEffect(() => {
+    if (ready) return;
+    const t = setTimeout(() => setTimedOut(true), MAP_READY_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, [ready]);
+  return { onMapReady: () => setReady(true), giveUp: timedOut && !ready };
+}
+
 export function DeliveryMap({
   destination,
   origin,
@@ -61,6 +84,7 @@ export function DeliveryMap({
    * the whole map on Android. Static pins are pinned to `false`; the rider gets
    * a short window open whenever its coordinate changes.
    */
+  const { onMapReady, giveUp } = useMapReady();
   const [riderRedraw, setRiderRedraw] = useState(false);
   const riderKey = rider ? `${rider.latitude},${rider.longitude}` : null;
   useEffect(() => {
@@ -70,7 +94,7 @@ export function DeliveryMap({
     return () => clearTimeout(t);
   }, [riderKey]);
 
-  if (!Maps) return <MapFallback style={style} />;
+  if (!Maps || giveUp) return <MapFallback style={style} />;
 
   const { default: MapView, Marker, Polyline, PROVIDER_DEFAULT } = Maps;
   const points = [destination, origin, rider].filter(Boolean) as LatLng[];
@@ -101,6 +125,7 @@ export function DeliveryMap({
       loadingEnabled
       loadingBackgroundColor={theme.colors.surfaceSunken}
       loadingIndicatorColor={theme.colors.primary}
+      onMapReady={onMapReady}
     >
       {origin ? (
         <Marker
@@ -170,6 +195,7 @@ type MapViewInstance = InstanceType<MapsModule['default']>;
  * caller's debounce, reverse-geocode and serviceability check are untouched.
  */
 export function MapPicker({ center, onCenterChange, style }: MapPickerProps) {
+  const { onMapReady, giveUp } = useMapReady();
   const mapRef = useRef<MapViewInstance | null>(null);
   const [pin, setPin] = useState<LatLng>(center);
   /** The last point we told the parent about, so our own drag doesn't bounce back. */
@@ -191,7 +217,7 @@ export function MapPicker({ center, onCenterChange, style }: MapPickerProps) {
     );
   }, [center.latitude, center.longitude]);
 
-  if (!Maps) return <MapFallback style={style} />;
+  if (!Maps || giveUp) return <MapFallback style={style} />;
 
   const { default: MapView, Marker, PROVIDER_DEFAULT } = Maps;
 
@@ -219,6 +245,7 @@ export function MapPicker({ center, onCenterChange, style }: MapPickerProps) {
         loadingEnabled
         loadingBackgroundColor={theme.colors.surfaceSunken}
         loadingIndicatorColor={theme.colors.primary}
+        onMapReady={onMapReady}
         rotateEnabled={false}
         pitchEnabled={false}
         toolbarEnabled={false}
@@ -257,6 +284,9 @@ function MapFallback({ style }: { style?: ViewStyle }) {
       <Text variant="labelSm" color="textTertiary">
         MAP UNAVAILABLE
       </Text>
+      <Text variant="caption" color="textTertiary" align="center">
+        Everything else on this screen still works
+      </Text>
     </View>
   );
 }
@@ -267,6 +297,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surfaceSunken,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 4,
+    padding: theme.spacing.md,
   },
   storePin: {
     width: 14,
