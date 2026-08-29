@@ -8,6 +8,7 @@ import {
   Chip,
   COMPACT_CARD_WIDTH,
   CTABar,
+  EmptyState,
   Icon,
   ProductCard,
   SearchBar,
@@ -27,7 +28,7 @@ const SHELF_COUNT = 4;
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { store, storeId } = useCurrentStore();
+  const { store, storeId, outOfArea, address } = useCurrentStore();
   const [refreshing, setRefreshing] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
@@ -82,7 +83,11 @@ export default function HomeScreen() {
         >
           <Icon name="location-outline" size={20} color={theme.colors.primary} />
           <Text variant="bodyStrong" numberOfLines={1}>
-            {store ? `Deliver to ${store.area}` : 'Finding your store…'}
+            {store
+              ? `Deliver to ${address?.area ?? store.area}`
+              : outOfArea
+                ? 'Outside our delivery area'
+                : 'Finding your store…'}
           </Text>
           <Icon name="chevron-down" size={16} color={theme.colors.textSecondary} />
         </Pressable>
@@ -110,9 +115,24 @@ export default function HomeScreen() {
       >
         <SearchBar showVoice onPress={() => router.push('/(tabs)/search')} />
 
+        {/* Outside every store's radius is a real answer, not an empty shop —
+            show it instead of a promo and category rails that lead nowhere. */}
+        {outOfArea ? (
+          <EmptyState
+            emoji="📍"
+            title="We don’t deliver here yet"
+            subtitle={`${address?.area ?? 'This address'} is outside every store’s delivery radius. Choose a different delivery address to start shopping.`}
+            actionLabel="Change address"
+            onAction={() => router.push('/addresses')}
+          />
+        ) : null}
+
         {/* Promo panel. Solid ink rather than photography — the Onyx canvas
             stays quiet, so a single dark surface carries the whole banner. */}
-        <Pressable style={styles.promo} onPress={() => router.push('/products')}>
+        <Pressable
+          style={[styles.promo, outOfArea && styles.hidden]}
+          onPress={() => router.push('/products')}
+        >
           <View style={styles.promoTag}>
             <Text variant="labelSm" color="onPrimary">
               LIMITED TIME
@@ -127,7 +147,7 @@ export default function HomeScreen() {
         </Pressable>
 
         {/* Category rail */}
-        {categories.data && categories.data.length > 0 ? (
+        {categories.data && categories.data.length > 0 && !outOfArea ? (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -152,7 +172,7 @@ export default function HomeScreen() {
         ) : null}
 
         {/* One rail per category */}
-        {shelfCategories.map((category, i) => {
+        {(outOfArea ? [] : shelfCategories).map((category, i) => {
           const shelf = shelves[i];
           const items = shelf?.data?.items ?? [];
           if (!shelf?.isLoading && items.length === 0) return null;
@@ -230,6 +250,7 @@ function ShelfSkeleton() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.background },
+  hidden: { display: 'none' },
   appBar: {
     flexDirection: 'row',
     alignItems: 'center',

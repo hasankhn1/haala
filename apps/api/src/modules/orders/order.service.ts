@@ -19,6 +19,7 @@ import { addressRepository } from '../addresses/address.repository';
 import { cartRepository } from '../cart/cart.repository';
 import { deliveryRepository } from '../delivery/delivery.repository';
 import { riderService } from '../riders/rider.service';
+import { isWithinDeliveryRadius } from '../../common/geo';
 import { availableToSell, inventoryRepository } from '../inventory/inventory.repository';
 import { paymentRepository } from '../payments/payment.repository';
 import { paymentService } from '../payments/payment.service';
@@ -88,6 +89,17 @@ export const orderService = {
     const storeId = cart.storeId;
     const store = await storeRepository.findActiveById(storeId);
     if (!store) throw AppError.invalidState('Store is not currently available');
+
+    // The delivery address must actually be inside this store's radius.
+    // Ops sets the coordinates and the radius per store; `GET /stores` reports
+    // serviceability to the app, but nothing re-checked it here, so a cart
+    // filled before the customer switched to an address in another area — or
+    // any direct API call — could place an order the store cannot deliver.
+    // Same reasoning as re-pricing promos at placement: the client's answer is
+    // a preview, this is the decision.
+    if (!isWithinDeliveryRadius(store, address.latitude, address.longitude)) {
+      throw AppError.invalidState('We don’t deliver to this address yet');
+    }
 
     const user = await userRepository.findById(userId);
     if (!user) throw AppError.unauthorized();

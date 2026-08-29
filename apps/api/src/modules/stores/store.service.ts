@@ -1,18 +1,27 @@
 import type { StoreView } from '@haala/shared';
 import { AppError } from '../../common/errors';
-import { haversineMeters } from '../../common/geo';
+import { haversineMeters, isWithinDeliveryRadius } from '../../common/geo';
 import type { Store } from '../../db/schema';
 import { storeRepository } from './store.repository';
 
-const toView = (s: Store, distanceMeters?: number): StoreView => ({
+/**
+ * `from` is the point the customer is asking about. Passing it is what adds
+ * `distanceMeters` and `isServiceable`; omitting it returns the plain store.
+ * A single optional point rather than loose lat/lng defaults, so there is no
+ * way to accidentally measure serviceability from (0, 0).
+ */
+const toView = (s: Store, from?: { lat: number; lng: number }): StoreView => ({
   id: s.id,
   name: s.name,
   area: s.area,
   city: s.city,
   latitude: s.latitude,
   longitude: s.longitude,
-  ...(distanceMeters !== undefined
-    ? { distanceMeters, isServiceable: distanceMeters <= s.deliveryRadiusMeters }
+  ...(from
+    ? {
+        distanceMeters: haversineMeters(from.lat, from.lng, s.latitude, s.longitude),
+        isServiceable: isWithinDeliveryRadius(s, from.lat, from.lng),
+      }
     : {}),
 });
 
@@ -27,7 +36,7 @@ export const storeService = {
     return stores
       .map((s) => ({ store: s, distance: haversineMeters(lat, lng, s.latitude, s.longitude) }))
       .sort((a, b) => a.distance - b.distance)
-      .map(({ store, distance }) => toView(store, distance));
+      .map(({ store }) => toView(store, { lat, lng }));
   },
 
   async getById(id: string): Promise<StoreView> {
