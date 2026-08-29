@@ -33,7 +33,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const categories = useQuery({ queryKey: qk.categories, queryFn: catalogApi.categories });
-  const { cart, qtyByProduct, busyProductId, addOne, setQty } = useProductActions(storeId);
+  const { cart, qtyByProduct, busyVariantId, addOne, setQty } = useProductActions(storeId);
 
   const shelfCategories = (categories.data ?? []).slice(0, SHELF_COUNT);
 
@@ -273,7 +273,7 @@ export default function HomeScreen() {
                       imageUrl={item.imageUrl}
                       inStock={item.inStock}
                       quantity={qtyByProduct.get(item.defaultVariantId ?? "") ?? 0}
-                      busy={busyProductId === item.id}
+                      busy={busyVariantId === item.defaultVariantId}
                       onPress={() => router.push(`/product/${item.id}`)}
                       onAdd={() => addOne(item.defaultVariantId)}
                       onIncrement={() =>

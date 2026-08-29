@@ -25,10 +25,12 @@ export function useProductActions(storeId: string | null) {
     qtyByProduct,
     busy: add.isPending,
     /**
-     * The product with an add in flight, so a card can show a spinner on its
-     * own button instead of every card reacting to any add.
+     * The **variant** with an add in flight, so a card can spin its own button
+     * instead of every card reacting to any add. Named for what it holds: it
+     * was `busyProductId` and kept being compared against product ids, which
+     * silently meant no card ever showed a spinner.
      */
-    busyProductId: add.isPending ? (add.variables?.variantId ?? null) : null,
+    busyVariantId: add.isPending ? (add.variables?.variantId ?? null) : null,
     /** Add `quantity` of a **variant** to the cart (defaults to a single unit). */
     addOne: (variantId: string | null, quantity = 1) => {
       if (!storeId || !variantId) return;

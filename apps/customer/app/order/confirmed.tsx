@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatPKR, OrderStatus } from '@haala/shared';
-import { Icon, Text, theme } from '@haala/ui';
+import { Icon, Skeleton, Text, theme } from '@haala/ui';
 import { ordersApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
 import { ETA_MINUTES } from '../../src/config';
@@ -142,14 +142,18 @@ export default function OrderConfirmedScreen() {
             </View>
 
             <View style={styles.cardBottom}>
-              <View style={styles.billRow}>
-                <Text variant="body" color="textSecondary">
-                  {itemCount} {itemCount === 1 ? 'item' : 'items'}
-                </Text>
-                <Text variant="body" color="textSecondary">
-                  {formatPKR(o?.subtotal ?? 0)}
-                </Text>
-              </View>
+              {o ? (
+                <View style={styles.billRow}>
+                  <Text variant="body" color="textSecondary">
+                    {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                  </Text>
+                  <Text variant="body" color="textSecondary">
+                    {formatPKR(o.subtotal)}
+                  </Text>
+                </View>
+              ) : (
+                <Skeleton width="60%" height={14} />
+              )}
 
               {saved > 0 || (o?.tipAmount ?? 0) > 0 ? (
                 <View style={styles.billRow}>
@@ -171,10 +175,19 @@ export default function OrderConfirmedScreen() {
               ) : null}
 
               <View style={styles.paidRow}>
-                <Text variant="title">
-                  {o?.paymentMethod === 'cod' ? 'Cash on delivery' : 'Paid'}
-                </Text>
-                <Text variant="h2">{formatPKR(o?.total ?? 0)}</Text>
+                {o ? (
+                  <>
+                    <Text variant="title">
+                      {o.paymentMethod === 'cod' ? 'Cash on delivery' : 'Paid'}
+                    </Text>
+                    <Text variant="h2">{formatPKR(o.total)}</Text>
+                  </>
+                ) : (
+                  <>
+                    <Skeleton width={110} height={16} />
+                    <Skeleton width={80} height={20} />
+                  </>
+                )}
               </View>
             </View>
           </View>

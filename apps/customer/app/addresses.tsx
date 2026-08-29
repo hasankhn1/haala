@@ -65,8 +65,16 @@ export default function AddressesScreen() {
               label={a.label}
               line={`${a.line1}, ${a.area}, ${a.city}`}
               selected={a.isDefault}
-              actionLabel={a.isDefault ? undefined : 'Set default'}
-              onPress={() => (a.isDefault ? undefined : setDefault.mutate(a.id))}
+              actionLabel={
+                a.isDefault
+                  ? undefined
+                  : setDefault.isPending && setDefault.variables === a.id
+                    ? 'Setting…'
+                    : 'Set default'
+              }
+              onPress={() =>
+                a.isDefault || setDefault.isPending ? undefined : setDefault.mutate(a.id)
+              }
             />
           ))}
 

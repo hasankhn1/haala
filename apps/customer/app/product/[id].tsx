@@ -34,7 +34,7 @@ export default function ProductDetailScreen() {
     enabled: !!storeId && !!id,
   });
 
-  const { cart, qtyByProduct, busy, addOne, setQty } = useProductActions(storeId);
+  const { cart, qtyByProduct, busy, busyVariantId, addOne, setQty } = useProductActions(storeId);
 
   /**
    * The size being bought. Defaults to the first variant — they arrive ordered
@@ -193,7 +193,7 @@ export default function ProductDetailScreen() {
                     imageUrl={item.imageUrl}
                     inStock={item.inStock}
                     quantity={qtyByProduct.get(item.defaultVariantId ?? "") ?? 0}
-                    busy={false}
+                    busy={busyVariantId === item.defaultVariantId}
                     onPress={() => router.push(`/product/${item.id}`)}
                     onAdd={() => addOne(item.defaultVariantId)}
                     onIncrement={() =>
