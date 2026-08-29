@@ -4,27 +4,9 @@ import { FlashList } from '@shopify/flash-list';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { CategoryView } from '@haala/shared';
-import { StateView, Text, theme } from '@haala/ui';
+import { StateView, Text, Thumb, theme } from '@haala/ui';
 import { catalogApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
-
-// Order matters — first match wins, so the specific patterns come first.
-const EMOJI: Array<[RegExp, string]> = [
-  [/dry\s*fruit|nut|almond/i, '🥜'],
-  [/dairy|milk|egg/i, '🥛'],
-  [/bakery|bread/i, '🍞'],
-  [/fruit|veg/i, '🥬'],
-  [/lentil|pulse|daal|dal|bean/i, '🫘'],
-  [/toiletr|hygiene|personal\s*care|soap/i, '🧼'],
-  [/sport|fitness/i, '🏏'],
-  [/grocer|staple|rice|grain|flour|atta/i, '🍚'],
-  [/drink|beverage|juice/i, '🥤'],
-  [/snack|biscuit/i, '🍪'],
-  [/meat|chicken/i, '🍗'],
-  [/clean|detergent|household/i, '🧽'],
-  [/baby|diaper/i, '🍼'],
-];
-const emojiFor = (name: string) => EMOJI.find(([re]) => re.test(name))?.[1] ?? '🛒';
 
 export default function CategoriesScreen() {
   const router = useRouter();
@@ -55,8 +37,13 @@ export default function CategoriesScreen() {
                   style={({ pressed }) => [styles.tile, pressed && { opacity: 0.9 }]}
                   onPress={() => router.push(`/products?categoryId=${item.id}`)}
                 >
-                  <View style={styles.emojiWrap}>
-                    <Text style={styles.emoji}>{emojiFor(item.name)}</Text>
+                  <View style={styles.tileImage}>
+                    <Thumb
+                      imageUrl={item.imageUrl}
+                      name={item.name}
+                      fill
+                      radius={theme.radii.md}
+                    />
                   </View>
                   <Text variant="labelSm" align="center" numberOfLines={2}>
                     {item.name}
@@ -89,16 +76,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.sm,
     alignItems: 'center',
     gap: theme.spacing.sm,
-    minHeight: 104,
+    minHeight: 128,
     ...theme.elevation.card,
   },
-  emojiWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: theme.radii.pill,
-    backgroundColor: theme.colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
+  /** Same 74px tile as the Home rail, so the two entry points match. */
+  tileImage: {
+    width: 74,
+    height: 74,
+    borderRadius: theme.radii.lg,
+    backgroundColor: theme.colors.infoSoft,
+    padding: 7,
+    overflow: 'hidden',
   },
-  emoji: { fontSize: 22, lineHeight: 28 },
 });

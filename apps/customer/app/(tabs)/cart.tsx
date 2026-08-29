@@ -28,7 +28,7 @@ import { ApiError } from '../../src/api/client';
 import { addressesApi, ordersApi, promotionsApi } from '../../src/api/endpoints';
 import { runOnlineCheckout } from '../../src/lib/onlineCheckout';
 import { qk } from '../../src/api/queryKeys';
-import { ETA_MINUTES, estimateDeliveryFee } from '../../src/config';
+import { ETA_MINUTES, FREE_DELIVERY_THRESHOLD, estimateDeliveryFee } from '../../src/config';
 import { haptics } from '../../src/lib/haptics';
 import { useCart, useCartMutations } from '../../src/hooks/useCart';
 
@@ -344,6 +344,29 @@ export default function CartScreen() {
             ) : null}
           </View>
 
+          {/* How close this basket is to free delivery. Same bar as Home, and
+              the same shared threshold the server prices against — the point is
+              that the customer sees the fee disappear before they commit. */}
+          {deliveryFee > 0 ? (
+            <View style={styles.freeDelivery}>
+              <View style={styles.freeDeliveryTop}>
+                <Text variant="labelSm" color="onPrimary" numberOfLines={1} style={styles.flex}>
+                  {formatPKR(Math.max(FREE_DELIVERY_THRESHOLD - subtotal, 0))} away from free
+                  delivery
+                </Text>
+                <Icon name="bicycle-outline" size={16} color={theme.colors.onPrimary} />
+              </View>
+              <View style={styles.freeDeliveryTrack}>
+                <View
+                  style={[
+                    styles.freeDeliveryFill,
+                    { width: `${Math.min(subtotal / FREE_DELIVERY_THRESHOLD, 1) * 100}%` },
+                  ]}
+                />
+              </View>
+            </View>
+          ) : null}
+
           {/* Order summary */}
           <View style={[styles.card, styles.summary]}>
             <Text variant="labelCaps" color="textSecondary">
@@ -600,6 +623,30 @@ const styles = StyleSheet.create({
   },
 
   summary: { marginTop: theme.spacing.lg },
+  freeDelivery: {
+    marginTop: theme.spacing.lg,
+    backgroundColor: theme.colors.accent,
+    borderRadius: theme.radii.md,
+    padding: theme.spacing.md,
+    gap: theme.spacing.sm,
+  },
+  freeDeliveryTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: theme.spacing.sm,
+  },
+  freeDeliveryTrack: {
+    height: 6,
+    borderRadius: theme.radii.pill,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    overflow: 'hidden',
+  },
+  freeDeliveryFill: {
+    height: '100%',
+    borderRadius: theme.radii.pill,
+    backgroundColor: theme.colors.promo,
+  },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
 
