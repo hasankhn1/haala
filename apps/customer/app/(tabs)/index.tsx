@@ -411,10 +411,10 @@ const styles = StyleSheet.create({
   seeAll: { color: theme.colors.primaryPressed },
   // Rails bleed to the right screen edge; the section header stays on the grid.
   rail: { gap: theme.spacing.md, paddingRight: theme.layout.margin },
-  catTile: { width: 74, alignItems: 'center', gap: theme.spacing.sm },
+  catTile: { width: 64, alignItems: 'center', gap: theme.spacing.sm },
   catTileImage: {
-    width: 74,
-    height: 74,
+    width: 64,
+    height: 64,
     borderRadius: theme.radii.lg,
     backgroundColor: theme.colors.infoSoft,
     padding: 7,

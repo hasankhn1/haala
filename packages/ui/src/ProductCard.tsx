@@ -301,8 +301,9 @@ function RowCard({
   );
 }
 
-/** Home's shelf rails. */
-export const COMPACT_CARD_WIDTH = 146;
+/** Home's shelf rails. Narrower than the comp's 146 so more of the shelf is
+ *  visible at once — the rail is for browsing, not for reading. */
+export const COMPACT_CARD_WIDTH = 126;
 /** The PDP's "more in this aisle" rail — the comps use a smaller tile there. */
 export const MINI_CARD_WIDTH = 120;
 /** The cart's "Forgot something?" rail. */

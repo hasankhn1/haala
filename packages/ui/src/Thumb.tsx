@@ -9,7 +9,14 @@ export interface ThumbProps {
   name: string;
   size?: number;
   radius?: number;
-  /** Fill the parent width as a square (for grid cards) instead of a fixed size. */
+  /**
+   * Fill the parent box entirely instead of using a fixed size.
+   *
+   * The parent decides the shape — these wells are not all square (a grid card
+   * is ~183x150, the cart upsell 92x70). This used to force `aspectRatio: 1`,
+   * which rendered a square inside a landscape well and clipped the bottom off
+   * every photo.
+   */
   fill?: boolean;
   /**
    * How the photo fits its box. Product shots read better `contain`ed on the
@@ -77,8 +84,8 @@ export function Thumb({
   // otherwise one broken image poisons every row that reuses the slot.
   useEffect(() => setFailed(false), [imageUrl]);
 
-  const dims = fill ? ({ width: '100%', aspectRatio: 1 } as const) : { width: size, height: size };
-  const emojiSize = fill ? 44 : size * 0.45;
+  const dims = fill ? ({ width: '100%', height: '100%' } as const) : { width: size, height: size };
+  const emojiSize = fill ? 34 : size * 0.45;
 
   if (imageUrl && !failed) {
     return (
