@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "backgroundColor": "#EDE7E0",
+    "backgroundColor": "#FFFFFF",
     "plugins": [
       "expo-router",
       [

@@ -136,9 +136,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: theme.spacing.md,
     backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.sm,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
     padding: theme.spacing.lg,
-    ...theme.elevation.card,
   },
   /** Unread reads as a tonal lift, not a colour — consistent with StatusBadge. */
   rowUnread: { backgroundColor: theme.colors.accentSoft },

@@ -10,15 +10,20 @@ export interface CardProps {
 }
 
 /**
- * Elevated surface. Onyx cards are pure white on the off-white canvas with an
- * 8px radius and the single ambient ink shadow — **no border**.
+ * Grouped surface.
+ *
+ * Basket's canvas is white, so a white fill plus a shadow would not read as a
+ * card at all — the comps separate blocks with a warm hairline instead, and
+ * reserve fills for wells that hold something (imagery, controls). Hence
+ * border, no shadow.
  */
 export function Card({ children, padded = true, onPress, style }: CardProps) {
   const cardStyle: ViewStyle = {
     backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.sm,
+    borderRadius: theme.radii.md,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
     padding: padded ? theme.spacing.lg : 0,
-    ...theme.elevation.card,
     ...style,
   };
   if (onPress) {

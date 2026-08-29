@@ -2,10 +2,13 @@
  * Color primitives + semantic tokens for Haala.
  *
  * Brand is **Basket** (Claude Design project "Grocery App Design System"): a
- * warm, appetising palette built on a burnt-orange action color over a beige
+ * warm, appetising palette built on a burnt-orange action color over a white
  * canvas, with warm near-black type. It replaced **Onyx & Ink** — the cool
  * slate/gallery-white system — on 2026-08-29. Food retail reads better warm;
  * the austere slate belonged to a different kind of product.
+ *
+ * The canvas is **white**; warmth arrives as accents — clay wells behind
+ * imagery, soft ember washes, and hairline borders — never as a page tint.
  *
  * Ember orange is the ACTION color: primary CTAs, add-to-cart, active nav,
  * prices, selected states. Clay 900 (`#26211E`) is the CONTRAST surface —
@@ -34,10 +37,9 @@ export const palette = {
    * canvas, borders, type. Warm-tinted throughout, never a cool grey.
    */
   clay: {
-    50: '#F7F3EF',
-    100: '#F1EBE4', // muted surface / tile fill
-    150: '#EDE7E0', // canvas
-    200: '#EDE5DE', // border
+    50: '#F7F3EF', // sunken — product image blocks, PDP hero
+    100: '#F1EBE4', // muted surface — category tiles, stepper fill
+    200: '#EDE5DE', // border / hairline
     300: '#D6C9BE', // border strong
     400: '#C6B7AA', // placeholder ink
     500: '#A99B90', // tertiary text
@@ -77,11 +79,23 @@ export const colors = {
   accentSoft: palette.clay[100],
 
   // Surfaces & backgrounds
-  /** Base canvas — warm beige so white cards lift off it. */
-  background: palette.clay[150],
-  /** Elevated containers: cards, sheets, inputs at rest. */
+  /**
+   * Base canvas — **white**.
+   *
+   * Do not put `#EDE7E0` here. That colour appears exactly once in the design
+   * source, inside the `<helmet>` block styling the design document's own page:
+   * it is the ground *behind the phone frame*, not an app colour. The app shell
+   * is `background:#fff`, which the comps use 23 times. Getting this wrong
+   * tints every screen and makes white cards invisible.
+   */
+  background: palette.neutral[0],
+  /** Elevated containers on a tinted ground — the search field on the ember
+   *  hero, the success card. On the white canvas these need a border, not a fill. */
   surface: palette.neutral[0],
+  /** Tile and control fills: category tiles, quantity steppers. */
   surfaceMuted: palette.clay[100],
+  /** Sunken wells that hold imagery: product cards, the PDP hero. */
+  surfaceSunken: palette.clay[50],
   overlay: 'rgba(25, 20, 16, 0.45)',
 
   // Text

@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
     width: '100%',
     aspectRatio: 1,
     borderRadius: theme.radii.md,
-    backgroundColor: theme.colors.surfaceMuted,
+    backgroundColor: theme.colors.surfaceSunken,
     overflow: 'hidden',
   },
   /** Floating add control, over the photo's bottom-right corner. */
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: COMPACT_CARD_WIDTH,
     borderRadius: theme.radii.md,
-    backgroundColor: theme.colors.surfaceMuted,
+    backgroundColor: theme.colors.surfaceSunken,
     overflow: 'hidden',
   },
   oosOverlayCompact: {
@@ -297,16 +297,15 @@ const styles = StyleSheet.create({
   },
   compactName: { minHeight: 34 },
 
-  // Row
+  // Row — the cart line. No panel: a sunken thumb well plus a hairline rule
+  // is what separates one line from the next on a white canvas.
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.md,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.sm,
-    padding: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-    ...theme.elevation.card,
+    paddingVertical: theme.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
   },
   rowInfo: { flex: 1, gap: 2 },
   rowPrice: { marginTop: theme.spacing.xs },

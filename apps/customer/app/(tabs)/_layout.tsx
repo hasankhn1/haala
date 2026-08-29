@@ -1,27 +1,25 @@
 import { Redirect, Tabs } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { Icon, type IconName, theme } from '@haala/ui';
 import { useAuth } from '../../src/auth/AuthContext';
 import { useCart } from '../../src/hooks/useCart';
 
 
 /**
- * Onyx navigation: no circular selection backdrop. The active tab is signalled
- * by the icon/label shifting from Slate to Onyx, plus a 2px "ink bar" on the
- * item's leading edge — the top edge, for a bottom bar.
+ * Basket navigation: a plain white bar with a hairline top border. The active
+ * tab is signalled by the icon and label turning ember, and by a slightly
+ * heavier stroke — nothing else. The 2px "ink bar" this used to draw was an
+ * Onyx rule; Basket's comp has no such marker.
  */
 const tabIcon =
   (name: IconName, focusedName: IconName) =>
   ({ focused, color, size }: { focused: boolean; color: string; size: number }) => (
-    <View style={styles.iconWrap}>
-      <View style={[styles.inkBar, focused ? styles.inkBarOn : styles.inkBarOff]} />
-      <Icon
-        name={focused ? focusedName : name}
-        size={size}
-        color={color}
-        strokeWidth={focused ? 2.4 : 1.8}
-      />
-    </View>
+    <Icon
+      name={focused ? focusedName : name}
+      size={size}
+      color={color}
+      strokeWidth={focused ? 2.4 : 1.8}
+    />
   );
 
 export default function TabsLayout() {
@@ -74,16 +72,12 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
   bar: {
     backgroundColor: theme.colors.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 1,
     borderTopColor: theme.colors.border,
     height: 64,
     paddingTop: 0,
   },
   item: { paddingTop: 0 },
-  iconWrap: { alignItems: 'center', gap: 6 },
-  inkBar: { width: 24, height: 2, borderRadius: 1 },
-  inkBarOn: { backgroundColor: theme.colors.primary },
-  inkBarOff: { backgroundColor: 'transparent' },
   label: {
     fontFamily: theme.typography.fontFamily.semibold,
     fontSize: 11,

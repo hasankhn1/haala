@@ -54,6 +54,22 @@ export function DeliveryMap({
   style,
   interactive = false,
 }: DeliveryMapProps) {
+  /**
+   * `tracksViewChanges` is why this map was slow to appear and janky after.
+   * While it is true, react-native-maps re-rasterises every custom marker view
+   * to a bitmap on each frame; three markers plus a polyline is enough to stall
+   * the whole map on Android. Static pins are pinned to `false`; the rider gets
+   * a short window open whenever its coordinate changes.
+   */
+  const [riderRedraw, setRiderRedraw] = useState(false);
+  const riderKey = rider ? `${rider.latitude},${rider.longitude}` : null;
+  useEffect(() => {
+    if (!riderKey) return;
+    setRiderRedraw(true);
+    const t = setTimeout(() => setRiderRedraw(false), 600);
+    return () => clearTimeout(t);
+  }, [riderKey]);
+
   if (!Maps) return <MapFallback style={style} />;
 
   const { default: MapView, Marker, Polyline, PROVIDER_DEFAULT } = Maps;
@@ -82,21 +98,42 @@ export function DeliveryMap({
       toolbarEnabled={false}
       showsCompass={false}
       showsMyLocationButton={false}
+      loadingEnabled
+      loadingBackgroundColor={theme.colors.surfaceSunken}
+      loadingIndicatorColor={theme.colors.primary}
     >
       {origin ? (
-        <Marker coordinate={origin} title="Store" anchor={{ x: 0.5, y: 0.5 }}>
+        <Marker
+          coordinate={origin}
+          title="Store"
+          anchor={{ x: 0.5, y: 0.5 }}
+          tracksViewChanges={false}
+        >
           <View style={styles.storePin} />
         </Marker>
       ) : null}
 
-      <Marker coordinate={destination} title="Delivery location" anchor={{ x: 0.5, y: 0.5 }}>
+      <Marker
+        coordinate={destination}
+        title="Delivery location"
+        anchor={{ x: 0.5, y: 0.5 }}
+        tracksViewChanges={false}
+      >
         <View style={styles.destOuter}>
           <View style={styles.destInner} />
         </View>
       </Marker>
 
       {rider ? (
-        <Marker coordinate={rider} title="Rider" anchor={{ x: 0.5, y: 0.5 }}>
+        <Marker
+          coordinate={rider}
+          title="Rider"
+          anchor={{ x: 0.5, y: 0.5 }}
+          // The rider actually moves, so this one needs a brief redraw window
+          // each time the coordinate changes — pinned to `false` forever, the
+          // pin would render once and then never update.
+          tracksViewChanges={riderRedraw}
+        >
           <View style={styles.riderPin} />
         </Marker>
       ) : null}
@@ -179,6 +216,9 @@ export function MapPicker({ center, onCenterChange, style }: MapPickerProps) {
         // quick, and someone reaching for a spot across the screen wants the
         // second one.
         onPress={(e: { nativeEvent: { coordinate: LatLng } }) => move(e.nativeEvent.coordinate)}
+        loadingEnabled
+        loadingBackgroundColor={theme.colors.surfaceSunken}
+        loadingIndicatorColor={theme.colors.primary}
         rotateEnabled={false}
         pitchEnabled={false}
         toolbarEnabled={false}
@@ -224,7 +264,7 @@ function MapFallback({ style }: { style?: ViewStyle }) {
 const styles = StyleSheet.create({
   map: { flex: 1 },
   fallback: {
-    backgroundColor: theme.colors.surfaceMuted,
+    backgroundColor: theme.colors.surfaceSunken,
     alignItems: 'center',
     justifyContent: 'center',
   },

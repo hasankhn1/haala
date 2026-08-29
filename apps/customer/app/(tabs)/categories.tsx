@@ -70,14 +70,13 @@ const styles = StyleSheet.create({
    * padding made a ~150px tile, so only four fitted on screen.
    */
   tile: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.sm,
+    backgroundColor: theme.colors.surfaceSunken,
+    borderRadius: theme.radii.md,
     paddingVertical: theme.spacing.md,
     paddingHorizontal: theme.spacing.sm,
     alignItems: 'center',
     gap: theme.spacing.sm,
     minHeight: 128,
-    ...theme.elevation.card,
   },
   /** Same 74px tile as the Home rail, so the two entry points match. */
   tileImage: {

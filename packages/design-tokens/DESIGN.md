@@ -37,8 +37,30 @@ is savings and progress only.
 3. **Sun yellow is reserved.** Savings badges, "best value", the free-delivery
    progress fill. Yellow on chrome is a bug. It always carries ink text —
    yellow-on-white fails contrast at label sizes.
-4. **The canvas is warm.** `#EDE7E0`, not white and never a cool off-white.
-   White is for cards lifting off it.
+4. **The canvas is WHITE.** `#FFFFFF`. Warmth arrives as accents, never as a
+   page tint.
+
+   > ⚠️ **Do not use `#EDE7E0` anywhere.** It appears exactly once in
+   > `Grocery App.dc.html` — line 10, inside the `<helmet>` block that styles
+   > the *design document's own page*. It is the ground **behind the phone
+   > frame**. The app shell is `background:#fff`, used 23 times inside the
+   > phone. This was got wrong once already: theming the canvas beige tinted
+   > every screen and made every white card invisible.
+
+   The surface ladder:
+
+   | Role | Token | Colour |
+   | --- | --- | --- |
+   | Canvas | `background` | `#FFFFFF` |
+   | Sunken well (imagery) | `surfaceSunken` | `#F7F3EF` |
+   | Tile / control fill | `surfaceMuted` | `#F1EBE4` |
+   | Soft ember wash | `infoSoft` / `primarySoft` | `#FFF6EF` / `#FFEDE4` |
+   | Hairline | `border` | `#EDE5DE` |
+   | Contrast surface | `accent` | `#26211E` |
+
+   **Cards are hairline-bounded, not filled.** A white panel on a white canvas
+   is invisible, so `Card` uses a 1px `border` and no shadow; blocks that hold
+   imagery or controls get a fill instead.
 5. **Round.** Pills for every chip, tag and control; 14 buttons/inputs, 16
    cards, 20 media, 26 for the hero sweep and sheets.
 6. **Heavy headings.** Headings, product names, prices and titles are
@@ -48,8 +70,14 @@ is savings and progress only.
    old 4% slate whisper is invisible; `card` is 10% at 24px blur.
 8. **8px rhythm**, 4px half-steps, 32px between sections — unchanged from the
    previous system. Basket differs in colour and roundness, not in measure.
-9. **No circular selection backdrops in nav.** Active = icon and label shift to
-   Ember, plus the ink bar on the item's leading edge.
+9. **Nav is plain.** A white bar with a 1px `#EDE5DE` top border; the active
+   tab is just the icon and label turning ember with a slightly heavier stroke.
+   No ink bar — that was an Onyx rule and does not exist in these comps.
+
+10. **Custom map markers must set `tracksViewChanges={false}`.** Android
+    re-rasterises a custom marker view every frame while it is true, which
+    stalls the whole map. Markers that actually move need a short redraw window
+    on coordinate change, not a permanent `true` — see `DeliveryMap.tsx`.
 
 ## Type
 
