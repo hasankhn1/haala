@@ -4,6 +4,7 @@ import { authService } from './auth.service';
 
 export const authController = {
   async register(req: Request, res: Response): Promise<void> {
+    console.log('register', req.body);
     const result = await authService.register(req.body);
     sendSuccess(res, result, 201);
   },
