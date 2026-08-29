@@ -32,17 +32,29 @@ export const fontWeight = {
   extrabold: '800',
 } as const;
 
+/**
+ * Sizes read off the comps, not inherited.
+ *
+ * Basket is a **dense, small-type** system: 83% of the type in
+ * `Grocery App.dc.html` is 13px or smaller, the most common size is 11.5px, and
+ * only seven declarations in the whole design are 18px or larger — all of them
+ * hero numbers. The previous system's scale (body 16, h3 20, h2 24) rendered
+ * every screen roughly a third oversized.
+ *
+ * The design frame is 412px wide, so these map to dp very nearly 1:1.
+ */
 export const fontSize = {
-  caption: 12,
-  label: 14,
-  bodySm: 14,
-  body: 16,
-  title: 18,
-  h3: 20,
-  h2: 24,
-  h1: 32,
-  display: 40,
-  displayLg: 48,
+  caption: 10.5,
+  labelSm: 11,
+  label: 11.5,
+  bodySm: 11.5,
+  body: 12.5,
+  title: 14,
+  h3: 14.5,
+  h2: 17,
+  h1: 20,
+  display: 30,
+  displayLg: 40,
 } as const;
 
 type TextStyle = {
@@ -65,91 +77,91 @@ export const textStyles = {
   displayLg: {
     fontFamily: fontFamily.extrabold,
     fontSize: fontSize.displayLg,
-    lineHeight: 56,
+    lineHeight: 44,
     fontWeight: fontWeight.extrabold,
-    letterSpacing: -0.96,
+    letterSpacing: -0.6,
   },
   display: {
     fontFamily: fontFamily.extrabold,
     fontSize: fontSize.display,
-    lineHeight: 48,
+    lineHeight: 34,
     fontWeight: fontWeight.extrabold,
-    letterSpacing: -0.8,
+    letterSpacing: -0.6,
   },
   h1: {
     fontFamily: fontFamily.extrabold,
     fontSize: fontSize.h1,
-    lineHeight: 40,
+    lineHeight: 25,
     fontWeight: fontWeight.extrabold,
-    letterSpacing: -0.32,
+    letterSpacing: -0.2,
   },
   h2: {
     fontFamily: fontFamily.extrabold,
     fontSize: fontSize.h2,
-    lineHeight: 32,
+    lineHeight: 21,
     fontWeight: fontWeight.extrabold,
-    letterSpacing: -0.24,
+    letterSpacing: -0.17,
   },
   h3: {
     fontFamily: fontFamily.extrabold,
     fontSize: fontSize.h3,
-    lineHeight: 28,
+    lineHeight: 19,
     fontWeight: fontWeight.extrabold,
   },
   /** Product names, store names, order status. */
   title: {
     fontFamily: fontFamily.extrabold,
     fontSize: fontSize.title,
-    lineHeight: 26,
+    lineHeight: 18,
     fontWeight: fontWeight.extrabold,
   },
   body: {
     fontFamily: fontFamily.regular,
     fontSize: fontSize.body,
-    lineHeight: 24,
+    lineHeight: 17,
     fontWeight: fontWeight.regular,
   },
   bodyStrong: {
     fontFamily: fontFamily.extrabold,
     fontSize: fontSize.body,
-    lineHeight: 24,
+    lineHeight: 17,
     fontWeight: fontWeight.extrabold,
   },
   bodySm: {
     fontFamily: fontFamily.regular,
     fontSize: fontSize.bodySm,
-    lineHeight: 20,
+    lineHeight: 15,
     fontWeight: fontWeight.regular,
   },
   /** Button/label text. */
   label: {
     fontFamily: fontFamily.bold,
     fontSize: fontSize.label,
-    lineHeight: 20,
+    lineHeight: 14,
     fontWeight: fontWeight.bold,
-    letterSpacing: 0.14,
+    letterSpacing: 0.11,
   },
   labelSm: {
     fontFamily: fontFamily.bold,
-    fontSize: fontSize.caption,
-    lineHeight: 16,
+    fontSize: fontSize.labelSm,
+    lineHeight: 14,
     fontWeight: fontWeight.bold,
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
   },
   /** Section eyebrows: "DELIVERY DETAILS", "ORDER SUMMARY", "LIMITED TIME". */
   labelCaps: {
     fontFamily: fontFamily.bold,
     fontSize: fontSize.caption,
-    lineHeight: 16,
+    lineHeight: 14,
     fontWeight: fontWeight.bold,
-    letterSpacing: 0.96,
+    letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
   /** Secondary metadata: units, delivery fees, supporting info. */
   caption: {
     fontFamily: fontFamily.regular,
     fontSize: fontSize.caption,
-    lineHeight: 16,
+    lineHeight: 14,
     fontWeight: fontWeight.regular,
   },
   /** Prominent price emphasis inline. */
@@ -158,7 +170,7 @@ export const textStyles = {
     fontSize: fontSize.title,
     lineHeight: 24,
     fontWeight: fontWeight.bold,
-    letterSpacing: -0.18,
+    letterSpacing: -0.14,
   },
 } as const satisfies Record<string, TextStyle>;
 

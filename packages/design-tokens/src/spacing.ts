@@ -9,6 +9,7 @@ export const space = {
   2: 8,
   3: 12,
   4: 16,
+  5: 20,
   6: 24,
   8: 32,
   10: 40,
@@ -30,19 +31,22 @@ export const spacing = {
 
 /**
  * Layout rhythm from the design system's spacing scale. `margin` is the screen
- * edge inset ("framed gallery" effect); `sectionGap` is the 32px+ breathing
- * room between content sections that keeps the UI off a crowded-supermarket
- * feel.
+ * edge inset — 16px, the comps' page inset; `sectionGap` is the breathing room
+ * between content sections.
  */
 export const layout = {
   /** Screen horizontal inset (mobile). */
   margin: space[4], // 16
   /** Gutter between grid columns. */
   gutter: space[6], // 24
-  /** Vertical gap between major sections. */
-  sectionGap: space[8], // 32
+  /**
+   * Vertical gap between major sections. The comps run 12–22px between
+   * sections, not 32 — Basket is dense, and the old value came from a system
+   * that used whitespace where this one uses colour and weight.
+   */
+  sectionGap: space[5], // 20
   /** Gap between sibling elements inside a section. */
-  elementGap: space[3], // 12
+  elementGap: 10,
 } as const;
 
 /**
