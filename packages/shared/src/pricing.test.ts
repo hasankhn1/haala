@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { formatPKR, rupees, toRupees } from './money';
-import { DELIVERY_FEE, FREE_DELIVERY_THRESHOLD, deliveryFeeFor } from './pricing';
+import {
+  DELIVERY_FEE,
+  FREE_DELIVERY_THRESHOLD,
+  MAX_TIP,
+  SERVICE_FEE,
+  deliveryFeeFor,
+  serviceFeeFor,
+} from './pricing';
 
 /**
  * The delivery-fee rule now has exactly one definition, imported by the API,
@@ -51,5 +58,55 @@ describe('money helpers', () => {
 
   it('formats decimals only when asked', () => {
     assert.equal(formatPKR(12_345, true), 'PKR 123.45');
+  });
+});
+
+/**
+ * Service fee and tip, added when the Basket comps' bill lines were built for
+ * real. Same rule as everything else in this file: integer paisa, one
+ * definition, pinned so an edit can't silently change what is charged.
+ */
+describe('serviceFeeFor', () => {
+  it('is zero on an empty basket', () => {
+    assert.equal(serviceFeeFor(0), 0);
+  });
+
+  it('is the configured fee on a real basket', () => {
+    assert.equal(serviceFeeFor(rupees(500)), SERVICE_FEE);
+  });
+
+  it('is currently zero — the line exists, the charge does not', () => {
+    // Guards a deliberate decision: the comps show a service-fee row, so it is
+    // computed and stored on every order, but charging one is a pricing call.
+    // If this fails someone set a rate — check that was intended, then update.
+    assert.equal(SERVICE_FEE, 0);
+  });
+});
+
+describe('order total', () => {
+  // Mirrors `order.service.placeOrder`.
+  const total = (subtotal: number, discount: number, tip: number) =>
+    subtotal + deliveryFeeFor(subtotal) + serviceFeeFor(subtotal) + tip - discount;
+
+  it('adds delivery, service and tip, then subtracts the discount', () => {
+    const subtotal = rupees(800);
+    assert.equal(
+      total(subtotal, rupees(100), rupees(50)),
+      subtotal + DELIVERY_FEE + rupees(50) - rupees(100),
+    );
+  });
+
+  it('leaves the tip intact when a promo covers delivery', () => {
+    // A code that quietly ate the rider's tip would be taking money from the
+    // wrong person.
+    const subtotal = rupees(800);
+    assert.equal(total(subtotal, DELIVERY_FEE, rupees(50)) - subtotal, rupees(50));
+  });
+
+  it('caps the tip and rejects negatives', () => {
+    const clamp = (n: number) => Math.min(Math.max(n, 0), MAX_TIP);
+    assert.equal(clamp(rupees(50)), rupees(50));
+    assert.equal(clamp(rupees(9_000)), MAX_TIP);
+    assert.equal(clamp(-1), 0);
   });
 });

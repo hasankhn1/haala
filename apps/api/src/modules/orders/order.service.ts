@@ -3,7 +3,9 @@ import {
   ORDER_STATUS_FLOW,
   OrderStatus,
   PaymentStatus,
+  MAX_TIP,
   deliveryFeeFor,
+  serviceFeeFor,
   type OrderStatus as OrderStatusT,
   type OrderView,
   type OrderSummaryView,
@@ -137,7 +139,12 @@ export const orderService = {
 
       const deliveryFee = promo?.deliveryFee ?? baseDeliveryFee;
       const discount = promo?.discount ?? 0;
-      const total = subtotal + deliveryFee - discount;
+      const serviceFee = serviceFeeFor(subtotal);
+      // The tip is the customer's number, not ours: clamped to the accepted
+      // range and never touched by a promotion. A code that discounted the
+      // rider's tip would be taking money from the wrong person.
+      const tipAmount = Math.min(Math.max(input.tipAmount ?? 0, 0), MAX_TIP);
+      const total = subtotal + deliveryFee + serviceFee + tipAmount - discount;
 
       const created = await orderRepository.create(
         {
@@ -148,6 +155,8 @@ export const orderService = {
           paymentMethod: input.paymentMethod,
           subtotal,
           deliveryFee,
+          serviceFee,
+          tipAmount,
           discount,
           total,
           promoCode: promo?.code ?? null,
@@ -407,6 +416,8 @@ export const orderService = {
       paymentStatus: payment?.status ?? null,
       subtotal: order.subtotal,
       deliveryFee: order.deliveryFee,
+      serviceFee: order.serviceFee,
+      tipAmount: order.tipAmount,
       discount: order.discount,
       total: order.total,
       promoCode: order.promoCode,

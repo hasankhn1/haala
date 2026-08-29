@@ -36,6 +36,9 @@ export const orders = pgTable(
     // Money, all paisa.
     subtotal: integer().notNull(),
     deliveryFee: integer().notNull().default(0),
+    serviceFee: integer().notNull().default(0),
+    /** What the customer added for the rider. Recorded, never discounted. */
+    tipAmount: integer().notNull().default(0),
     discount: integer().notNull().default(0),
     total: integer().notNull(),
 

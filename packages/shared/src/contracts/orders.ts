@@ -12,6 +12,8 @@ export const placeOrderSchema = z.object({
   addressId: z.string().uuid(),
   paymentMethod: z.enum([PaymentMethod.Cod, PaymentMethod.Online]),
   notes: z.string().max(240).optional(),
+  /** Rider tip in paisa. Bounded — see MAX_TIP. */
+  tipAmount: z.number().int().min(0).max(200_000).optional(),
   /**
    * Optional promo code. Re-priced server-side at placement — the cart's quote
    * is a preview, never the charge.
@@ -70,6 +72,9 @@ export interface OrderView {
   paymentStatus: PaymentStatus | null;
   subtotal: number;
   deliveryFee: number;
+  serviceFee: number;
+  /** Rider tip, recorded at placement. */
+  tipAmount: number;
   discount: number;
   total: number;
   /** The promo code applied at order time, if any. */

@@ -3,7 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { formatPKR, type PaymentMethod, type PlaceOrderResult } from '@haala/shared';
+import {
+  formatPKR,
+  serviceFeeFor,
+  type PaymentMethod,
+  type PlaceOrderResult,
+} from '@haala/shared';
 import {
   BottomSheet,
   Button,
@@ -25,6 +30,9 @@ import { haptics } from '../src/lib/haptics';
 import { runOnlineCheckout } from '../src/lib/onlineCheckout';
 import { useCheckoutDraft } from '../src/store/useCheckoutDraft';
 import { useCurrentStore } from '../src/store/useCurrentStore';
+
+/** Tip presets in paisa. "None" first so it reads as a choice, not a default. */
+const TIPS = [0, 3_000, 5_000, 10_000];
 
 /**
  * Checkout — where the order is actually placed.
@@ -52,6 +60,7 @@ export default function CheckoutScreen() {
   const [appliedCode, setAppliedCode] = useState<string | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tip, setTip] = useState(0);
   const idempotencyKey = useRef(`co-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
   useEffect(() => {
@@ -92,7 +101,9 @@ export default function CheckoutScreen() {
   const quote = appliedCode && promo.data ? promo.data : null;
   const deliveryFee = quote ? quote.deliveryFee : estimateDeliveryFee(subtotal);
   const discount = quote?.discount ?? 0;
-  const total = subtotal + deliveryFee - discount;
+  const serviceFee = serviceFeeFor(subtotal);
+  // Mirrors the server: the tip is added and never touched by a promotion.
+  const total = subtotal + deliveryFee + serviceFee + tip - discount;
 
   const applyPromo = () => {
     const code = promoInput.trim().toUpperCase();
@@ -109,6 +120,7 @@ export default function CheckoutScreen() {
           addressId: addressId as string,
           paymentMethod: method,
           ...(notes.trim() ? { notes: notes.trim() } : {}),
+          ...(tip > 0 ? { tipAmount: tip } : {}),
           ...(quote ? { promoCode: quote.code } : {}),
         },
         idempotencyKey.current,
@@ -222,6 +234,28 @@ export default function CheckoutScreen() {
             </View>
           </View>
 
+          {/* Tip. Recorded against the order and shown to the rider —
+              settling it is operational, not something this app does. */}
+          <View style={[styles.outlined, styles.tipCard]}>
+            <Text variant="bodyStrong">Tip your rider</Text>
+            <Text variant="bodySm" color="textSecondary">
+              They keep 100% of it
+            </Text>
+            <View style={styles.tipRow}>
+              {TIPS.map((amount) => (
+                <Pressable
+                  key={amount}
+                  onPress={() => setTip(amount)}
+                  style={[styles.tipChip, tip === amount && styles.tipChipOn]}
+                >
+                  <Text variant="label" color={tip === amount ? 'onPrimary' : 'textPrimary'}>
+                    {amount === 0 ? 'None' : formatPKR(amount)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
           <Text variant="h3" style={styles.sectionHead}>
             Pay with
           </Text>
@@ -295,6 +329,8 @@ export default function CheckoutScreen() {
               label="Delivery fee"
               value={deliveryFee === 0 ? 'Free' : formatPKR(deliveryFee)}
             />
+            {serviceFee > 0 ? <Row label="Service fee" value={formatPKR(serviceFee)} /> : null}
+            {tip > 0 ? <Row label="Rider tip" value={formatPKR(tip)} /> : null}
             {discount > 0 ? (
               <Row label={`Discount (${quote?.code})`} value={`− ${formatPKR(discount)}`} positive />
             ) : null}
@@ -490,6 +526,17 @@ const styles = StyleSheet.create({
   },
 
   sectionHead: { marginTop: theme.spacing.sm },
+  tipCard: { padding: theme.spacing.lg, gap: 4 },
+  tipRow: { flexDirection: 'row', gap: theme.spacing.sm, marginTop: theme.spacing.md },
+  tipChip: {
+    flex: 1,
+    alignItems: 'center',
+    borderRadius: theme.radii.pill,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    paddingVertical: 9,
+  },
+  tipChipOn: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
   payRow: {
     flexDirection: 'row',
     alignItems: 'center',

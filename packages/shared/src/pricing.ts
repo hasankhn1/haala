@@ -19,3 +19,22 @@ export const FREE_DELIVERY_THRESHOLD = rupees(2000);
 /** Delivery fee for a given subtotal, both in paisa. */
 export const deliveryFeeFor = (subtotal: number): number =>
   subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE;
+
+/**
+ * Flat service fee in paisa.
+ *
+ * **Zero today**, deliberately: the comps show a service-fee line, so the line
+ * exists and is computed and stored on every order — but charging one is a
+ * pricing decision, not a design decision. Set this and every surface picks it
+ * up at once, because the rule lives here rather than in three places.
+ */
+export const SERVICE_FEE = 0;
+
+/** Service fee for a given subtotal, both in paisa. Free on an empty basket. */
+export const serviceFeeFor = (subtotal: number): number => (subtotal > 0 ? SERVICE_FEE : 0);
+
+/**
+ * Largest tip we accept, in paisa. An unbounded amount field is one fat finger
+ * away from a support ticket and a refund.
+ */
+export const MAX_TIP = rupees(2000);

@@ -111,6 +111,7 @@ export const deliveryService = {
       status: assignment.status,
       codAmount: assignment.codAmount,
       codCollected: assignment.codCollected,
+      tipAmount: order.tipAmount,
       assignedAt: assignment.assignedAt.toISOString(),
       acceptedAt: assignment.acceptedAt?.toISOString() ?? null,
       pickedUpAt: assignment.pickedUpAt?.toISOString() ?? null,

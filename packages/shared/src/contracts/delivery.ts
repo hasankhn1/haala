@@ -93,6 +93,12 @@ export interface DeliveryAssignmentView {
   /** COD to collect in paisa; null for prepaid orders. */
   codAmount: number | null;
   codCollected: boolean;
+  /**
+   * What the customer tipped, in paisa. Included in `codAmount` on a
+   * cash order — it is part of the total the rider collects — and shown
+   * separately so they can see it was left for them.
+   */
+  tipAmount: number;
   assignedAt: string;
   acceptedAt: string | null;
   pickedUpAt: string | null;

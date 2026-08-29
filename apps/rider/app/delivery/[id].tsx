@@ -263,6 +263,11 @@ function Body({
                   Cash on delivery
                 </Text>
                 <Text variant="display">{formatPKR(assignment.codAmount)}</Text>
+                {assignment.tipAmount > 0 ? (
+                  <Text variant="bodySm" color="success">
+                    Includes {formatPKR(assignment.tipAmount)} tip for you
+                  </Text>
+                ) : null}
               </View>
               {assignment.codCollected ? (
                 <Icon name="checkmark-circle" size={28} color={theme.colors.success} />
@@ -282,6 +287,11 @@ function Body({
               Payment
             </Text>
             <Text variant="bodyStrong">Prepaid — nothing to collect</Text>
+            {assignment.tipAmount > 0 ? (
+              <Text variant="bodySm" color="success">
+                {formatPKR(assignment.tipAmount)} tip left for you
+              </Text>
+            ) : null}
           </View>
         )}
 

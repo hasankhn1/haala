@@ -15,6 +15,13 @@
       "when": 1788013361252,
       "tag": "0001_burly_leopardon",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788029079018,
+      "tag": "0002_parched_mystique",
+      "breakpoints": true
     }
   ]
 }
