@@ -8,7 +8,7 @@ import { QuantityStepper } from './QuantityStepper';
 import { Text } from './Text';
 import { Thumb } from './Thumb';
 
-export type ProductCardVariant = 'grid' | 'row' | 'compact';
+export type ProductCardVariant = 'grid' | 'row' | 'compact' | 'mini' | 'upsell';
 
 export interface ProductCardProps {
   name: string;
@@ -25,10 +25,14 @@ export interface ProductCardProps {
   onPress?: () => void;
   busy?: boolean;
   /**
-   * `grid` (default) — 2-column listing card.
-   * `row` — horizontal card for the cart.
-   * `compact` — the narrow card used in Home's horizontally-scrolling category
-   * shelves (fixed 132px wide).
+   * The comps use four distinct tile sizes and they are not interchangeable:
+   *
+   * - `grid` (default) — 2-column listing, 150px image block.
+   * - `compact` — Home's shelf rails, 146px square.
+   * - `mini` — the PDP's "more in this aisle" rail, 120px square.
+   * - `upsell` — the cart's "Forgot something?" rail: 108px on an ember wash
+   *   with a filled Add button instead of the floating circle.
+   * - `row` — the cart line item.
    */
   variant?: ProductCardVariant;
   favorite?: boolean;
@@ -37,6 +41,8 @@ export interface ProductCardProps {
 
 export function ProductCard(props: ProductCardProps) {
   if (props.variant === 'row') return <RowCard {...props} />;
+  if (props.variant === 'upsell') return <UpsellCard {...props} />;
+  if (props.variant === 'mini') return <CompactCard {...props} size={MINI_CARD_WIDTH} />;
   if (props.variant === 'compact') return <CompactCard {...props} />;
   return <GridCard {...props} />;
 }
@@ -135,10 +141,13 @@ function GridCard({
   );
 }
 
-/** Narrow shelf card — Home's "Milk & Dairy" / "Fresh Bread" rails. */
+/**
+ * Narrow shelf card. Sized by the caller: 146px on Home's rails, 120px on the
+ * PDP's "more in this aisle" — the comps use both and the smaller one drops to
+ * a tighter name and price.
+ */
 function CompactCard({
   name,
-  unit,
   price,
   original,
   imageUrl,
@@ -149,14 +158,19 @@ function CompactCard({
   onDecrement,
   onPress,
   busy = false,
-}: ProductCardProps) {
+  size = COMPACT_CARD_WIDTH,
+}: ProductCardProps & { size?: number }) {
   const off = discountPercent(price, original);
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.compact, pressed && onPress ? { opacity: 0.92 } : null]}
+      style={({ pressed }) => [
+        styles.compact,
+        { width: size },
+        pressed && onPress ? { opacity: 0.92 } : null,
+      ]}
     >
-      <View style={styles.compactImage}>
+      <View style={[styles.compactImage, { height: size }]}>
         <Thumb imageUrl={imageUrl} name={name} fill radius={theme.radii.md} />
         {off > 0 ? (
           <View style={styles.badgeTL}>
@@ -198,6 +212,40 @@ function CompactCard({
         {name}
       </Text>
       <PriceText amount={price} original={original} variant="price" />
+    </Pressable>
+  );
+}
+
+/**
+ * The cart's "Forgot something?" tile. Unlike every other card this one sits on
+ * an ember wash with its photo in a white well, and its Add is a filled button
+ * rather than the floating circle — it is an interruption, so the comps let it
+ * look like one.
+ */
+function UpsellCard({ name, price, imageUrl, onAdd, onPress, busy = false }: ProductCardProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.upsell, pressed && onPress ? { opacity: 0.92 } : null]}
+    >
+      <View style={styles.upsellImage}>
+        <Thumb imageUrl={imageUrl} name={name} fill radius={theme.radii.xs} />
+      </View>
+      <Text variant="caption" color="textSecondary" numberOfLines={1} style={styles.upsellName}>
+        {name}
+      </Text>
+      <Text variant="label">{priceLabel(price)}</Text>
+      <Pressable
+        onPress={onAdd}
+        disabled={busy}
+        style={({ pressed }) => [styles.upsellAdd, pressed && { opacity: 0.85 }]}
+        accessibilityRole="button"
+        accessibilityLabel={`Add ${name} to cart`}
+      >
+        <Text variant="labelSm" color="onPrimary">
+          Add
+        </Text>
+      </Pressable>
     </Pressable>
   );
 }
@@ -253,15 +301,23 @@ function RowCard({
   );
 }
 
-/** Fixed shelf-card width, matching the design's 146px rail rhythm. */
+/** Home's shelf rails. */
 export const COMPACT_CARD_WIDTH = 146;
+/** The PDP's "more in this aisle" rail — the comps use a smaller tile there. */
+export const MINI_CARD_WIDTH = 120;
+/** The cart's "Forgot something?" rail. */
+export const UPSELL_CARD_WIDTH = 108;
+
+/** Compact tiles have no room for a struck-through original, so price only. */
+const priceLabel = (paisa: number): string =>
+  `Rs. ${Math.round(paisa / 100).toLocaleString('en-PK')}`;
 
 const styles = StyleSheet.create({
   // Grid — no surface; the photo is the card.
   grid: { gap: theme.spacing.sm },
   imageWrap: {
     width: '100%',
-    aspectRatio: 1,
+    height: 150,
     borderRadius: theme.radii.md,
     backgroundColor: theme.colors.surfaceSunken,
     overflow: 'hidden',
@@ -280,13 +336,35 @@ const styles = StyleSheet.create({
   name: { minHeight: 36 },
 
   // Compact (shelf)
-  compact: { width: COMPACT_CARD_WIDTH, gap: theme.spacing.sm },
+  compact: { gap: theme.spacing.sm },
   compactImage: {
     width: '100%',
-    height: COMPACT_CARD_WIDTH,
     borderRadius: theme.radii.md,
     backgroundColor: theme.colors.surfaceSunken,
     overflow: 'hidden',
+  },
+
+  // Upsell (cart rail)
+  upsell: {
+    width: UPSELL_CARD_WIDTH,
+    backgroundColor: theme.colors.infoSoft,
+    borderRadius: theme.radii.sm,
+    padding: theme.spacing.sm,
+    gap: 6,
+  },
+  upsellImage: {
+    height: 70,
+    borderRadius: theme.radii.xs,
+    backgroundColor: theme.colors.surface,
+    overflow: 'hidden',
+  },
+  upsellName: { marginTop: 1 },
+  upsellAdd: {
+    marginTop: 1,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 9,
+    paddingVertical: 6,
+    alignItems: 'center',
   },
   oosOverlayCompact: {
     ...StyleSheet.absoluteFillObject,

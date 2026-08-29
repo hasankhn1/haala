@@ -16,6 +16,7 @@ import {
   Button,
   EmptyState,
   Icon,
+  ProductCard,
   type IconName,
   QuantityStepper,
   StateView,
@@ -25,7 +26,7 @@ import {
   useToast,
 } from '@haala/ui';
 import { ApiError } from '../../src/api/client';
-import { addressesApi, ordersApi, promotionsApi } from '../../src/api/endpoints';
+import { addressesApi, catalogApi, ordersApi, promotionsApi } from '../../src/api/endpoints';
 import { runOnlineCheckout } from '../../src/lib/onlineCheckout';
 import { qk } from '../../src/api/queryKeys';
 import { ETA_MINUTES, FREE_DELIVERY_THRESHOLD, estimateDeliveryFee } from '../../src/config';
@@ -33,6 +34,7 @@ import { DeliveryMap } from '../../src/components/DeliveryMap';
 import { useAuth } from '../../src/auth/AuthContext';
 import { haptics } from '../../src/lib/haptics';
 import { useCart, useCartMutations } from '../../src/hooks/useCart';
+import { useCurrentStore } from '../../src/store/useCurrentStore';
 
 /**
  * Cart & Checkout — one screen, as the Onyx comp draws it.
@@ -47,7 +49,7 @@ export default function CartScreen() {
   const toast = useToast();
 
   const cart = useCart();
-  const { update, remove } = useCartMutations();
+  const { add, update, remove } = useCartMutations();
   const addresses = useQuery({ queryKey: qk.addresses, queryFn: addressesApi.list });
 
   const { user } = useAuth();
@@ -70,6 +72,23 @@ export default function CartScreen() {
 
   const data = cart.data;
   const selected = addresses.data?.find((a) => a.id === addressId) ?? null;
+
+  /**
+   * "Forgot something?" — the comp's upsell rail. Suggestions come from the
+   * categories already represented in the basket, minus what is in it, which
+   * is an honest version of the idea without pretending to a recommender.
+   */
+  const { storeId } = useCurrentStore();
+  const suggestions = useQuery({
+    queryKey: ['cart-suggestions', storeId, data?.items.length ?? 0],
+    queryFn: () => catalogApi.products({ storeId: storeId as string }),
+    enabled: !!storeId && !!data && data.items.length > 0,
+    staleTime: 5 * 60_000,
+  });
+  const inBasket = new Set((data?.items ?? []).map((i) => i.productId));
+  const usuals = (suggestions.data?.items ?? [])
+    .filter((p) => p.inStock && !inBasket.has(p.id))
+    .slice(0, 8);
   const subtotal = data?.subtotal ?? 0;
   const isEmpty = !!data && data.items.length === 0;
 
@@ -374,6 +393,33 @@ export default function CartScreen() {
               </Text>
             ) : null}
           </View>
+
+          {/* Forgot something? */}
+          {usuals.length > 0 ? (
+            <View style={styles.usuals}>
+              <Text variant="h3">Forgot something?</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.usualsRow}
+              >
+                {usuals.map((u) => (
+                  <ProductCard
+                    key={u.id}
+                    variant="upsell"
+                    name={u.name}
+                    unit={u.unit}
+                    price={u.price}
+                    imageUrl={u.imageUrl}
+                    onPress={() => router.push(`/product/${u.id}`)}
+                    onAdd={() =>
+                      add.mutate({ storeId: storeId as string, productId: u.id, quantity: 1 })
+                    }
+                  />
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
 
           {/* How close this basket is to free delivery. Same bar as Home, and
               the same shared threshold the server prices against — the point is
@@ -698,6 +744,8 @@ const styles = StyleSheet.create({
   },
 
   summary: { marginTop: theme.spacing.lg },
+  usuals: { marginTop: theme.spacing.lg, gap: theme.spacing.md },
+  usualsRow: { gap: theme.spacing.md, paddingRight: theme.layout.margin },
   savingsLabel: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
   savingsBadge: {
     backgroundColor: theme.colors.promo,

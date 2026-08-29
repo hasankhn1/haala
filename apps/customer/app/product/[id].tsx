@@ -134,7 +134,7 @@ export default function ProductDetailScreen() {
                 contentContainerStyle={styles.relatedRow}
                 renderItem={({ item }) => (
                   <ProductCard
-                    variant="compact"
+                    variant="mini"
                     name={item.name}
                     unit={item.unit}
                     price={item.price}
