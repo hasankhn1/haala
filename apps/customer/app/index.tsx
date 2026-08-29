@@ -14,5 +14,7 @@ export default function Index() {
     );
   }
 
-  return <Redirect href={status === 'authenticated' ? '/(tabs)' : '/login'} />;
+  // Signed-out customers land on Welcome, which routes on to register or
+  // sign-in. Signed-in ones never see it.
+  return <Redirect href={status === 'authenticated' ? '/(tabs)' : '/welcome'} />;
 }

@@ -1,20 +1,24 @@
 import { useState } from 'react';
 import { Link, useRouter } from 'expo-router';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Input, Text, theme } from '@haala/ui';
+import { Button, Icon, Input, Text, theme } from '@haala/ui';
 import { ApiError } from '../src/api/client';
 import { useAuth } from '../src/auth/AuthContext';
 import { PhoneField, toE164 } from '../src/components/PhoneField';
 
 /**
- * Sign in — Onyx & Ink.
+ * Sign in.
  *
- * The Stitch design signs in with a phone number and a one-time code. Our API
- * authenticates on **phone + password** (there is no OTP issuer yet), so the
- * layout, the `+92` phone field and the solid-Onyx CTA are kept exactly, and
- * the code step is replaced by a password. When an OTP endpoint lands, only the
- * second field changes.
+ * The Basket comps have no auth screens, so this borrows the system's own
+ * language: the ember hero with the 26px sweep from Home, and a white sheet
+ * carrying the form. The previous version put a white card on what had become a
+ * white canvas after the re-theme, so the card was invisible and the screen read
+ * as unstyled.
+ *
+ * Authentication is **phone + password** — there is no OTP issuer. When one
+ * lands, only the second field changes.
  */
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -38,7 +42,8 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <View style={styles.root}>
+      <StatusBar style="light" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
@@ -48,18 +53,23 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.brand}>
-            <Text variant="h1" align="center">
-              Haala
+          <SafeAreaView style={styles.hero} edges={['top', 'left', 'right']}>
+            <Pressable
+              style={styles.back}
+              onPress={() => router.back()}
+              accessibilityLabel="Back"
+            >
+              <Icon name="arrow-back" size={16} color={theme.colors.onPrimary} />
+            </Pressable>
+            <Text variant="h1" color="onPrimary" style={styles.heroTitle}>
+              Welcome back
             </Text>
-            <Text variant="body" color="textSecondary" align="center">
-              Groceries at your door in minutes.
+            <Text variant="bodySm" style={styles.heroSub}>
+              Sign in to pick up where you left off.
             </Text>
-          </View>
+          </SafeAreaView>
 
-          <View style={styles.card}>
-            <Text variant="h2">Sign In</Text>
-
+          <View style={styles.sheet}>
             <PhoneField value={national} onChangeText={setNational} />
 
             <Input
@@ -78,49 +88,70 @@ export default function LoginScreen() {
             ) : null}
 
             <Button
-              label="Sign In  →"
+              label="Sign in"
+              style={styles.cta}
               onPress={onSubmit}
               loading={loading}
               disabled={national.length < 10 || password.length === 0}
             />
-          </View>
 
-          <View style={styles.footer}>
-            <Text variant="bodySm" color="textSecondary">
-              New to Haala?
-            </Text>
-            <Link href="/register">
-              <Text variant="label">Create Account</Text>
-            </Link>
+            <View style={styles.footer}>
+              <Text variant="bodySm" color="textSecondary">
+                New to Haala?
+              </Text>
+              <Link href="/register">
+                <Text variant="label" style={styles.link}>
+                  Create an account
+                </Text>
+              </Link>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.background },
+  root: { flex: 1, backgroundColor: theme.colors.primary },
   flex: { flex: 1 },
-  content: {
-    flexGrow: 1,
+  content: { flexGrow: 1 },
+
+  hero: {
+    paddingHorizontal: theme.layout.margin,
+    paddingBottom: theme.spacing['2xl'],
+    gap: theme.spacing.xs,
+  },
+  back: {
+    width: 34,
+    height: 34,
+    borderRadius: theme.radii.pill,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
     justifyContent: 'center',
-    padding: theme.layout.margin,
-    gap: theme.spacing.xl,
+    marginBottom: theme.spacing.xl,
+    marginTop: theme.spacing.md,
   },
-  brand: { gap: theme.spacing.sm, marginBottom: theme.spacing.sm },
-  /** Gallery-white panel lifted off the canvas by the ambient ink shadow. */
-  card: {
+  heroTitle: { marginTop: theme.spacing.sm },
+  heroSub: { color: 'rgba(255,255,255,0.86)' },
+
+  /** White sheet sweeping up over the ember, same 26px curve as Home's hero. */
+  sheet: {
+    flex: 1,
     backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.sm,
+    borderTopLeftRadius: theme.radii.xl,
+    borderTopRightRadius: theme.radii.xl,
     padding: theme.spacing.xl,
+    paddingTop: theme.spacing['2xl'],
     gap: theme.spacing.lg,
-    ...theme.elevation.card,
   },
+  cta: { borderRadius: theme.radii.pill, height: 52, marginTop: theme.spacing.xs },
+  link: { color: theme.colors.primaryPressed },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: theme.spacing.xs,
+    marginTop: theme.spacing.sm,
   },
 });

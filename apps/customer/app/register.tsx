@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { Button, Icon, Input, Text, theme } from '@haala/ui';
 import { ApiError } from '../src/api/client';
 import { useAuth } from '../src/auth/AuthContext';
@@ -55,7 +56,8 @@ export default function RegisterScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <View style={styles.root}>
+      <StatusBar style="light" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
@@ -65,16 +67,19 @@ export default function RegisterScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.brand}>
-            <Text variant="h1" align="center">
-              Haala
-            </Text>
-            <Text variant="body" color="textSecondary" align="center">
+          <SafeAreaView style={styles.hero} edges={['top', 'left', 'right']}>
+            <Pressable style={styles.back} onPress={() => router.back()} accessibilityLabel="Back">
+              <Icon name="arrow-back" size={16} color={theme.colors.onPrimary} />
+            </Pressable>
+            <Text variant="h1" color="onPrimary" style={styles.heroTitle}>
               Create your account
             </Text>
-          </View>
+            <Text variant="bodySm" style={styles.heroSub}>
+              Your first delivery is on us.
+            </Text>
+          </SafeAreaView>
 
-          <View style={styles.card}>
+          <View style={styles.sheet}>
             <Input
               label="Full name"
               value={name}
@@ -129,39 +134,58 @@ export default function RegisterScreen() {
               onPress={onSubmit}
               loading={loading}
               disabled={!canSubmit}
+              style={styles.cta}
             />
-          </View>
 
-          <View style={styles.footer}>
-            <Text variant="bodySm" color="textSecondary">
-              Already have an account?
-            </Text>
-            <Link href="/login">
-              <Text variant="label">Sign In</Text>
-            </Link>
+            <View style={styles.footer}>
+              <Text variant="bodySm" color="textSecondary">
+                Already have an account?
+              </Text>
+              <Link href="/login">
+                <Text variant="label" style={styles.link}>
+                  Sign in
+                </Text>
+              </Link>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.background },
+  root: { flex: 1, backgroundColor: theme.colors.primary },
   flex: { flex: 1 },
-  content: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: theme.layout.margin,
-    gap: theme.spacing.xl,
+  content: { flexGrow: 1 },
+  hero: {
+    paddingHorizontal: theme.layout.margin,
+    paddingBottom: theme.spacing['2xl'],
+    gap: theme.spacing.xs,
   },
-  brand: { gap: theme.spacing.sm },
-  card: {
+  back: {
+    width: 34,
+    height: 34,
+    borderRadius: theme.radii.pill,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: theme.spacing.xl,
+    marginTop: theme.spacing.md,
+  },
+  heroTitle: { marginTop: theme.spacing.sm },
+  heroSub: { color: 'rgba(255,255,255,0.86)' },
+  link: { color: theme.colors.primaryPressed },
+  cta: { borderRadius: theme.radii.pill, height: 52, marginTop: theme.spacing.xs },
+  /** Same white sheet and 26px sweep as sign-in, so the pair reads as one flow. */
+  sheet: {
+    flex: 1,
     backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.sm,
+    borderTopLeftRadius: theme.radii.xl,
+    borderTopRightRadius: theme.radii.xl,
     padding: theme.spacing.xl,
+    paddingTop: theme.spacing['2xl'],
     gap: theme.spacing.lg,
-    ...theme.elevation.card,
   },
   terms: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md },
   checkbox: {
