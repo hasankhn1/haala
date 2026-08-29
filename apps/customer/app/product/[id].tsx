@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Image, ScrollView, Share, StyleSheet, View } from 'react-native';
@@ -7,12 +6,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatPKR, type ProductView } from '@haala/shared';
 import {
   Button,
+  Icon,
   IconButton,
+  type IconName,
   QuantityStepper,
+  remoteImageSource,
   Skeleton,
   StateView,
   Text,
-  remoteImageSource,
   theme,
 } from '@haala/ui';
 import { catalogApi } from '../../src/api/endpoints';
@@ -72,7 +73,7 @@ export default function ProductDetailScreen() {
             />
           ) : (
             <View style={[styles.heroImage, styles.heroFallback]}>
-              <Ionicons name="basket-outline" size={64} color={theme.colors.textTertiary} />
+              <Icon name="basket-outline" size={64} color={theme.colors.textTertiary} />
             </View>
           )}
 
@@ -131,14 +132,23 @@ export default function ProductDetailScreen() {
             />
             <View style={styles.flex}>
               {qty > 0 ? (
-                <Button label="Go to cart  →" onPress={() => router.push('/(tabs)/cart')} />
+                /* In the cart: confirm it, and show the line total so the
+                   amount tracks the stepper the customer is still adjusting. */
+                <Button
+                  label={`Added to cart  ·  ${formatPKR(p.price * qty)}`}
+                  onPress={() => router.push('/(tabs)/cart')}
+                  loading={busy}
+                  leadingIcon={
+                    <Icon name="checkmark-circle" size={18} color={theme.colors.onPrimary} />
+                  }
+                />
               ) : (
                 <Button
                   label={`Add  ·  ${formatPKR(p.price * pending)}`}
                   onPress={() => addOne(id, pending)}
                   loading={busy}
                   leadingIcon={
-                    <Ionicons name="cart-outline" size={18} color={theme.colors.onPrimary} />
+                    <Icon name="cart-outline" size={18} color={theme.colors.onPrimary} />
                   }
                 />
               )}
@@ -216,13 +226,13 @@ function BentoTile({
   value,
   label,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: IconName;
   value: string;
   label: string;
 }) {
   return (
     <View style={styles.tile}>
-      <Ionicons name={icon} size={22} color={theme.colors.primary} />
+      <Icon name={icon} size={22} color={theme.colors.primary} />
       <Text variant="labelSm" align="center" numberOfLines={1}>
         {value}
       </Text>

@@ -1,10 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RiderAvailability } from '@haala/shared';
-import { Button, StateView, Text, theme, useToast } from '@haala/ui';
+import { Button, Icon, StateView, Text, theme, useToast } from '@haala/ui';
 import { ApiError } from '../../src/api/client';
 import { riderApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
@@ -48,7 +47,7 @@ export default function ProfileScreen() {
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.identity}>
             <View style={styles.avatar}>
-              <Ionicons name="person" size={26} color={theme.colors.onPrimary} />
+              <Icon name="person" size={26} color={theme.colors.onPrimary} />
             </View>
             <View style={styles.flex}>
               <Text variant="h3">{rider.data?.name}</Text>

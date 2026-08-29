@@ -8,14 +8,21 @@ import { StateView, Text, theme } from '@haala/ui';
 import { catalogApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
 
+// Order matters — first match wins, so the specific patterns come first.
 const EMOJI: Array<[RegExp, string]> = [
+  [/dry\s*fruit|nut|almond/i, '🥜'],
   [/dairy|milk|egg/i, '🥛'],
   [/bakery|bread/i, '🍞'],
   [/fruit|veg/i, '🥬'],
+  [/lentil|pulse|daal|dal|bean/i, '🫘'],
+  [/toiletr|hygiene|personal\s*care|soap/i, '🧼'],
+  [/sport|fitness/i, '🏏'],
+  [/grocer|staple|rice|grain|flour|atta/i, '🍚'],
   [/drink|beverage|juice/i, '🥤'],
   [/snack|biscuit/i, '🍪'],
   [/meat|chicken/i, '🍗'],
-  [/rice|grain|staple/i, '🍚'],
+  [/clean|detergent|household/i, '🧽'],
+  [/baby|diaper/i, '🍼'],
 ];
 const emojiFor = (name: string) => EMOJI.find(([re]) => re.test(name))?.[1] ?? '🛒';
 
@@ -37,8 +44,8 @@ export default function CategoriesScreen() {
         <View style={styles.flex}>
           <FlashList
             data={categories.data ?? []}
-            numColumns={2}
-            estimatedItemSize={140}
+            numColumns={3}
+            estimatedItemSize={112}
             keyExtractor={(c) => c.id}
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
@@ -51,7 +58,7 @@ export default function CategoriesScreen() {
                   <View style={styles.emojiWrap}>
                     <Text style={styles.emoji}>{emojiFor(item.name)}</Text>
                   </View>
-                  <Text variant="bodyStrong" align="center" numberOfLines={2}>
+                  <Text variant="labelSm" align="center" numberOfLines={2}>
                     {item.name}
                   </Text>
                 </Pressable>
@@ -69,23 +76,29 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   header: { padding: theme.spacing.lg },
   list: { paddingHorizontal: theme.spacing.md, paddingBottom: theme.spacing['2xl'] },
-  cell: { flex: 1, padding: theme.spacing.sm },
+  cell: { flex: 1, padding: theme.spacing.xs },
+  /**
+   * Three across rather than two, and sized so a 7-category catalogue is
+   * visible without scrolling — the previous 64px medallion plus `xl` vertical
+   * padding made a ~150px tile, so only four fitted on screen.
+   */
   tile: {
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radii.sm,
-    paddingVertical: theme.spacing.xl,
-    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.sm,
     alignItems: 'center',
-    gap: theme.spacing.md,
+    gap: theme.spacing.sm,
+    minHeight: 104,
     ...theme.elevation.card,
   },
   emojiWrap: {
-    width: 64,
-    height: 64,
+    width: 44,
+    height: 44,
     borderRadius: theme.radii.pill,
     backgroundColor: theme.colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emoji: { fontSize: 32 },
+  emoji: { fontSize: 22, lineHeight: 28 },
 });

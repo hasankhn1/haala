@@ -1,11 +1,10 @@
 import { useCallback, useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RiderAvailability, formatPKR, type DeliveryOrderView } from '@haala/shared';
-import { Button, EmptyState, StateView, Text, theme, useToast } from '@haala/ui';
+import { Button, EmptyState, Icon, type IconName, StateView, Text, theme, useToast } from '@haala/ui';
 import { ApiError } from '../../src/api/client';
 import { deliveryApi, riderApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
@@ -123,7 +122,7 @@ export default function QueueScreen() {
                     <Text variant="bodyStrong" color="onPrimary">
                       {a.order.orderNumber}
                     </Text>
-                    <Ionicons name="chevron-forward" size={18} color={theme.colors.onPrimary} />
+                    <Icon name="chevron-forward" size={18} color={theme.colors.onPrimary} />
                   </View>
                   <Text variant="h3" style={styles.activeStatus}>
                     {STATUS_COPY[a.status] ?? a.status}
@@ -236,13 +235,13 @@ function Leg({
   label,
   value,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: IconName;
   label: string;
   value: string;
 }) {
   return (
     <View style={styles.leg}>
-      <Ionicons name={icon} size={18} color={theme.colors.textSecondary} />
+      <Icon name={icon} size={18} color={theme.colors.textSecondary} />
       <View style={styles.flex}>
         <Text variant="caption" color="textSecondary">
           {label}

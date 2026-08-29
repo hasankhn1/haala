@@ -4,6 +4,7 @@ export * from './imageSource';
 export * from './pushToken';
 export * from './Text';
 export * from './Button';
+export * from './Icon';
 export * from './IconButton';
 export * from './Card';
 export * from './Screen';

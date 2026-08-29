@@ -48,7 +48,7 @@ export default function ProductsScreen() {
     placeholderData: (prev) => prev, // keep old results visible while searching
   });
 
-  const { qtyByProduct, busy, addOne, setQty, cart } = useProductActions(storeId);
+  const { qtyByProduct, busyProductId, addOne, setQty, cart } = useProductActions(storeId);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -144,7 +144,7 @@ export default function ProductsScreen() {
                     imageUrl={item.imageUrl}
                     inStock={item.inStock}
                     quantity={qtyByProduct.get(item.id) ?? 0}
-                    busy={busy}
+                    busy={busyProductId === item.id}
                     onPress={() => router.push(`/product/${item.id}`)}
                     onAdd={() => addOne(item.id)}
                     onIncrement={() => setQty(item.id, (qtyByProduct.get(item.id) ?? 0) + 1)}

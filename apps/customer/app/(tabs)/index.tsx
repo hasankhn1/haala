@@ -1,14 +1,14 @@
 import { useCallback, useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatPKR, type CategoryView, type ProductView } from '@haala/shared';
 import {
+  Chip,
   COMPACT_CARD_WIDTH,
   CTABar,
-  Chip,
+  Icon,
   ProductCard,
   SearchBar,
   Skeleton,
@@ -32,7 +32,7 @@ export default function HomeScreen() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
   const categories = useQuery({ queryKey: qk.categories, queryFn: catalogApi.categories });
-  const { cart, qtyByProduct, busy, addOne, setQty } = useProductActions(storeId);
+  const { cart, qtyByProduct, busyProductId, addOne, setQty } = useProductActions(storeId);
 
   const shelfCategories = (categories.data ?? []).slice(0, SHELF_COUNT);
 
@@ -80,11 +80,11 @@ export default function HomeScreen() {
           onPress={() => router.push('/addresses')}
           accessibilityRole="button"
         >
-          <Ionicons name="location-outline" size={20} color={theme.colors.primary} />
+          <Icon name="location-outline" size={20} color={theme.colors.primary} />
           <Text variant="bodyStrong" numberOfLines={1}>
             {store ? `Deliver to ${store.area}` : 'Finding your store…'}
           </Text>
-          <Ionicons name="chevron-down" size={16} color={theme.colors.textSecondary} />
+          <Icon name="chevron-down" size={16} color={theme.colors.textSecondary} />
         </Pressable>
         <Pressable
           style={styles.avatar}
@@ -185,7 +185,7 @@ export default function HomeScreen() {
                       imageUrl={item.imageUrl}
                       inStock={item.inStock}
                       quantity={qtyByProduct.get(item.id) ?? 0}
-                      busy={busy}
+                      busy={busyProductId === item.id}
                       onPress={() => router.push(`/product/${item.id}`)}
                       onAdd={() => addOne(item.id)}
                       onIncrement={() => setQty(item.id, (qtyByProduct.get(item.id) ?? 0) + 1)}

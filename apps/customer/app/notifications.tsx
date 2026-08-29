@@ -1,10 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NotificationView } from '@haala/shared';
-import { EmptyState, StateView, Text, theme } from '@haala/ui';
+import { EmptyState, Icon, type IconName, StateView, Text, theme } from '@haala/ui';
 import { notificationsApi } from '../src/api/endpoints';
 import { qk } from '../src/api/queryKeys';
 
@@ -19,7 +18,7 @@ const ago = (iso: string): string => {
   return days === 1 ? 'Yesterday' : `${days}d ago`;
 };
 
-const ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
+const ICON: Record<string, IconName> = {
   order_update: 'cube-outline',
   promo: 'pricetag-outline',
   system: 'information-circle-outline',
@@ -57,7 +56,7 @@ export default function NotificationsScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={10} accessibilityLabel="Go back">
-          <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
+          <Icon name="arrow-back" size={24} color={theme.colors.textPrimary} />
         </Pressable>
         <Text variant="h2" style={styles.flex}>
           Notifications
@@ -95,7 +94,7 @@ export default function NotificationsScreen() {
                 style={[styles.row, isUnread && styles.rowUnread]}
               >
                 <View style={styles.icon}>
-                  <Ionicons
+                  <Icon
                     name={ICON[item.type] ?? ICON.system}
                     size={20}
                     color={isUnread ? theme.colors.primary : theme.colors.textSecondary}

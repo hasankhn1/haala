@@ -73,10 +73,11 @@ function GridCard({
         ) : null}
         {onToggleFavorite ? (
           <IconButton
-            name={favorite ? 'heart' : 'heart-outline'}
+            name="heart"
             size={15}
             dimension={30}
             color={favorite ? theme.colors.error : theme.colors.textSecondary}
+            fill={favorite ? theme.colors.error : 'none'}
             onPress={onToggleFavorite}
             accessibilityLabel="Toggle favorite"
             style={styles.heart}
@@ -116,6 +117,7 @@ function GridCard({
                 size={20}
                 dimension={36}
                 onPress={onAdd}
+                loading={busy}
                 accessibilityLabel={`Add ${name} to cart`}
               />
             )
@@ -189,6 +191,7 @@ function CompactCard({
               size={18}
               dimension={30}
               onPress={onAdd}
+              loading={busy}
               accessibilityLabel={`Add ${name} to cart`}
             />
           )

@@ -1,14 +1,12 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Card, Divider, Text, theme } from '@haala/ui';
+import { Button, Card, Divider, Icon, type IconName, Text, theme } from '@haala/ui';
 import { notificationsApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
 import { useAuth } from '../../src/auth/AuthContext';
 
-type IconName = keyof typeof Ionicons.glyphMap;
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -88,7 +86,7 @@ function MenuRow({
 }) {
   return (
     <Pressable style={styles.menuRow} onPress={onPress}>
-      <Ionicons name={icon} size={20} color={theme.colors.textSecondary} />
+      <Icon name={icon} size={20} color={theme.colors.textSecondary} />
       <Text variant="body" style={{ flex: 1 }}>
         {label}
       </Text>
@@ -99,7 +97,7 @@ function MenuRow({
           </Text>
         </View>
       ) : null}
-      <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
+      <Icon name="chevron-forward" size={18} color={theme.colors.textTertiary} />
     </Pressable>
   );
 }

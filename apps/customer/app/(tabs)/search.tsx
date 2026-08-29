@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { ProductView } from '@haala/shared';
-import { Chip, EmptyState, ProductCard, SearchBar, Skeleton, Text, theme } from '@haala/ui';
+import { Chip, EmptyState, Icon, ProductCard, SearchBar, Skeleton, Text, theme } from '@haala/ui';
 import { catalogApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
 import { useDebouncedValue } from '../../src/hooks/useDebouncedValue';
@@ -26,7 +25,7 @@ export default function SearchScreen() {
   const [term, setTerm] = useState('');
   const debounced = useDebouncedValue(term, 300);
   const { recents, addRecent, removeRecent, clearRecents } = useSearchStore();
-  const { qtyByProduct, busy, addOne, setQty } = useProductActions(storeId);
+  const { qtyByProduct, busyProductId, addOne, setQty } = useProductActions(storeId);
 
   const query = debounced.trim();
   const active = query.length >= MIN_QUERY;
@@ -72,7 +71,7 @@ export default function SearchScreen() {
               </View>
               {recents.map((r) => (
                 <Pressable key={r} style={styles.recentRow} onPress={() => submit(r)}>
-                  <Ionicons name="time-outline" size={18} color={theme.colors.textTertiary} />
+                  <Icon name="time-outline" size={18} color={theme.colors.textTertiary} />
                   <Text variant="body" style={styles.flex} numberOfLines={1}>
                     {r}
                   </Text>
@@ -81,7 +80,7 @@ export default function SearchScreen() {
                     hitSlop={10}
                     accessibilityLabel={`Remove ${r} from recent searches`}
                   >
-                    <Ionicons name="close" size={16} color={theme.colors.textTertiary} />
+                    <Icon name="close" size={16} color={theme.colors.textTertiary} />
                   </Pressable>
                 </Pressable>
               ))}
@@ -126,7 +125,7 @@ export default function SearchScreen() {
                   imageUrl={item.imageUrl}
                   inStock={item.inStock}
                   quantity={qtyByProduct.get(item.id) ?? 0}
-                  busy={busy}
+                  busy={busyProductId === item.id}
                   onPress={() => {
                     addRecent(query);
                     router.push(`/product/${item.id}`);

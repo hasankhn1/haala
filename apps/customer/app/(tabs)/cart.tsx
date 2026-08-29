@@ -1,19 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { formatPKR, type PaymentMethod, type PlaceOrderResult } from '@haala/shared';
 import {
   BottomSheet,
   Button,
   EmptyState,
+  Icon,
+  type IconName,
   QuantityStepper,
   StateView,
   Text,
-  Thumb,
   theme,
+  Thumb,
   useToast,
 } from '@haala/ui';
 import { ApiError } from '../../src/api/client';
@@ -189,7 +197,7 @@ export default function CartScreen() {
                       hitSlop={10}
                       accessibilityLabel={`Remove ${item.name}`}
                     >
-                      <Ionicons name="close" size={18} color={theme.colors.textTertiary} />
+                      <Icon name="close" size={18} color={theme.colors.textTertiary} />
                     </Pressable>
                   </View>
 
@@ -226,7 +234,7 @@ export default function CartScreen() {
               <>
                 <View style={styles.addrRow}>
                   <View style={styles.addrIcon}>
-                    <Ionicons name="home" size={18} color={theme.colors.primary} />
+                    <Icon name="home" size={18} color={theme.colors.primary} />
                   </View>
                   <View style={styles.flex}>
                     <View style={styles.itemTop}>
@@ -250,7 +258,7 @@ export default function CartScreen() {
 
                 <View style={styles.itemTop}>
                   <View style={styles.etaLabel}>
-                    <Ionicons name="time-outline" size={16} color={theme.colors.textSecondary} />
+                    <Icon name="time-outline" size={16} color={theme.colors.textSecondary} />
                     <Text variant="body" color="textSecondary">
                       Estimated arrival in
                     </Text>
@@ -294,7 +302,7 @@ export default function CartScreen() {
             {quote ? (
               <View style={styles.promoApplied}>
                 <View style={styles.promoTag}>
-                  <Ionicons name="pricetag" size={16} color={theme.colors.success} />
+                  <Icon name="pricetag" size={16} color={theme.colors.success} />
                   <Text variant="bodyStrong">{quote.code}</Text>
                 </View>
                 <View style={styles.flex}>
@@ -303,7 +311,7 @@ export default function CartScreen() {
                   </Text>
                 </View>
                 <Pressable onPress={clearPromo} hitSlop={10} accessibilityLabel="Remove promo code">
-                  <Ionicons name="close-circle" size={20} color={theme.colors.textTertiary} />
+                  <Icon name="close-circle" size={20} color={theme.colors.textTertiary} />
                 </Pressable>
               </View>
             ) : (
@@ -320,7 +328,8 @@ export default function CartScreen() {
                   returnKeyType="done"
                 />
                 <Button
-                  label={promo.isFetching ? 'Checking…' : 'Apply'}
+                  label="Apply"
+                  loading={promo.isFetching}
                   variant="secondary"
                   size="sm"
                   disabled={!promoInput.trim() || promo.isFetching}
@@ -390,7 +399,13 @@ export default function CartScreen() {
               <Text variant="bodyStrong" color="onPrimary">
                 {formatPKR(total)}
               </Text>
-              <Ionicons name="arrow-forward" size={18} color={theme.colors.onPrimary} />
+              {/* The arrow becomes the spinner, so the bar keeps its width and
+                  the biggest action in the app shows that it is working. */}
+              {place.isPending ? (
+                <ActivityIndicator size="small" color={theme.colors.onPrimary} />
+              ) : (
+                <Icon name="arrow-forward" size={18} color={theme.colors.onPrimary} />
+              )}
             </View>
           </Pressable>
         </View>
@@ -415,7 +430,7 @@ export default function CartScreen() {
               </Text>
             </View>
             {a.id === addressId ? (
-              <Ionicons name="checkmark-circle" size={20} color={theme.colors.primary} />
+              <Icon name="checkmark-circle" size={20} color={theme.colors.primary} />
             ) : null}
           </Pressable>
         ))}
@@ -438,7 +453,7 @@ function PaymentTile({
   selected,
   onPress,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: IconName;
   label: string;
   selected: boolean;
   onPress: () => void;
@@ -452,10 +467,10 @@ function PaymentTile({
     >
       {selected ? (
         <View style={styles.payCheck}>
-          <Ionicons name="checkmark-circle" size={16} color={theme.colors.primary} />
+          <Icon name="checkmark-circle" size={16} color={theme.colors.primary} />
         </View>
       ) : null}
-      <Ionicons
+      <Icon
         name={icon}
         size={28}
         color={selected ? theme.colors.primary : theme.colors.textSecondary}

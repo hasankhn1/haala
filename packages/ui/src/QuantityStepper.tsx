@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import { theme } from '@haala/design-tokens';
+import { Icon } from './Icon';
 import { Text } from './Text';
 
 export interface QuantityStepperProps {
@@ -27,7 +28,9 @@ export function QuantityStepper({
   variant = 'tonal',
 }: QuantityStepperProps) {
   const dim = size === 'sm' ? 30 : 36;
+  const glyph = size === 'sm' ? 15 : 17;
   const solid = variant === 'solid';
+  const tint = solid ? theme.colors.onPrimary : theme.colors.textPrimary;
   const dec = () => value > min && onChange(value - 1);
   const inc = () => value < max && onChange(value + 1);
 
@@ -39,12 +42,15 @@ export function QuantityStepper({
         accessibilityLabel="Decrease quantity"
         style={[styles.btn, { width: dim }, value <= min && styles.btnDisabled]}
       >
-        <Text variant="bodyStrong" color={solid ? 'onPrimary' : 'textPrimary'}>
-          −
-        </Text>
+        <Icon name="remove" size={glyph} color={tint} />
       </Pressable>
       <View style={styles.count}>
-        <Text variant="label" color={solid ? 'onPrimary' : 'textPrimary'}>
+        <Text
+          variant="label"
+          color={solid ? 'onPrimary' : 'textPrimary'}
+          align="center"
+          style={[styles.countText, { lineHeight: dim }]}
+        >
           {value}
         </Text>
       </View>
@@ -54,9 +60,7 @@ export function QuantityStepper({
         accessibilityLabel="Increase quantity"
         style={[styles.btn, { width: dim }, value >= max && styles.btnDisabled]}
       >
-        <Text variant="bodyStrong" color={solid ? 'onPrimary' : 'textPrimary'}>
-          +
-        </Text>
+        <Icon name="add" size={glyph} color={tint} />
       </Pressable>
     </View>
   );
@@ -77,5 +81,14 @@ const styles = StyleSheet.create({
   wrapSolid: { backgroundColor: theme.colors.primary },
   btn: { alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },
   btnDisabled: { opacity: 0.35 },
-  count: { minWidth: 22, alignItems: 'center', justifyContent: 'center' },
+  count: { minWidth: 24, alignSelf: 'stretch', justifyContent: 'center' },
+  /**
+   * The glyphs are icons (perfectly centred by the icon font) but the count is
+   * real text, and text does not centre reliably in a fixed-height row: Android
+   * adds `includeFontPadding` inside the line box, and the token's own
+   * lineHeight (20) is shorter than the control (30/36), so the digit sat high.
+   * Stretching the line box to the control height and dropping the font padding
+   * puts it on the same optical centre as the − and +.
+   */
+  countText: { includeFontPadding: false, textAlignVertical: 'center' },
 });

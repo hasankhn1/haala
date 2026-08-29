@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -9,6 +8,7 @@ import {
   Card,
   DeliveryTracker,
   Divider,
+  Icon,
   IconButton,
   PriceText,
   StateView,
@@ -137,7 +137,7 @@ export default function OrderScreen() {
                 accessibilityLabel="Back to home"
               />
               <View style={styles.appBarTitle}>
-                <Ionicons name="location" size={14} color={theme.colors.primary} />
+                <Icon name="location" size={14} color={theme.colors.primary} />
                 <Text variant="labelSm" numberOfLines={1}>
                   {o.deliveryAddress.area}
                 </Text>
@@ -161,7 +161,7 @@ export default function OrderScreen() {
             <View style={styles.sheet}>
               {placed === '1' ? (
                 <View style={styles.placedBanner}>
-                  <Ionicons name="checkmark-circle" size={18} color={theme.colors.primary} />
+                  <Icon name="checkmark-circle" size={18} color={theme.colors.primary} />
                   <Text variant="labelSm">Order placed — we’ve sent it to the store</Text>
                 </View>
               ) : null}
@@ -179,7 +179,7 @@ export default function OrderScreen() {
                   </Text>
                 </View>
                 <View style={styles.clock}>
-                  <Ionicons name="time-outline" size={22} color={theme.colors.primary} />
+                  <Icon name="time-outline" size={22} color={theme.colors.primary} />
                 </View>
               </View>
 
@@ -196,12 +196,12 @@ export default function OrderScreen() {
               {/* Driver card */}
               <View style={styles.driver}>
                 <View style={styles.driverAvatar}>
-                  <Ionicons name="person" size={20} color={theme.colors.textSecondary} />
+                  <Icon name="person" size={20} color={theme.colors.textSecondary} />
                 </View>
                 <View style={styles.flex}>
                   <Text variant="bodyStrong">{rider?.name ?? 'Finding a rider'}</Text>
                   <View style={styles.rating}>
-                    <Ionicons
+                    <Icon
                       name={rider ? 'bicycle-outline' : 'time-outline'}
                       size={12}
                       color={theme.colors.textSecondary}
@@ -227,7 +227,7 @@ export default function OrderScreen() {
 
               <View style={styles.orderMeta}>
                 <View style={styles.metaLeft}>
-                  <Ionicons
+                  <Icon
                     name="bag-handle-outline"
                     size={16}
                     color={theme.colors.textSecondary}

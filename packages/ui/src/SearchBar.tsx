@@ -1,6 +1,6 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, TextInput, View, type ViewStyle } from 'react-native';
 import { theme } from '@haala/design-tokens';
+import { Icon } from './Icon';
 import { Text } from './Text';
 
 export interface SearchBarProps {
@@ -37,7 +37,7 @@ export function SearchBar({
 }: SearchBarProps) {
   const content = (
     <View style={[styles.bar, style]}>
-      <Ionicons name="search" size={20} color={theme.colors.textSecondary} />
+      <Icon name="search" size={20} color={theme.colors.textSecondary} />
       {onPress ? (
         <Text variant="body" color="textTertiary" style={styles.flex} numberOfLines={1}>
           {placeholder}
@@ -56,11 +56,11 @@ export function SearchBar({
       )}
       {value ? (
         <Pressable onPress={onClear} hitSlop={8} accessibilityLabel="Clear search">
-          <Ionicons name="close-circle" size={18} color={theme.colors.textTertiary} />
+          <Icon name="close-circle" size={18} color={theme.colors.textTertiary} />
         </Pressable>
       ) : showVoice ? (
         <Pressable onPress={onVoicePress} hitSlop={8} accessibilityLabel="Search by voice">
-          <Ionicons name="mic-outline" size={20} color={theme.colors.textSecondary} />
+          <Icon name="mic-outline" size={20} color={theme.colors.textSecondary} />
         </Pressable>
       ) : null}
     </View>

@@ -8,9 +8,8 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Input, Text, theme } from '@haala/ui';
+import { Button, Icon, Input, Text, theme } from '@haala/ui';
 import { ApiError } from '../src/api/client';
 import { useAuth } from '../src/auth/AuthContext';
 import { PhoneField, isCompletePhone, toE164 } from '../src/components/PhoneField';
@@ -111,7 +110,7 @@ export default function RegisterScreen() {
             >
               <View style={[styles.checkbox, agreed && styles.checkboxOn]}>
                 {agreed ? (
-                  <Ionicons name="checkmark" size={14} color={theme.colors.onPrimary} />
+                  <Icon name="checkmark" size={14} color={theme.colors.onPrimary} />
                 ) : null}
               </View>
               <Text variant="bodySm" color="textSecondary" style={styles.flex}>

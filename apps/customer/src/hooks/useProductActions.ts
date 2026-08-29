@@ -20,6 +20,11 @@ export function useProductActions(storeId: string | null) {
     cart,
     qtyByProduct,
     busy: add.isPending,
+    /**
+     * The product with an add in flight, so a card can show a spinner on its
+     * own button instead of every card reacting to any add.
+     */
+    busyProductId: add.isPending ? (add.variables?.productId ?? null) : null,
     /** Add `quantity` of a product to the cart (defaults to a single unit). */
     addOne: (productId: string, quantity = 1) => {
       if (!storeId) return;
@@ -27,7 +32,9 @@ export function useProductActions(storeId: string | null) {
       add.mutate(
         { storeId, productId, quantity },
         {
-          onSuccess: () => toast.show('Added to cart'),
+          // No success toast: the card flips to a stepper and the haptic already
+          // fired, so a toast on every tap is three signals for one action — and
+          // it covers the very control the customer is about to tap again.
           onError: (e) =>
             toast.show(e instanceof ApiError ? e.message : 'Could not add item', 'error'),
         },

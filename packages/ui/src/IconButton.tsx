@@ -1,9 +1,7 @@
-import type { ComponentProps } from 'react';
-import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, type ViewStyle } from 'react-native';
 import { theme } from '@haala/design-tokens';
+import { Icon, type IconName } from './Icon';
 
-type IconName = ComponentProps<typeof Ionicons>['name'];
 type Variant = 'surface' | 'primary' | 'ghost';
 
 export interface IconButtonProps {
@@ -17,6 +15,10 @@ export interface IconButtonProps {
   variant?: Variant;
   accessibilityLabel?: string;
   disabled?: boolean;
+  /** Swaps the glyph for a spinner and blocks presses. */
+  loading?: boolean;
+  /** Fills the glyph — Lucide draws outlines only, so on/off states need this. */
+  fill?: string;
   style?: ViewStyle;
 }
 
@@ -33,8 +35,11 @@ export function IconButton({
   variant = 'surface',
   accessibilityLabel,
   disabled = false,
+  loading = false,
+  fill,
   style,
 }: IconButtonProps) {
+  const isDisabled = disabled || loading;
   const bg =
     variant === 'primary'
       ? theme.colors.primary
@@ -49,18 +54,22 @@ export function IconButton({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
-      disabled={disabled}
+      disabled={isDisabled}
       hitSlop={8}
       style={({ pressed }) => [
         styles.btn,
         { width: dimension, height: dimension, backgroundColor: bg },
         variant === 'surface' && styles.surface,
         pressed && { opacity: 0.7 },
-        disabled && { opacity: 0.4 },
+        isDisabled && { opacity: 0.4 },
         style,
       ]}
     >
-      <Ionicons name={name} size={size} color={iconColor} />
+      {loading ? (
+        <ActivityIndicator size="small" color={iconColor} />
+      ) : (
+        <Icon name={name} size={size} color={iconColor} fill={fill} />
+      )}
     </Pressable>
   );
 }

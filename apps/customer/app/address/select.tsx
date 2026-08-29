@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
@@ -14,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { AddressLabel, CreateAddressInput } from '@haala/shared';
-import { Button, Chip, IconButton, Text, theme, useToast } from '@haala/ui';
+import { Button, Chip, Icon, IconButton, Text, theme, useToast } from '@haala/ui';
 import { ApiError } from '../../src/api/client';
 import { addressesApi, storesApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
@@ -180,7 +179,7 @@ export default function SelectAddressScreen() {
       <SafeAreaView style={styles.topBar} edges={['top', 'left', 'right']} pointerEvents="box-none">
         <IconButton name="arrow-back" onPress={() => router.back()} accessibilityLabel="Back" />
         <View style={styles.searchPill}>
-          <Ionicons name="location-outline" size={18} color={theme.colors.textSecondary} />
+          <Icon name="location-outline" size={18} color={theme.colors.textSecondary} />
           <Text variant="bodySm" numberOfLines={1} style={styles.flex}>
             {resolving && !resolved
               ? 'Locating…'
@@ -191,7 +190,7 @@ export default function SelectAddressScreen() {
       </SafeAreaView>
 
       <Pressable style={styles.recenter} onPress={recenter} accessibilityLabel="Use my location">
-        <Ionicons name="locate" size={20} color={theme.colors.primary} />
+        <Icon name="locate" size={20} color={theme.colors.primary} />
       </Pressable>
 
       {/* Bottom sheet */}
@@ -203,7 +202,7 @@ export default function SelectAddressScreen() {
           <Text variant="h2">Set Delivery Location</Text>
 
           <View style={styles.addrRow}>
-            <Ionicons name="location" size={18} color={theme.colors.primary} />
+            <Icon name="location" size={18} color={theme.colors.primary} />
             <View style={styles.flex}>
               <Text variant="bodyStrong" numberOfLines={1}>
                 {resolved?.area || resolved?.city || 'Pinned location'}
@@ -220,7 +219,7 @@ export default function SelectAddressScreen() {
 
           {blocked ? (
             <View style={styles.notice}>
-              <Ionicons name="alert-circle-outline" size={20} color={theme.colors.error} />
+              <Icon name="alert-circle-outline" size={20} color={theme.colors.error} />
               <View style={styles.flex}>
                 <Text variant="bodyStrong">We don’t deliver here yet</Text>
                 <Text variant="bodySm" color="textSecondary">
@@ -232,7 +231,7 @@ export default function SelectAddressScreen() {
           ) : (
             <>
               <View style={styles.detailField}>
-                <Ionicons name="business-outline" size={18} color={theme.colors.textSecondary} />
+                <Icon name="business-outline" size={18} color={theme.colors.textSecondary} />
                 <TextInput
                   style={styles.detailInput}
                   value={detail}
@@ -240,7 +239,7 @@ export default function SelectAddressScreen() {
                   placeholder="Add floor / house number (optional)"
                   placeholderTextColor={theme.colors.textTertiary}
                 />
-                <Ionicons name="pencil" size={16} color={theme.colors.textTertiary} />
+                <Icon name="pencil" size={16} color={theme.colors.textTertiary} />
               </View>
 
               <View style={styles.labels}>

@@ -1,6 +1,6 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { theme } from '@haala/design-tokens';
+import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
 
 export interface AddressCardProps {
@@ -11,7 +11,7 @@ export interface AddressCardProps {
   onPress?: () => void;
 }
 
-const ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
+const ICON: Record<string, IconName> = {
   home: 'home',
   work: 'briefcase',
   other: 'location',
@@ -28,7 +28,7 @@ export function AddressCard({ label, line, selected, actionLabel, onPress }: Add
       ]}
     >
       <View style={[styles.icon, selected && styles.iconSelected]}>
-        <Ionicons
+        <Icon
           name={ICON[label.toLowerCase()] ?? 'location'}
           size={18}
           color={selected ? theme.colors.onPrimary : theme.colors.primary}
@@ -47,7 +47,7 @@ export function AddressCard({ label, line, selected, actionLabel, onPress }: Add
           {actionLabel}
         </Text>
       ) : selected ? (
-        <Ionicons name="checkmark-circle" size={22} color={theme.colors.primary} />
+        <Icon name="checkmark-circle" size={22} color={theme.colors.primary} />
       ) : null}
     </Pressable>
   );

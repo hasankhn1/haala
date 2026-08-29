@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -10,7 +9,7 @@ import {
   type DeliveryAssignmentView,
   type DeliveryStatus as DeliveryStatusT,
 } from '@haala/shared';
-import { Button, IconButton, StateView, Text, theme, useToast } from '@haala/ui';
+import { Button, Icon, IconButton, StateView, Text, theme, useToast } from '@haala/ui';
 import { ApiError } from '../../src/api/client';
 import { deliveryApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
@@ -218,7 +217,7 @@ function Body({
               hitSlop={8}
             >
               <View style={styles.navLink}>
-                <Ionicons name="navigate" size={14} color={theme.colors.primary} />
+                <Icon name="navigate" size={14} color={theme.colors.primary} />
                 <Text variant="labelSm">Navigate</Text>
               </View>
             </Pressable>
@@ -249,7 +248,7 @@ function Body({
                 label={`Call ${order.customerName.split(' ')[0]}`}
                 variant="secondary"
                 onPress={() => onCall(order.customerPhone)}
-                leadingIcon={<Ionicons name="call" size={16} color={theme.colors.primary} />}
+                leadingIcon={<Icon name="call" size={16} color={theme.colors.primary} />}
               />
             </>
           )}
@@ -266,7 +265,7 @@ function Body({
                 <Text variant="display">{formatPKR(assignment.codAmount)}</Text>
               </View>
               {assignment.codCollected ? (
-                <Ionicons name="checkmark-circle" size={28} color={theme.colors.success} />
+                <Icon name="checkmark-circle" size={28} color={theme.colors.success} />
               ) : null}
             </View>
             {needsCash ? (

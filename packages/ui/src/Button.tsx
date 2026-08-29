@@ -94,7 +94,12 @@ export function Button({
       ) : (
         <View style={styles.row}>
           {leadingIcon}
-          <Text variant="label" color={fg[variant]} style={labelColor ? { color: tint } : null}>
+          <Text
+            variant="label"
+            color={fg[variant]}
+            numberOfLines={1}
+            style={[styles.label, labelColor ? { color: tint } : null]}
+          >
             {label}
           </Text>
           {trailingIcon}
@@ -118,4 +123,6 @@ const styles = StyleSheet.create({
   fullWidth: { alignSelf: 'stretch' },
   disabled: { opacity: 0.4 },
   row: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
+  // Fixed-height control: a long label must ellipsize, not wrap out of it.
+  label: { flexShrink: 1 },
 });

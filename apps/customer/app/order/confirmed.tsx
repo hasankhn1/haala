@@ -1,10 +1,9 @@
 import { useEffect } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Text, theme } from '@haala/ui';
+import { Button, Icon, Text, theme } from '@haala/ui';
 import { haptics } from '../../src/lib/haptics';
 
 /**
@@ -42,7 +41,7 @@ export default function OrderConfirmedScreen() {
       <SafeAreaView style={styles.safe}>
         <View style={styles.panel}>
           <View style={styles.check}>
-            <Ionicons name="checkmark-circle" size={34} color="#FFFFFF" />
+            <Icon name="checkmark-circle" size={34} color="#FFFFFF" />
           </View>
 
           <Text variant="h1" align="center" style={styles.title}>
@@ -71,7 +70,7 @@ export default function OrderConfirmedScreen() {
               onPress={() => router.replace(`/order/${id}?placed=1`)}
               style={styles.trackBtn}
               labelColor={INK}
-              leadingIcon={<Ionicons name="navigate-outline" size={18} color={INK} />}
+              leadingIcon={<Icon name="navigate-outline" size={18} color={INK} />}
             />
             <Button
               label="Go to Home"

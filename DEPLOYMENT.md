@@ -154,12 +154,24 @@ the Google Cloud console with the *Maps SDK for Android* enabled, then add:
 
 ## 5. Dashboard
 
-Deploy `apps/dashboard` as its own service (or to Vercel) with:
+Deploy `apps/dashboard` as its own service (or to Vercel) with **one** variable:
 
 ```
-HAALA_API_URL=https://<api-domain>/api/v1
-SESSION_SECRET=<fresh random>
+HAALA_API_URL=https://<api-domain>
 ```
+
+**Bare origin, no `/api/v1`.** `src/lib/session.ts` builds
+``API_BASE = `${HAALA_API_URL ?? 'http://localhost:4000'}/api/v1` `` — appending
+the prefix yourself produces `/api/v1/api/v1` and every dashboard call 404s.
+
+There is no `SESSION_SECRET`. The dashboard stores the API's own JWTs in
+httpOnly cookies and signs nothing of its own, so there is no secret to set —
+nothing in the code reads that variable.
+
+To run it locally against the deployed API, put the same line in
+`apps/dashboard/.env.local` and `pnpm --filter @haala/dashboard dev`. Note
+cookies are only marked `secure` when `NODE_ENV === 'production'`, so local HTTP
+works.
 
 Then add its origin to the API's `CORS_ORIGINS`. Note the dashboard proxies
 every API call server-side, so CORS matters less here than it would with a

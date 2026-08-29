@@ -1,11 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Redirect, Tabs } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
-import { theme } from '@haala/ui';
+import { Icon, type IconName, theme } from '@haala/ui';
 import { useAuth } from '../../src/auth/AuthContext';
 import { useCart } from '../../src/hooks/useCart';
 
-type IconName = keyof typeof Ionicons.glyphMap;
 
 /**
  * Onyx navigation: no circular selection backdrop. The active tab is signalled
@@ -17,7 +15,12 @@ const tabIcon =
   ({ focused, color, size }: { focused: boolean; color: string; size: number }) => (
     <View style={styles.iconWrap}>
       <View style={[styles.inkBar, focused ? styles.inkBarOn : styles.inkBarOff]} />
-      <Ionicons name={focused ? focusedName : name} size={size} color={color} />
+      <Icon
+        name={focused ? focusedName : name}
+        size={size}
+        color={color}
+        strokeWidth={focused ? 2.4 : 1.8}
+      />
     </View>
   );
 
