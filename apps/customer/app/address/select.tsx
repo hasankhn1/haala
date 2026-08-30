@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { AddressLabel, CreateAddressInput } from '@haala/shared';
-import { Button, Chip, Icon, IconButton, Text, theme, useToast } from '@haala/ui';
+import { Button, Icon, type IconName, IconButton, Text, theme, useToast } from '@haala/ui';
 import { ApiError } from '../../src/api/client';
 import { addressesApi, storesApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
@@ -29,7 +29,12 @@ type Resolved = {
   city: string;
 };
 
-const LABELS: AddressLabel[] = ['home', 'work', 'other'];
+/** The comps' segmented selector: icon over label, not a filter chip. */
+const LABELS: Array<{ value: AddressLabel; name: string; icon: IconName }> = [
+  { value: 'home', name: 'Home', icon: 'home-outline' },
+  { value: 'work', name: 'Work', icon: 'briefcase-outline' },
+  { value: 'other', name: 'Other', icon: 'location-outline' },
+];
 
 /**
  * Set Delivery Location — the Onyx map picker.
@@ -57,6 +62,7 @@ export default function SelectAddressScreen() {
   const [resolved, setResolved] = useState<Resolved | null>(null);
   const [resolving, setResolving] = useState(false);
   const [detail, setDetail] = useState('');
+  const [directions, setDirections] = useState('');
   const [label, setLabel] = useState<AddressLabel>('home');
   const [serviceable, setServiceable] = useState<boolean | null>(null);
   const [locating, setLocating] = useState(true);
@@ -160,6 +166,7 @@ export default function SelectAddressScreen() {
       label,
       line1: resolved.line1,
       ...(detail.trim() ? { line2: detail.trim() } : {}),
+      ...(directions.trim() ? { notes: directions.trim() } : {}),
       // The API requires both; fall back to the label so validation passes on
       // sparse geocoder results rather than silently failing.
       area: resolved.area || resolved.city || 'Unknown area',
@@ -173,7 +180,7 @@ export default function SelectAddressScreen() {
 
   return (
     <View style={styles.root}>
-      <MapPicker center={center} onCenterChange={setCenter} style={styles.map} />
+      <MapPicker center={center} onCenterChange={setCenter} tip={resolved?.area} style={styles.map} />
 
       {/* Floating search / back bar */}
       <SafeAreaView style={styles.topBar} edges={['top', 'left', 'right']} pointerEvents="box-none">
@@ -189,6 +196,16 @@ export default function SelectAddressScreen() {
         </View>
       </SafeAreaView>
 
+      {/*
+        Says out loud what the gesture is. The pin is fixed to the centre, so
+        without this the map reads as something you look at rather than aim.
+      */}
+      <View style={styles.hint} pointerEvents="none">
+        <Text variant="labelSm" color="onPrimary">
+          Drag the map to move the pin
+        </Text>
+      </View>
+
       <Pressable style={styles.recenter} onPress={recenter} accessibilityLabel="Use my location">
         <Icon name="locate" size={20} color={theme.colors.primary} />
       </Pressable>
@@ -199,10 +216,12 @@ export default function SelectAddressScreen() {
         style={styles.sheetWrap}
       >
         <SafeAreaView style={styles.sheet} edges={['bottom', 'left', 'right']}>
-          <Text variant="h2">Set Delivery Location</Text>
+          <View style={styles.grabber} />
 
           <View style={styles.addrRow}>
-            <Icon name="location" size={18} color={theme.colors.primary} />
+            <View style={styles.addrIcon}>
+              <Icon name="location-outline" size={18} color={theme.colors.primary} />
+            </View>
             <View style={styles.flex}>
               <Text variant="bodyStrong" numberOfLines={1}>
                 {resolved?.area || resolved?.city || 'Pinned location'}
@@ -230,33 +249,64 @@ export default function SelectAddressScreen() {
             </View>
           ) : (
             <>
-              <View style={styles.detailField}>
-                <Icon name="business-outline" size={18} color={theme.colors.textSecondary} />
-                <TextInput
-                  style={styles.detailInput}
-                  value={detail}
-                  onChangeText={setDetail}
-                  placeholder="Add floor / house number (optional)"
-                  placeholderTextColor={theme.colors.textTertiary}
-                />
-                <Icon name="pencil" size={16} color={theme.colors.textTertiary} />
+              <View style={styles.labels}>
+                {LABELS.map((l) => {
+                  const on = label === l.value;
+                  return (
+                    <Pressable
+                      key={l.value}
+                      style={[styles.labelBox, on && styles.labelBoxOn]}
+                      onPress={() => setLabel(l.value)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                    >
+                      <Icon
+                        name={l.icon}
+                        size={15}
+                        color={on ? theme.colors.primary : theme.colors.textSecondary}
+                      />
+                      <Text variant="label" color={on ? 'primary' : 'textSecondary'}>
+                        {l.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
 
-              <View style={styles.labels}>
-                {LABELS.map((l) => (
-                  <Chip
-                    key={l}
-                    label={l[0].toUpperCase() + l.slice(1)}
-                    selected={label === l}
-                    onPress={() => setLabel(l)}
+              {/* `line2` and `notes` — both already on the address, so these
+                  two fields are display, not new storage. */}
+              <View style={styles.fields}>
+                <View style={styles.field}>
+                  <Text variant="labelCaps" color="textTertiary">
+                    FLOOR / UNIT
+                  </Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    value={detail}
+                    onChangeText={setDetail}
+                    placeholder="5B"
+                    placeholderTextColor={theme.colors.textTertiary}
                   />
-                ))}
+                </View>
+                <View style={styles.field}>
+                  <Text variant="labelCaps" color="textTertiary">
+                    DIRECTIONS
+                  </Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    value={directions}
+                    onChangeText={setDirections}
+                    placeholder="Add a note"
+                    placeholderTextColor={theme.colors.textTertiary}
+                    maxLength={240}
+                  />
+                </View>
               </View>
             </>
           )}
 
           <Button
-            label={blocked ? 'Move the pin to continue' : 'Confirm Location'}
+            label={blocked ? 'Move the pin to continue' : 'Confirm this location'}
             onPress={confirm}
             loading={save.isPending}
             disabled={blocked || resolving || !resolved}
@@ -295,6 +345,16 @@ const styles = StyleSheet.create({
     ...theme.elevation.card,
   },
 
+  /** Bottom-left of the visible map, paired with the locate button opposite. */
+  hint: {
+    position: 'absolute',
+    left: theme.layout.margin,
+    bottom: '46%',
+    backgroundColor: 'rgba(38,33,30,0.86)',
+    borderRadius: theme.radii.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
   recenter: {
     position: 'absolute',
     right: theme.layout.margin,
@@ -319,24 +379,50 @@ const styles = StyleSheet.create({
   },
   addrRow: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.md },
 
-  detailField: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.md,
-    height: theme.controlHeight.lg,
-    borderRadius: theme.radii.sm,
+  fields: { flexDirection: 'row', gap: 10 },
+  field: {
+    flex: 1,
     borderWidth: 1,
     borderColor: theme.colors.border,
-    backgroundColor: theme.colors.surfaceMuted,
-    paddingHorizontal: theme.spacing.lg,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
   },
-  detailInput: {
-    flex: 1,
-    fontFamily: theme.typography.fontFamily.regular,
-    fontSize: theme.typography.fontSize.bodySm,
-    color: theme.colors.textPrimary,
+  fieldInput: {
+    marginTop: 7,
     padding: 0,
+    fontFamily: theme.typography.fontFamily.bold,
+    fontSize: theme.typography.fontSize.body,
+    color: theme.colors.textPrimary,
   },
+  grabber: {
+    width: 38,
+    height: 4,
+    borderRadius: theme.radii.pill,
+    backgroundColor: theme.colors.border,
+    alignSelf: 'center',
+  },
+  /** 36px ember wash behind the pin glyph, per the comps. */
+  addrIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: theme.colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  labelBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 12,
+    paddingVertical: 10,
+    borderWidth: 1.4,
+    borderColor: theme.colors.border,
+  },
+  labelBoxOn: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primarySoft },
   labels: { flexDirection: 'row', gap: theme.spacing.sm },
 
   notice: {

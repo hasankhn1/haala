@@ -167,10 +167,12 @@ export function DeliveryMap({
       <Marker
         coordinate={destination}
         title="Delivery location"
-        anchor={{ x: 0.5, y: 1 }}
+        // A teardrop points with its tip, not its middle. 0.94 rather than 1
+        // because the ground shadow hangs a few pixels below that tip.
+        anchor={{ x: 0.5, y: 0.94 }}
         tracksViewChanges={pinsRedraw}
       >
-        <PinGlyph size={30} />
+        <PinGlyph size={26} />
       </Marker>
 
       {rider ? (
@@ -200,37 +202,40 @@ export interface MapPickerProps {
   center: LatLng;
   /** Fires when panning settles, with the new centre point. */
   onCenterChange: (point: LatLng) => void;
+  /** Area name for the pill above the pin; hidden until the centre resolves. */
+  tip?: string;
   style?: ViewStyle;
 }
+
+/** What `onRegionChangeComplete` hands back. */
+type Region = LatLng & { latitudeDelta: number; longitudeDelta: number };
 
 type MapViewInstance = InstanceType<MapsModule['default']>;
 
 /**
- * The map pin.
+ * The map pin, traced from the comps' own SVG.
  *
- * A teardrop rather than a dot, because this one is **draggable** and a dot
- * reads as "you are here" — something the map is telling you — while a pin
- * reads as something you placed and can move. Ember body, white outline so it
- * survives both pale streets and dark satellite tiles, white centre so it is
- * legible at a glance.
+ *   path  M21 51 … A17 17 0 1 0 4 19 …   fill #FF5A1F, stroke #fff 3px
+ *   circle cx21 cy18.5 r6.4              fill #fff
  *
- * Drawn rather than taken from the icon set so the tip is exactly at the
- * bottom edge: the marker anchors on that point, and it is the point that
- * marks the customer's door.
+ * The shadow is a **separate ground ellipse** beneath the tip rather than a
+ * drop shadow on the pin, which is what lets it read as an object standing on
+ * the map: it widens as the pin lifts and tightens as it settles.
  */
-function PinGlyph({ size = 34, lifted = false }: { size?: number; lifted?: boolean }) {
-  const scale = lifted ? 1.15 : 1;
+function PinGlyph({ size = 42, lifted = false }: { size?: number; lifted?: boolean }) {
+  const h = (size / 42) * 52;
   return (
-    <View style={styles.pinGlyph}>
-      <Svg width={size * scale} height={size * 1.28 * scale} viewBox="0 0 24 31">
+    <View style={styles.pinStack}>
+      <Svg width={size} height={h} viewBox="0 0 42 52" fill="none">
         <Path
-          d="M12 1.2c-5.9 0-10.7 4.8-10.7 10.7 0 7.7 10.7 17.9 10.7 17.9s10.7-10.2 10.7-17.9C22.7 6 17.9 1.2 12 1.2z"
+          d="M21 51C21 51 38 31.9 38 19A17 17 0 1 0 4 19C4 31.9 21 51 21 51Z"
           fill={theme.colors.primary}
           stroke={theme.colors.surface}
-          strokeWidth={2.2}
+          strokeWidth={3}
         />
-        <Circle cx="12" cy="11.6" r="4.2" fill={theme.colors.surface} />
+        <Circle cx="21" cy="18.5" r="6.4" fill={theme.colors.surface} />
       </Svg>
+      <View style={[styles.pinShadow, { width: lifted ? size * 0.62 : size * 0.4 }]} />
     </View>
   );
 }
@@ -239,30 +244,31 @@ function PinGlyph({ size = 34, lifted = false }: { size?: number; lifted?: boole
  * Address-picker map with a pin you pick up and drop.
  *
  * The pin used to be a fixed overlay at the centre of the viewport, with the
- * map sliding underneath it. Dragging the marker itself is the more direct
- * gesture — you move the thing you are aiming, not everything around it.
+ * map sliding underneath it — the gesture the comps specify, and the one their
+ * own hint pill describes ("Drag the map to move the pin").
+ *
+ * Keeping the pin out of the map as a plain centred overlay also sidesteps the
+ * failure a custom `Marker` has: it cannot go invisible waiting to rasterise.
  *
  * `onCenterChange` keeps its meaning ("the delivery point moved") so the
  * caller's debounce, reverse-geocode and serviceability check are untouched.
  */
-export function MapPicker({ center, onCenterChange, style }: MapPickerProps) {
+export function MapPicker({ center, onCenterChange, tip, style }: MapPickerProps) {
   const { onMapReady, giveUp } = useMapReady();
   const mapRef = useRef<MapViewInstance | null>(null);
-  const [pin, setPin] = useState<LatLng>(center);
-  const pinRedraw = useMarkerRedraw(`${pin.latitude},${pin.longitude}`);
-  /** The last point we told the parent about, so our own drag doesn't bounce back. */
+  const [dragging, setDragging] = useState(false);
+  /** The last point we told the parent about, so our own pan doesn't bounce back. */
   const emitted = useRef<LatLng | null>(null);
 
   // Follow the parent when *it* moves the point — the "use my location"
   // button. `initialRegion` is read once, so without animating here that
   // button silently updated the address while the map stayed put.
   useEffect(() => {
-    const isOurOwnDrag =
+    const isOurOwnPan =
       emitted.current?.latitude === center.latitude &&
       emitted.current?.longitude === center.longitude;
-    if (isOurOwnDrag) return;
+    if (isOurOwnPan) return;
 
-    setPin(center);
     mapRef.current?.animateToRegion(
       { ...center, latitudeDelta: PICKER_SPAN, longitudeDelta: PICKER_SPAN },
       350,
@@ -271,10 +277,14 @@ export function MapPicker({ center, onCenterChange, style }: MapPickerProps) {
 
   if (!Maps || giveUp) return <MapFallback style={style} />;
 
-  const { default: MapView, Marker, PROVIDER_DEFAULT } = Maps;
+  const { default: MapView, PROVIDER_DEFAULT } = Maps;
 
-  const move = (point: LatLng) => {
-    setPin(point);
+  const settle = (region: Region) => {
+    setDragging(false);
+    const point = { latitude: region.latitude, longitude: region.longitude };
+    // `onRegionChangeComplete` also fires after our own `animateToRegion`;
+    // emitting there would bounce the parent's own move back at it.
+    if (point.latitude === center.latitude && point.longitude === center.longitude) return;
     emitted.current = point;
     onCenterChange(point);
   };
@@ -290,10 +300,8 @@ export function MapPicker({ center, onCenterChange, style }: MapPickerProps) {
           latitudeDelta: PICKER_SPAN,
           longitudeDelta: PICKER_SPAN,
         }}
-        // Tapping the map moves the pin too: dragging is precise, tapping is
-        // quick, and someone reaching for a spot across the screen wants the
-        // second one.
-        onPress={(e: { nativeEvent: { coordinate: LatLng } }) => move(e.nativeEvent.coordinate)}
+        onRegionChange={() => setDragging(true)}
+        onRegionChangeComplete={settle}
         loadingEnabled
         loadingBackgroundColor={theme.colors.surfaceSunken}
         loadingIndicatorColor={theme.colors.primary}
@@ -304,23 +312,26 @@ export function MapPicker({ center, onCenterChange, style }: MapPickerProps) {
         showsCompass={false}
         showsMyLocationButton={false}
       >
-        <Marker
-          coordinate={pin}
-          draggable
-          onDragEnd={(e: { nativeEvent: { coordinate: LatLng } }) => move(e.nativeEvent.coordinate)}
-          anchor={{ x: 0.5, y: 1 }}
-          tracksViewChanges={pinRedraw}
-        >
-          <View style={styles.pinLayer}>
+      </MapView>
+
+      {/*
+        The pin is an overlay pinned to the map's centre, not a marker on the
+        map — which is why it can't vanish the way a marker awaiting
+        rasterisation can, and why it needs `pointerEvents="none"` so the pan
+        gesture reaches the map underneath it.
+      */}
+      <View style={styles.pinLayer} pointerEvents="none">
+        <View style={[styles.pinGroup, dragging && styles.pinGroupLifted]}>
+          {tip ? (
             <View style={styles.pinLabel}>
-              <Text variant="labelSm" color="onPrimary">
-                Drag to move
+              <Text variant="labelSm" color="onPrimary" numberOfLines={1}>
+                {dragging ? 'Drop here' : tip}
               </Text>
             </View>
-            <PinGlyph />
-          </View>
-        </Marker>
-      </MapView>
+          ) : null}
+          <PinGlyph lifted={dragging} />
+        </View>
+      </View>
     </View>
   );
 }
@@ -365,19 +376,34 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.surface,
   },
 
-  pinLayer: { alignItems: 'center', justifyContent: 'flex-end' },
-  // Shadow lifts the pin off the tiles so it reads on a busy map.
-  pinGlyph: {
-    shadowColor: theme.palette.clay[900],
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 3 },
+  pinLayer: { ...StyleSheet.absoluteFillObject, alignItems: 'center' },
+  /**
+   * `bottom: 50%` puts the *tip* of the teardrop on the map's centre rather
+   * than the middle of the glyph — the pin points at the delivery address.
+   * The -3 offsets the ground shadow, which sits below the tip.
+   */
+  pinGroup: { position: 'absolute', bottom: '50%', marginBottom: -3, alignItems: 'center' },
+  /** Lifts on drag and settles on release, exactly the comps' 8px. */
+  pinGroupLifted: { transform: [{ translateY: -8 }] },
+  pinStack: { alignItems: 'center' },
+  /** The ground ellipse the pin stands on — `rgba(0,0,0,.20)`, soft, tight. */
+  pinShadow: {
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.20)',
+    marginTop: -2,
   },
   pinLabel: {
     backgroundColor: theme.colors.accent,
-    borderRadius: theme.radii.pill,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 5,
-    marginBottom: theme.spacing.sm,
+    borderRadius: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 5,
+    maxWidth: 180,
+    shadowColor: '#000000',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
 });
