@@ -101,7 +101,9 @@ export function Thumb({
   }
   return (
     <View style={[styles.fallback, dims, { borderRadius: radius, backgroundColor: tintFor(name) }]}>
-      <Text style={{ fontSize: emojiSize }}>{emojiFor(name)}</Text>
+      <Text style={{ fontSize: emojiSize, lineHeight: Math.round(emojiSize * 1.2) }}>
+        {emojiFor(name)}
+      </Text>
     </View>
   );
 }

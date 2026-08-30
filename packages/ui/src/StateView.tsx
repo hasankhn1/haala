@@ -73,6 +73,6 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
     padding: theme.spacing['2xl'],
   },
-  emoji: { fontSize: 40 },
+  emoji: { fontSize: 40, lineHeight: 48 },
   retry: { marginTop: theme.spacing.lg },
 });

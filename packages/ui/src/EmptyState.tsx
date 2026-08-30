@@ -46,6 +46,8 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
     padding: theme.spacing['2xl'],
   },
-  emoji: { fontSize: 48, marginBottom: theme.spacing.sm },
+  // lineHeight travels with fontSize: `Text` otherwise applies the `body`
+  // variant's line box (17px), which slices a 48px glyph top and bottom.
+  emoji: { fontSize: 48, lineHeight: 58, marginBottom: theme.spacing.sm },
   action: { marginTop: theme.spacing.lg },
 });

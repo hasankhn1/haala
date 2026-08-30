@@ -44,8 +44,19 @@ const Maps: MapsModule | null = (() => {
   }
 })();
 
-/** Padding around the fitted region, in degrees. Roughly a city block. */
+/**
+ * Padding around the **tracking** map's fitted region, in degrees — about
+ * 1.3km, which is the context needed to hold the store, the rider and the
+ * destination in one view.
+ */
 const REGION_PADDING = 0.012;
+
+/**
+ * The **picker**'s span, in degrees — about 440m. Placing a pin on a house is a
+ * street-level task, and at the tracking map's 1.3km you cannot tell one
+ * building from the next.
+ */
+const PICKER_SPAN = 0.004;
 
 /**
  * How long to wait for the map to say it is ready before giving up on it.
@@ -58,6 +69,29 @@ const REGION_PADDING = 0.012;
  * screen useful instead of hanging on a promise the map can't keep.
  */
 const MAP_READY_TIMEOUT_MS = 6_000;
+
+/**
+ * How long a custom marker is allowed to keep re-rasterising after it appears
+ * or moves. `react-native-maps` draws a marker's child View to a bitmap *only
+ * while `tracksViewChanges` is true* — pin it to `false` from the first render
+ * and the marker never draws at all, which is exactly how these pins went
+ * invisible. True forever is the other failure: that is what stalled the map.
+ */
+const MARKER_REDRAW_MS = 600;
+
+/**
+ * `tracksViewChanges` for a custom marker: true briefly on mount and after any
+ * `key` change (a moving pin needs to redraw), false the rest of the time.
+ */
+function useMarkerRedraw(key: string | null): boolean {
+  const [redraw, setRedraw] = useState(true);
+  useEffect(() => {
+    setRedraw(true);
+    const t = setTimeout(() => setRedraw(false), MARKER_REDRAW_MS);
+    return () => clearTimeout(t);
+  }, [key]);
+  return redraw;
+}
 
 function useMapReady() {
   const [ready, setReady] = useState(false);
@@ -77,22 +111,13 @@ export function DeliveryMap({
   style,
   interactive = false,
 }: DeliveryMapProps) {
-  /**
-   * `tracksViewChanges` is why this map was slow to appear and janky after.
-   * While it is true, react-native-maps re-rasterises every custom marker view
-   * to a bitmap on each frame; three markers plus a polyline is enough to stall
-   * the whole map on Android. Static pins are pinned to `false`; the rider gets
-   * a short window open whenever its coordinate changes.
-   */
   const { onMapReady, giveUp } = useMapReady();
-  const [riderRedraw, setRiderRedraw] = useState(false);
-  const riderKey = rider ? `${rider.latitude},${rider.longitude}` : null;
-  useEffect(() => {
-    if (!riderKey) return;
-    setRiderRedraw(true);
-    const t = setTimeout(() => setRiderRedraw(false), 600);
-    return () => clearTimeout(t);
-  }, [riderKey]);
+  // The static pins still need one redraw window to appear at all; the rider's
+  // reopens every time it moves.
+  const pinsRedraw = useMarkerRedraw('static');
+  const riderRedraw = useMarkerRedraw(
+    rider ? `${rider.latitude},${rider.longitude}` : null,
+  );
 
   if (!Maps || giveUp) return <MapFallback style={style} />;
 
@@ -132,7 +157,7 @@ export function DeliveryMap({
           coordinate={origin}
           title="Store"
           anchor={{ x: 0.5, y: 0.5 }}
-          tracksViewChanges={false}
+          tracksViewChanges={pinsRedraw}
         >
           <View style={styles.storePin} />
         </Marker>
@@ -142,7 +167,7 @@ export function DeliveryMap({
         coordinate={destination}
         title="Delivery location"
         anchor={{ x: 0.5, y: 0.5 }}
-        tracksViewChanges={false}
+        tracksViewChanges={pinsRedraw}
       >
         <View style={styles.destOuter}>
           <View style={styles.destInner} />
@@ -154,9 +179,6 @@ export function DeliveryMap({
           coordinate={rider}
           title="Rider"
           anchor={{ x: 0.5, y: 0.5 }}
-          // The rider actually moves, so this one needs a brief redraw window
-          // each time the coordinate changes — pinned to `false` forever, the
-          // pin would render once and then never update.
           tracksViewChanges={riderRedraw}
         >
           <View style={styles.riderPin} />
@@ -198,6 +220,7 @@ export function MapPicker({ center, onCenterChange, style }: MapPickerProps) {
   const { onMapReady, giveUp } = useMapReady();
   const mapRef = useRef<MapViewInstance | null>(null);
   const [pin, setPin] = useState<LatLng>(center);
+  const pinRedraw = useMarkerRedraw(`${pin.latitude},${pin.longitude}`);
   /** The last point we told the parent about, so our own drag doesn't bounce back. */
   const emitted = useRef<LatLng | null>(null);
 
@@ -212,7 +235,7 @@ export function MapPicker({ center, onCenterChange, style }: MapPickerProps) {
 
     setPin(center);
     mapRef.current?.animateToRegion(
-      { ...center, latitudeDelta: REGION_PADDING, longitudeDelta: REGION_PADDING },
+      { ...center, latitudeDelta: PICKER_SPAN, longitudeDelta: PICKER_SPAN },
       350,
     );
   }, [center.latitude, center.longitude]);
@@ -235,8 +258,8 @@ export function MapPicker({ center, onCenterChange, style }: MapPickerProps) {
         provider={PROVIDER_DEFAULT}
         initialRegion={{
           ...center,
-          latitudeDelta: REGION_PADDING,
-          longitudeDelta: REGION_PADDING,
+          latitudeDelta: PICKER_SPAN,
+          longitudeDelta: PICKER_SPAN,
         }}
         // Tapping the map moves the pin too: dragging is precise, tapping is
         // quick, and someone reaching for a spot across the screen wants the
@@ -257,9 +280,7 @@ export function MapPicker({ center, onCenterChange, style }: MapPickerProps) {
           draggable
           onDragEnd={(e: { nativeEvent: { coordinate: LatLng } }) => move(e.nativeEvent.coordinate)}
           anchor={{ x: 0.5, y: 1 }}
-          // Custom marker views re-render constantly on Android unless this is
-          // off, which makes the drag stutter.
-          tracksViewChanges={false}
+          tracksViewChanges={pinRedraw}
         >
           <View style={styles.pinLayer}>
             <View style={styles.pinLabel}>
