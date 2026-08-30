@@ -34,6 +34,14 @@ only — `push` infers changes and will drop a column against real data.
 
 ## Common commands
 
+> **Android emulator:** run `pnpm android:reverse` after the emulator starts.
+> Both apps read `EXPO_PUBLIC_API_URL=http://localhost:4000`, and inside the
+> emulator that is the emulator's own loopback unless adb forwards it. The
+> tunnel does **not** survive an emulator or adb restart — an empty
+> `adb reverse --list` is the tell when sign-in or the API suddenly stops
+> working. (`10.0.2.2` would need no tunnel, but pinning it in `.env` breaks
+> the web build, which cannot resolve that address.)
+
 | Command | What it does |
 | --- | --- |
 | `pnpm dev:api` | Run the API in watch mode |
