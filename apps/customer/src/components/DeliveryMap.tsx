@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { Text, theme } from '@haala/ui';
 
 export interface LatLng {
@@ -166,12 +167,10 @@ export function DeliveryMap({
       <Marker
         coordinate={destination}
         title="Delivery location"
-        anchor={{ x: 0.5, y: 0.5 }}
+        anchor={{ x: 0.5, y: 1 }}
         tracksViewChanges={pinsRedraw}
       >
-        <View style={styles.destOuter}>
-          <View style={styles.destInner} />
-        </View>
+        <PinGlyph size={30} />
       </Marker>
 
       {rider ? (
@@ -205,6 +204,36 @@ export interface MapPickerProps {
 }
 
 type MapViewInstance = InstanceType<MapsModule['default']>;
+
+/**
+ * The map pin.
+ *
+ * A teardrop rather than a dot, because this one is **draggable** and a dot
+ * reads as "you are here" — something the map is telling you — while a pin
+ * reads as something you placed and can move. Ember body, white outline so it
+ * survives both pale streets and dark satellite tiles, white centre so it is
+ * legible at a glance.
+ *
+ * Drawn rather than taken from the icon set so the tip is exactly at the
+ * bottom edge: the marker anchors on that point, and it is the point that
+ * marks the customer's door.
+ */
+function PinGlyph({ size = 34, lifted = false }: { size?: number; lifted?: boolean }) {
+  const scale = lifted ? 1.15 : 1;
+  return (
+    <View style={styles.pinGlyph}>
+      <Svg width={size * scale} height={size * 1.28 * scale} viewBox="0 0 24 31">
+        <Path
+          d="M12 1.2c-5.9 0-10.7 4.8-10.7 10.7 0 7.7 10.7 17.9 10.7 17.9s10.7-10.2 10.7-17.9C22.7 6 17.9 1.2 12 1.2z"
+          fill={theme.colors.primary}
+          stroke={theme.colors.surface}
+          strokeWidth={2.2}
+        />
+        <Circle cx="12" cy="11.6" r="4.2" fill={theme.colors.surface} />
+      </Svg>
+    </View>
+  );
+}
 
 /**
  * Address-picker map with a pin you pick up and drop.
@@ -285,12 +314,10 @@ export function MapPicker({ center, onCenterChange, style }: MapPickerProps) {
           <View style={styles.pinLayer}>
             <View style={styles.pinLabel}>
               <Text variant="labelSm" color="onPrimary">
-                Delivery location
+                Drag to move
               </Text>
             </View>
-            <View style={styles.pinHalo}>
-              <View style={styles.pinDot} />
-            </View>
+            <PinGlyph />
           </View>
         </Marker>
       </MapView>
@@ -329,22 +356,6 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: theme.colors.primary,
   },
-  destOuter: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(15,23,42,0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  destInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: theme.colors.primary,
-    borderWidth: 2,
-    borderColor: theme.colors.surface,
-  },
   riderPin: {
     width: 18,
     height: 18,
@@ -355,27 +366,18 @@ const styles = StyleSheet.create({
   },
 
   pinLayer: { alignItems: 'center', justifyContent: 'flex-end' },
+  // Shadow lifts the pin off the tiles so it reads on a busy map.
+  pinGlyph: {
+    shadowColor: theme.palette.clay[900],
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 3 },
+  },
   pinLabel: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: theme.radii.xs,
+    backgroundColor: theme.colors.accent,
+    borderRadius: theme.radii.pill,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: 5,
     marginBottom: theme.spacing.sm,
-  },
-  pinHalo: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(15,23,42,0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pinDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: theme.colors.primary,
-    borderWidth: 2,
-    borderColor: theme.colors.surface,
   },
 });
