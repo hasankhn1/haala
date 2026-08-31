@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 import {
   type BrandDetailView,
+  type BrandUserRow,
   type BrandUserView,
   type BrandView,
   type BrandsQuery,
@@ -101,6 +102,15 @@ export const brandService = {
   async list(query: BrandsQuery): Promise<BrandView[]> {
     const rows = await brandRepository.list(query);
     return rows.map(toView);
+  },
+
+  /** Every brand login on the platform — the "who can sign in" page. */
+  async listAllUsers(): Promise<BrandUserRow[]> {
+    const rows = await brandRepository.listAllUsers();
+    return rows.map((r) => ({
+      ...toUserView(r),
+      brand: { id: r.brandId, name: r.brandName, slug: r.brandSlug, status: r.brandStatus },
+    }));
   },
 
   async getById(id: string): Promise<BrandDetailView> {

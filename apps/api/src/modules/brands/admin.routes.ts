@@ -70,6 +70,17 @@ router.patch(
 );
 
 // ── Brand logins ──────────────────────────────────────────────────────────
+// Listed across all brands here, and created under one brand below. The list
+// is flat because "who can sign in" is a question about the platform; creating
+// is per-brand because attaching a login to the wrong shop should not be
+// possible by editing a field.
+router.get(
+  '/brand-users',
+  asyncHandler(async (_req, res) => {
+    sendSuccess(res, await brandService.listAllUsers());
+  }),
+);
+
 // The brand is in the path, never the body: a login cannot be created for, or
 // deactivated in, a brand other than the one being addressed.
 router.post(

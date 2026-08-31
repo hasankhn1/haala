@@ -104,6 +104,14 @@ export interface BrandView {
   createdAt: string;
 }
 
+/**
+ * A brand login seen from the platform side, i.e. carrying the shop it belongs
+ * to. The per-brand view omits that, because there the brand is the page.
+ */
+export interface BrandUserRow extends BrandUserView {
+  brand: { id: string; name: string; slug: string; status: BrandStatus };
+}
+
 /** Brand detail, with its logins. Only the super admin ever sees this. */
 export interface BrandDetailView extends BrandView {
   users: BrandUserView[];

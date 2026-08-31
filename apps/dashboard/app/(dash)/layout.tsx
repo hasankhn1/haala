@@ -15,6 +15,7 @@ import { Nav, type NavLink } from '@/components/Nav';
 const OPS_LINKS: NavLink[] = [
   { href: '/dashboard', label: 'Overview' },
   { href: '/brands', label: 'Brands' },
+  { href: '/brand-users', label: 'Shop logins' },
   { href: '/orders', label: 'Orders' },
   { href: '/riders', label: 'Riders' },
   { href: '/catalog', label: 'Catalogue' },

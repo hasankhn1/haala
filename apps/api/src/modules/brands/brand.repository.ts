@@ -1,4 +1,4 @@
-import { and, asc, count, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import type { BrandStatus } from '@haala/shared';
 import { db } from '../../db/client';
 import {
@@ -115,6 +115,31 @@ export const brandRepository = {
       .from(users)
       .where(eq(users.brandId, brandId))
       .orderBy(asc(users.createdAt));
+  },
+
+  /**
+   * Every brand login on the platform, newest first, with the shop attached.
+   *
+   * Sorted newest-first rather than by brand: the row someone is looking for is
+   * almost always the one they just made.
+   */
+  async listAllUsers() {
+    return db
+      .select({
+        id: users.id,
+        name: users.name,
+        phone: users.phone,
+        email: users.email,
+        isActive: users.isActive,
+        createdAt: users.createdAt,
+        brandId: brands.id,
+        brandName: brands.name,
+        brandSlug: brands.slug,
+        brandStatus: brands.status,
+      })
+      .from(users)
+      .innerJoin(brands, eq(brands.id, users.brandId))
+      .orderBy(desc(users.createdAt));
   },
 
   /**
