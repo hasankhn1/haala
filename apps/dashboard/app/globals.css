@@ -95,7 +95,8 @@ button:disabled {
 }
 
 input,
-select {
+select,
+textarea {
   font: inherit;
   color: inherit;
 }
@@ -268,7 +269,8 @@ th.num {
   color: var(--text-secondary);
 }
 input,
-select {
+select,
+textarea {
   background: var(--muted);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -279,9 +281,14 @@ select {
     background 0.15s;
 }
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   background: var(--surface);
   border-color: var(--onyx-900);
+}
+textarea {
+  resize: vertical;
+  min-height: 60px;
 }
 input.inline {
   padding: 5px 8px;

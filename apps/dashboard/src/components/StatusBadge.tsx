@@ -22,6 +22,11 @@ const TONE: Record<string, string> = {
   available: 'good',
   busy: 'warn',
   offline: 'neutral',
+  // Brand statuses. `suspended` is bad rather than warn: it means a shop that
+  // customers can no longer buy from, which is worth reading as a stop.
+  pending: 'warn',
+  active: 'good',
+  suspended: 'bad',
 };
 
 const LABEL: Record<string, string> = {
@@ -37,6 +42,10 @@ const LABEL: Record<string, string> = {
   available: 'Available',
   busy: 'On a delivery',
   offline: 'Offline',
+  pending: 'Pending',
+  active: 'Active',
+  suspended: 'Suspended',
+  rejected: 'Rejected',
 };
 
 export function StatusBadge({ status }: { status: string }) {

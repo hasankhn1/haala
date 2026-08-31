@@ -5,12 +5,14 @@ import { usePathname, useRouter } from 'next/navigation';
 
 const LINKS = [
   { href: '/dashboard', label: 'Overview' },
+  { href: '/brands', label: 'Brands' },
   { href: '/orders', label: 'Orders' },
   { href: '/riders', label: 'Riders' },
   { href: '/catalog', label: 'Catalogue' },
   { href: '/promotions', label: 'Promotions' },
   { href: '/stores', label: 'Stores' },
   { href: '/staff', label: 'Staff' },
+  { href: '/business-types', label: 'Business types' },
 ];
 
 export function Nav({ name, phone }: { name: string; phone: string }) {
