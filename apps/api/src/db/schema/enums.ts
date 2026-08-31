@@ -4,7 +4,34 @@ import { pgEnum } from 'drizzle-orm/pg-core';
  * Postgres enums. Values MUST mirror the const enums in `@haala/shared`.
  * (Kept as literal tuples here because pgEnum needs a readonly string tuple.)
  */
-export const userRoleEnum = pgEnum('user_role', ['customer', 'rider', 'admin']);
+/**
+ * `admin` and `super_admin` are both Haala staff; `super_admin` additionally
+ * manages brands and business types. `admin` was deliberately **not** renamed —
+ * every existing ops route, session and seeded account keeps working, and the
+ * ops routes simply accept either.
+ *
+ * A `brand_user` is scoped to exactly one brand. The `users_brand_role_ck`
+ * constraint makes that a database invariant rather than a convention.
+ */
+export const userRoleEnum = pgEnum('user_role', [
+  'customer',
+  'rider',
+  'admin',
+  'super_admin',
+  'brand_user',
+]);
+
+/**
+ * Only `active` may sell. `pending` exists so an application-and-approval flow
+ * is a UI addition later rather than a migration — brands are created directly
+ * by a super admin today.
+ */
+export const brandStatusEnum = pgEnum('brand_status', [
+  'pending',
+  'active',
+  'suspended',
+  'rejected',
+]);
 
 export const orderStatusEnum = pgEnum('order_status', [
   'placed',

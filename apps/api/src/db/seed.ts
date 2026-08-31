@@ -1,9 +1,9 @@
 import bcrypt from 'bcryptjs';
 import { and, eq, inArray } from 'drizzle-orm';
-import { rupees } from '@haala/shared';
+import { BrandStatus, BusinessTypeKey, businessTypeSpecs, rupees } from '@haala/shared';
 import { logger } from '../common/logger';
 import { closeDb, db } from './client';
-import { categories, inventory, productVariants,
+import { brands, businessTypes, categories, inventory, productVariants,
   products, promotions, riders, stores, users } from './schema';
 import {
   SEED_CATEGORIES,
@@ -105,6 +105,45 @@ const seed = async (): Promise<void> => {
       .onConflictDoUpdate({ target: riders.userId, set: { storeId: store.id } });
   }
 
+  // ── Business types and the house brand ──────────────────────────────────
+  // Everything in `seed-data.ts` predates brands and belongs to Haala itself,
+  // so the house brand is seeded first and owns all of it. This mirrors what
+  // migration 0008 does to production data.
+  for (const [index, key] of Object.keys(businessTypeSpecs).entries()) {
+    const spec = businessTypeSpecs[key as BusinessTypeKey];
+    await db
+      .insert(businessTypes)
+      .values({ key: spec.key, name: spec.name, sortOrder: index })
+      .onConflictDoUpdate({
+        target: businessTypes.key,
+        set: { name: spec.name, sortOrder: index, isActive: true },
+      });
+  }
+
+  const [groceryType] = await db
+    .select()
+    .from(businessTypes)
+    .where(eq(businessTypes.key, BusinessTypeKey.Grocery))
+    .limit(1);
+  if (!groceryType) throw new Error('Failed to resolve the grocery business type');
+
+  await db
+    .insert(brands)
+    .values({
+      name: 'Haala',
+      slug: 'haala',
+      businessTypeId: groceryType.id,
+      status: BrandStatus.Active,
+      description: 'Everyday groceries, delivered across DHA Peshawar.',
+    })
+    .onConflictDoUpdate({
+      target: brands.slug,
+      set: { businessTypeId: groceryType.id, status: BrandStatus.Active },
+    });
+
+  const [houseBrand] = await db.select().from(brands).where(eq(brands.slug, 'haala')).limit(1);
+  if (!houseBrand) throw new Error('Failed to resolve the house brand');
+
   let productCount = 0;
   let stockRows = 0;
 
@@ -113,13 +152,14 @@ const seed = async (): Promise<void> => {
     await db
       .insert(categories)
       .values({
+        brandId: houseBrand.id,
         name: category.name,
         slug: category.slug,
         imageUrl: category.imageUrl,
         sortOrder: index,
       })
       .onConflictDoUpdate({
-        target: categories.slug,
+        target: [categories.brandId, categories.slug],
         set: {
           name: category.name,
           imageUrl: category.imageUrl,
@@ -131,7 +171,7 @@ const seed = async (): Promise<void> => {
     const [categoryRow] = await db
       .select()
       .from(categories)
-      .where(eq(categories.slug, category.slug))
+      .where(and(eq(categories.brandId, houseBrand.id), eq(categories.slug, category.slug)))
       .limit(1);
     if (!categoryRow) throw new Error(`Failed to resolve category ${category.slug}`);
 
@@ -141,6 +181,7 @@ const seed = async (): Promise<void> => {
       await db
         .insert(products)
         .values({
+          brandId: houseBrand.id,
           categoryId: categoryRow.id,
           name: item.name,
           slug: item.slug,
@@ -150,7 +191,7 @@ const seed = async (): Promise<void> => {
           basePrice,
         })
         .onConflictDoUpdate({
-          target: products.slug,
+          target: [products.brandId, products.slug],
           set: {
             categoryId: categoryRow.id,
             name: item.name,

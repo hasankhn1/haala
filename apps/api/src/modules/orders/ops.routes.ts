@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import {
+  HAALA_STAFF_ROLES,
   OrderStatus,
-  UserRole,
   assignRiderStoreSchema,
   createStoreSchema,
   updateInventorySchema,
@@ -29,7 +29,10 @@ import { orderService } from './order.service';
  */
 const router: Router = Router();
 
-router.use(authenticate, authorize(UserRole.Admin));
+// Both Haala staff roles, because migration 0007 promoted the existing ops
+// account to `super_admin`. Without this widening every endpoint below would
+// 403 for the only person who uses them.
+router.use(authenticate, authorize(...HAALA_STAFF_ROLES));
 
 const listQuerySchema = z.object({
   status: z

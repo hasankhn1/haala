@@ -28,7 +28,14 @@ export const registerSchema = z
   .strict();
 export type RegisterInput = z.infer<typeof registerSchema>;
 
-/** Admin-only user creation — the route the ops dashboard will use. */
+/**
+ * Admin-only user creation — the route the ops dashboard will use.
+ *
+ * `brand_user` is deliberately absent: a brand login is meaningless without a
+ * `brandId`, and this route has nowhere to put one. Brand logins are created by
+ * `POST /admin/brands/:id/users`, where the brand is in the path. Attempting one
+ * here would violate `users_brand_role_ck` at the database.
+ */
 export const adminCreateUserSchema = z.object({
   name: z.string().min(2).max(80),
   phone: phoneSchema,
@@ -61,6 +68,8 @@ export interface AuthUser {
   phone: string;
   email: string | null;
   role: UserRole;
+  /** Set for `brand_user` and nobody else — see the `users_brand_role_ck`. */
+  brandId: string | null;
 }
 
 export interface AuthResult {

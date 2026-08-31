@@ -10,7 +10,11 @@ export const authenticate: RequestHandler = (req, _res, next) => {
   }
   try {
     const payload = verifyAccessToken(header.slice(7));
-    req.auth = { userId: payload.sub, role: payload.role };
+    req.auth = {
+      userId: payload.sub,
+      role: payload.role,
+      ...(payload.brandId ? { brandId: payload.brandId } : {}),
+    };
     next();
   } catch {
     throw AppError.unauthorized('Invalid or expired token');

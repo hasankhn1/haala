@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, integer, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { pk, timestamps } from './_helpers';
 import { products } from './catalog';
 
@@ -30,6 +30,18 @@ export const productVariants = pgTable(
     /** The sellable unit, used for the per-unit price line. */
     unit: text().notNull(),
     basePrice: integer().notNull(),
+    /**
+     * The axes this variant sits on, e.g. `{"size":"M","color":"Red"}`.
+     *
+     * `label` stays the single string a customer reads ("M / Red"); this is the
+     * structured form a size picker and a colour swatch are built from. Which
+     * axes exist is declared by the owning brand's business type, so clothing
+     * gets size and colour while a bakery gets weight, without either needing
+     * its own table.
+     */
+    options: jsonb().$type<Record<string, string>>().notNull().default({}),
+    /** The brand's own reference for this specific size/colour. */
+    sku: text(),
     sortOrder: integer().notNull().default(0),
     isActive: boolean().notNull().default(true),
     ...timestamps(),

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { UserRole, adminCreateUserSchema, enumValues } from '@haala/shared';
+import { HAALA_STAFF_ROLES, UserRole, adminCreateUserSchema, enumValues } from '@haala/shared';
 import { asyncHandler } from '../../common/http';
 import { authenticate } from '../../common/middleware/authenticate';
 import { authorize } from '../../common/middleware/authorize';
@@ -36,14 +36,14 @@ router.patch(
 router.post(
   '/',
   authenticate,
-  authorize(UserRole.Admin),
+  authorize(...HAALA_STAFF_ROLES),
   validate({ body: adminCreateUserSchema }),
   asyncHandler(userController.create),
 );
 router.get(
   '/',
   authenticate,
-  authorize(UserRole.Admin),
+  authorize(...HAALA_STAFF_ROLES),
   validate({ query: listUsersQuerySchema }),
   asyncHandler(userController.list),
 );

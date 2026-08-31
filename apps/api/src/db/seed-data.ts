@@ -62,7 +62,7 @@ export const SEED_USERS = [
     role: 'rider' as const,
     homeStoreCode: 'PEW-HYT',
   },
-  { name: 'Ops Admin', phone: '+923009990000', email: 'admin@haala.test', role: 'admin' as const },
+  { name: 'Ops Admin', phone: '+923009990000', email: 'admin@haala.test', role: 'super_admin' as const },
 ] as const;
 
 /**

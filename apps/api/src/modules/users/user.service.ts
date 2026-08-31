@@ -14,6 +14,7 @@ export const toAuthUser = (u: User): AuthUser => ({
   phone: u.phone,
   email: u.email,
   role: u.role,
+  brandId: u.brandId,
 });
 
 export interface UpdateProfileInput {

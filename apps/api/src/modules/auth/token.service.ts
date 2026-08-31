@@ -12,13 +12,29 @@ import { redis } from '../../redis/client';
  */
 const refreshKey = (userId: string, jti: string): string => `refresh:${userId}:${jti}`;
 
+/** The minimum of a user row needed to mint a token. */
+export interface TokenSubject {
+  id: string;
+  role: UserRole;
+  brandId: string | null;
+}
+
 export const tokenService = {
   /** Issue a fresh access + refresh token pair and register the refresh jti. */
-  async issue(userId: string, role: UserRole): Promise<AuthTokens> {
+  /**
+   * Takes the user row rather than loose fields on purpose: the tenant key has
+   * to travel with every token a brand user is issued, and passing the row
+   * makes leaving it out impossible rather than merely discouraged.
+   */
+  async issue(user: TokenSubject): Promise<AuthTokens> {
     const jti = randomUUID();
-    const accessToken = signAccessToken({ sub: userId, role });
-    const refreshToken = signRefreshToken({ sub: userId, jti });
-    await redis.set(refreshKey(userId, jti), '1', 'EX', config.jwt.refreshTtl);
+    const accessToken = signAccessToken({
+      sub: user.id,
+      role: user.role,
+      ...(user.brandId ? { brandId: user.brandId } : {}),
+    });
+    const refreshToken = signRefreshToken({ sub: user.id, jti });
+    await redis.set(refreshKey(user.id, jti), '1', 'EX', config.jwt.refreshTtl);
     return { accessToken, refreshToken, expiresIn: config.jwt.accessTtl };
   },
 

@@ -7,9 +7,30 @@
 export const UserRole = {
   Customer: 'customer',
   Rider: 'rider',
+  /** Haala operations staff: orders, riders, inventory. */
   Admin: 'admin',
+  /** Haala operations staff, plus brands and business types. */
+  SuperAdmin: 'super_admin',
+  /** Scoped to exactly one brand's catalogue. Never sees another's. */
+  BrandUser: 'brand_user',
 } as const;
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+
+/**
+ * The roles that run Haala itself, as opposed to a single brand. Use this
+ * rather than listing roles at each call site, so widening the staff set later
+ * is one edit instead of a search.
+ */
+export const HAALA_STAFF_ROLES = [UserRole.Admin, UserRole.SuperAdmin] as const;
+
+/** Only `active` brands may sell; everything else is invisible to customers. */
+export const BrandStatus = {
+  Pending: 'pending',
+  Active: 'active',
+  Suspended: 'suspended',
+  Rejected: 'rejected',
+} as const;
+export type BrandStatus = (typeof BrandStatus)[keyof typeof BrandStatus];
 
 /**
  * Order lifecycle. The customer-facing timeline maps onto this:

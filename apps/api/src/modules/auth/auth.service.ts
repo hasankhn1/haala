@@ -26,7 +26,7 @@ export const authService = {
       role: UserRole.Customer,
     });
 
-    const tokens = await tokenService.issue(user.id, user.role);
+    const tokens = await tokenService.issue(user);
     return { user: toAuthUser(user), tokens };
   },
 
@@ -37,7 +37,7 @@ export const authService = {
       user && user.isActive ? await bcrypt.compare(input.password, user.passwordHash) : false;
     if (!user || !ok) throw AppError.unauthorized(INVALID_CREDENTIALS);
 
-    const tokens = await tokenService.issue(user.id, user.role);
+    const tokens = await tokenService.issue(user);
     return { user: toAuthUser(user), tokens };
   },
 
@@ -46,7 +46,7 @@ export const authService = {
     const user = await userRepository.findById(userId);
     if (!user || !user.isActive) throw AppError.unauthorized('Account is no longer active');
 
-    const tokens = await tokenService.issue(user.id, user.role);
+    const tokens = await tokenService.issue(user);
     return { user: toAuthUser(user), tokens };
   },
 

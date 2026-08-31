@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { UserRole, createPromotionSchema, updatePromotionSchema, validatePromoSchema } from '@haala/shared';
+import { HAALA_STAFF_ROLES, createPromotionSchema, updatePromotionSchema, validatePromoSchema } from '@haala/shared';
 import { asyncHandler } from '../../common/http';
 import { authenticate } from '../../common/middleware/authenticate';
 import { authorize } from '../../common/middleware/authorize';
@@ -20,18 +20,18 @@ router.post(
 );
 
 // ── Admin ──
-router.get('/all', authenticate, authorize(UserRole.Admin), asyncHandler(promotionController.listAll));
+router.get('/all', authenticate, authorize(...HAALA_STAFF_ROLES), asyncHandler(promotionController.listAll));
 router.post(
   '/',
   authenticate,
-  authorize(UserRole.Admin),
+  authorize(...HAALA_STAFF_ROLES),
   validate({ body: createPromotionSchema }),
   asyncHandler(promotionController.create),
 );
 router.patch(
   '/:id',
   authenticate,
-  authorize(UserRole.Admin),
+  authorize(...HAALA_STAFF_ROLES),
   validate({ body: updatePromotionSchema }),
   asyncHandler(promotionController.update),
 );

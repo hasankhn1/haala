@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { HAALA_STAFF_ROLES } from '@haala/shared';
 import type { ReactNode } from 'react';
 import { API_BASE, readSession } from '@/lib/session';
 import { Nav } from '@/components/Nav';
@@ -22,7 +23,11 @@ export default async function DashLayout({ children }: { children: ReactNode }) 
   if (!res.ok) redirect('/login');
 
   const json = (await res.json()) as { data: { name: string; role: string; phone: string } };
-  if (json.data.role !== 'admin') redirect('/login');
+  // Both Haala staff roles. Migration 0007 promoted the existing ops account to
+  // `super_admin`, and `admin` stays valid for staff who don't manage brands.
+  if (!HAALA_STAFF_ROLES.includes(json.data.role as (typeof HAALA_STAFF_ROLES)[number])) {
+    redirect('/login');
+  }
 
   return (
     <div className="shell">

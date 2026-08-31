@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { UserRole, placeOrderSchema, updateOrderStatusSchema } from '@haala/shared';
+import { HAALA_STAFF_ROLES, placeOrderSchema, updateOrderStatusSchema } from '@haala/shared';
 import { asyncHandler } from '../../common/http';
 import { authenticate } from '../../common/middleware/authenticate';
 import { authorize } from '../../common/middleware/authorize';
@@ -18,7 +18,7 @@ router.post('/:id/cancel', asyncHandler(orderController.cancel));
 // Ops/admin: advance order status through the fulfilment lifecycle.
 router.patch(
   '/:id/status',
-  authorize(UserRole.Admin),
+  authorize(...HAALA_STAFF_ROLES),
   validate({ body: updateOrderStatusSchema }),
   asyncHandler(orderController.updateStatus),
 );
