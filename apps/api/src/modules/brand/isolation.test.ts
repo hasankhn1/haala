@@ -438,3 +438,127 @@ describe('every product keeps exactly one default variant', () => {
     assert.equal(r.status, 409, 'a product with no sizes cannot be bought');
   });
 });
+
+/**
+ * Suspension has to mean something to a shopper, not just to the dashboard.
+ *
+ * These drive the *customer* endpoints, because that is where the consequence
+ * lives: a shop Haala has switched off must vanish from listings, from search,
+ * from its own product page, and — most importantly — from the query the
+ * basket uses to accept an item.
+ */
+describe('a suspended shop disappears from the customer app', () => {
+  let storeId = '';
+  let variantId = '';
+
+  before(async () => {
+    const stores = expectOk(
+      await call('GET', '/api/v1/ops/stores', { token: superToken }),
+      'stores',
+    ) as unknown as Json[];
+    storeId = stores[0].id as string;
+
+    // Stock B's product so it is genuinely sellable before we take it away.
+    const product = expectOk(
+      await call('GET', `/api/v1/brand/products/${B.productId}`, { token: B.token }),
+      'B product',
+    );
+    variantId = product.variants[0].id as string;
+    expectOk(
+      await call('PATCH', `/api/v1/ops/stores/${storeId}/inventory/${variantId}`, {
+        token: superToken,
+        body: { quantityAvailable: 10 },
+      }),
+      'stock B',
+    );
+  });
+
+  const listing = async () =>
+    (
+      expectOk(
+        await call('GET', `/api/v1/catalog/products?storeId=${storeId}&pageSize=100`, {
+          token: superToken,
+        }),
+        'catalogue',
+      ) as unknown as { items: Json[] }
+    ).items;
+
+  it('shows a stocked product while the shop is active', async () => {
+    const ids = (await listing()).map((p) => p.id);
+    assert.ok(ids.includes(B.productId), 'an active, stocked product should be on sale');
+  });
+
+  it('names the shop selling it', async () => {
+    const item = (await listing()).find((p) => p.id === B.productId);
+    assert.ok(item?.brandName, 'a shopper must be able to tell whose product this is');
+  });
+
+  it('lets the basket take one while the shop is active', async () => {
+    // The positive case exists so the negative one below cannot pass for an
+    // unrelated reason — a wrong store id or a bad body would fail both.
+    const r = await call('POST', '/api/v1/cart/items', {
+      token: superToken,
+      body: { storeId, variantId, quantity: 1 },
+    });
+    expectOk(r, 'add an active shop’s item to the basket');
+    await call('DELETE', '/api/v1/cart', { token: superToken });
+  });
+
+  it('hides everything the moment the shop is suspended', async () => {
+    expectOk(
+      await call('PATCH', `/api/v1/admin/brands/${B.brandId}`, {
+        token: superToken,
+        body: { status: 'suspended' },
+      }),
+      'suspend B',
+    );
+
+    const ids = (await listing()).map((p) => p.id);
+    assert.ok(!ids.includes(B.productId), 'a suspended shop must not appear in the catalogue');
+
+    const detail = await call(
+      `GET`,
+      `/api/v1/catalog/products/${B.productId}?storeId=${storeId}`,
+      { token: superToken },
+    );
+    assert.equal(detail.status, 404, 'its product page must not open either');
+  });
+
+  it('refuses to let the basket take one', async () => {
+    // The gate the cart asks before holding a line. If this still answered, a
+    // shopper with the page already open could buy from a suspended shop.
+    // Exactly the same request that succeeded above, so only the suspension
+    // can account for the difference.
+    const r = await call('POST', '/api/v1/cart/items', {
+      token: superToken,
+      body: { storeId, variantId, quantity: 1 },
+    });
+    assert.equal(r.status, 404, `expected the variant to be unfindable, got ${r.status}`);
+  });
+
+  it('does not offer a category tile that opens onto nothing', async () => {
+    // A's category holds one product that Haala has never stocked, so nothing
+    // in it is buyable. Offering the tile anyway sends a shopper to an empty
+    // list — the category filter has to mean the same thing as the listing.
+    const cats = expectOk(
+      await call('GET', '/api/v1/catalog/categories', { token: superToken }),
+      'customer categories',
+    ) as unknown as Json[];
+    assert.ok(
+      !cats.some((c) => c.id === A.categoryId),
+      'a category with nothing stocked must not appear',
+    );
+  });
+
+  it('comes back when the suspension is lifted', async () => {
+    expectOk(
+      await call('PATCH', `/api/v1/admin/brands/${B.brandId}`, {
+        token: superToken,
+        body: { status: 'active' },
+      }),
+      'reactivate B',
+    );
+    const ids = (await listing()).map((p) => p.id);
+    assert.ok(ids.includes(B.productId), 'reactivating must restore the shop');
+  });
+});

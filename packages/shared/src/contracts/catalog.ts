@@ -31,6 +31,13 @@ export interface ProductVariantView {
 }
 
 export interface ProductView {
+  /**
+   * Who is selling it. Additive, and the apps may ignore it — but with more
+   * than one shop on the platform a customer needs to be told whose cake this
+   * is, so the data is here ready for the screen that shows it.
+   */
+  brandName: string;
+  brandSlug: string;
   id: string;
   name: string;
   slug: string;

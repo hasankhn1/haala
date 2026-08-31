@@ -13,6 +13,8 @@ const toCategoryView = (c: Category): CategoryView => ({
 
 const toProductView = (p: ProductWithStock): ProductView => ({
   id: p.id,
+  brandName: p.brandName,
+  brandSlug: p.brandSlug,
   name: p.name,
   slug: p.slug,
   unit: p.unit,
