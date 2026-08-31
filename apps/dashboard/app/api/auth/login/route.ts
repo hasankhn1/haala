@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { HAALA_STAFF_ROLES, type AuthResult, type UserRole } from '@haala/shared';
+import { HAALA_STAFF_ROLES, UserRole, type AuthResult } from '@haala/shared';
 import { API_BASE, setSession } from '@/lib/session';
 
 /**
@@ -9,9 +9,9 @@ import { API_BASE, setSession } from '@/lib/session';
  * reject them on every ops route anyway, but failing here gives an honest
  * message instead of a working login followed by a wall of 403s.
  *
- * Brand users are refused for now: they authenticate fine, but there is no
- * brand dashboard to land them on yet, and a working login into an empty shell
- * is worse than a clear no.
+ * Two audiences now share this door: Haala staff, who land on the ops shell,
+ * and brand users, who land on their own. Customers and riders are turned away
+ * here rather than after a wall of 403s.
  */
 export async function POST(req: NextRequest) {
   const body = await req.text();
@@ -35,9 +35,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!HAALA_STAFF_ROLES.includes(json.data.user.role as (typeof HAALA_STAFF_ROLES)[number])) {
+  const role = json.data.user.role;
+  const isStaff = HAALA_STAFF_ROLES.includes(role as (typeof HAALA_STAFF_ROLES)[number]);
+  if (!isStaff && role !== UserRole.BrandUser) {
     return NextResponse.json(
-      { ok: false, error: { message: 'This account does not have operations access' } },
+      { ok: false, error: { message: 'This account cannot sign in here' } },
       { status: 403 },
     );
   }

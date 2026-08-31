@@ -316,18 +316,34 @@ export const brandCatalogService = {
   },
 
   // ── Variants ──────────────────────────────────────────────────────────────
+  /**
+   * `product_variants_default_uq` allows exactly one variant per product at
+   * `sort_order = 0`, because the customer catalogue joins on that row to
+   * resolve the price shown on a card. So a new size goes to the end unless the
+   * caller insists otherwise — defaulting to 0 would collide with the product's
+   * existing default and surface as a 500.
+   */
   async addVariant(
     brandId: string,
     productId: string,
     input: CreateVariantInput,
   ): Promise<BrandProductView> {
+    const existing = await repo.listVariants(brandId, productId);
+    if (input.sortOrder === 0 && existing.some((v) => v.sortOrder === 0)) {
+      throw AppError.conflict(
+        'This product already has a default size — reorder the existing one first',
+      );
+    }
+    const nextOrder =
+      input.sortOrder ?? existing.reduce((max, v) => Math.max(max, v.sortOrder), 0) + 1;
+
     const created = await repo.createVariant(brandId, productId, {
       label: input.label,
       unit: input.unit,
       basePrice: input.basePrice,
       ...(input.options ? { options: input.options } : {}),
       sku: input.sku ?? null,
-      ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
+      sortOrder: nextOrder,
       ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
     });
     if (!created) throw AppError.notFound('Product not found');
@@ -374,7 +390,17 @@ export const brandCatalogService = {
       );
     }
 
-    const removed = await repo.deleteVariant(brandId, productId, variantId);
+    // Removing the default would leave the product with nothing at
+    // `sort_order = 0`, and the catalogue card resolves its price from exactly
+    // that row — the product would still exist and stop being shoppable. So the
+    // next size is promoted in the same transaction.
+    const removing = variants.find((v) => v.id === variantId);
+    const promote =
+      removing?.sortOrder === 0
+        ? variants.filter((v) => v.id !== variantId).sort((a, b) => a.sortOrder - b.sortOrder)[0]
+        : undefined;
+
+    const removed = await repo.deleteVariantAndPromote(brandId, productId, variantId, promote?.id);
     if (!removed) throw AppError.notFound('Variant not found');
     return this.getProduct(brandId, productId);
   },

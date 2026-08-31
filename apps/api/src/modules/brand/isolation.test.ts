@@ -19,6 +19,11 @@ import { closeRedis } from '../../redis/client';
  * 404 — never 403, which would confirm the row exists and let a competitor's
  * catalogue be enumerated by id.
  *
+ * The last suite is not about isolation. It pins the default-variant invariant,
+ * which lives in the same routes and which two bugs walked straight into during
+ * Phase 5 — it belongs with the tests that need a real database rather than in
+ * a file of its own with a duplicate fixture.
+ *
  * Requires a real database, because the isolation being tested lives partly in
  * SQL. Point `DATABASE_URL` at a migrated throwaway and run
  * `pnpm --filter @haala/api test`. It creates its own fixtures under a unique
@@ -354,5 +359,82 @@ describe('the brand owns its catalogue, not its stock', () => {
       body: { attributes: { material: 'cotton' } },
     });
     assert.equal(wrong.status, 400, 'a clothing attribute on a bakery product');
+  });
+});
+
+/**
+ * `product_variants_default_uq` permits exactly one variant per product at
+ * `sort_order = 0`, and the customer catalogue joins on that row to resolve the
+ * price shown on a card. A product without one still exists and quietly stops
+ * being shoppable, so both directions are pinned here.
+ */
+describe('every product keeps exactly one default variant', () => {
+  it('adds new sizes after the default rather than colliding with it', async () => {
+    const added = expectOk(
+      await call('POST', `/api/v1/brand/products/${A.productId}/variants`, {
+        token: A.token,
+        body: { label: '500 g', unit: '500 g', basePrice: 140_000 },
+      }),
+      'add a second size',
+    );
+    const orders = (added.variants as Json[]).map((v) => v.sortOrder).sort();
+    assert.deepEqual(orders, [0, 1], 'a second size must not also claim sort_order 0');
+  });
+
+  it('refuses a second explicit default', async () => {
+    const r = await call('POST', `/api/v1/brand/products/${A.productId}/variants`, {
+      token: A.token,
+      body: { label: '2 kg', unit: '2 kg', basePrice: 480_000, sortOrder: 0 },
+    });
+    assert.equal(r.status, 409, 'should be a stated conflict, not a constraint 500');
+  });
+
+  it('promotes the next size when the default is removed', async () => {
+    const before = expectOk(
+      await call('GET', `/api/v1/brand/products/${A.productId}`, { token: A.token }),
+      'read sizes',
+    );
+    const def = (before.variants as Json[]).find((v) => v.sortOrder === 0);
+    assert.ok(def, 'fixture should have a default');
+
+    const after = expectOk(
+      await call('DELETE', `/api/v1/brand/products/${A.productId}/variants/${def.id}`, {
+        token: A.token,
+      }),
+      'remove the default',
+    );
+    const remaining = after.variants as Json[];
+    assert.ok(remaining.length > 0);
+    assert.equal(
+      remaining.filter((v) => v.sortOrder === 0).length,
+      1,
+      'exactly one size must be the default after a removal',
+    );
+  });
+
+  it('refuses to remove the only size', async () => {
+    let product = expectOk(
+      await call('GET', `/api/v1/brand/products/${A.productId}`, { token: A.token }),
+      'read sizes',
+    );
+    // Reduce to one, then try to take the last.
+    for (const v of (product.variants as Json[]).slice(1)) {
+      expectOk(
+        await call('DELETE', `/api/v1/brand/products/${A.productId}/variants/${v.id}`, {
+          token: A.token,
+        }),
+        'trim sizes',
+      );
+    }
+    product = expectOk(
+      await call('GET', `/api/v1/brand/products/${A.productId}`, { token: A.token }),
+      'read sizes again',
+    );
+    assert.equal((product.variants as Json[]).length, 1);
+    const last = (product.variants as Json[])[0];
+    const r = await call('DELETE', `/api/v1/brand/products/${A.productId}/variants/${last.id}`, {
+      token: A.token,
+    });
+    assert.equal(r.status, 409, 'a product with no sizes cannot be bought');
   });
 });

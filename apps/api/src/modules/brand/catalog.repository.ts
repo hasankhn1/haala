@@ -275,18 +275,38 @@ export const brandCatalogRepository = {
     return row ?? null;
   },
 
-  async deleteVariant(
+  /**
+   * Remove a variant, optionally promoting another to `sort_order = 0`.
+   *
+   * Both happen in one transaction because `product_variants_default_uq` allows
+   * only one row at 0: promoting first would collide, and deleting first would
+   * briefly leave the product with no default, which is the row the customer
+   * catalogue reads a card's price from.
+   */
+  async deleteVariantAndPromote(
     brandId: string,
     productId: string,
     variantId: string,
+    promoteId?: string,
   ): Promise<{ id: string } | null> {
     const owner = await this.findProduct(brandId, productId);
     if (!owner) return null;
-    const [row] = await db
-      .delete(productVariants)
-      .where(and(eq(productVariants.productId, productId), eq(productVariants.id, variantId)))
-      .returning({ id: productVariants.id });
-    return row ?? null;
+
+    return db.transaction(async (tx) => {
+      const [row] = await tx
+        .delete(productVariants)
+        .where(and(eq(productVariants.productId, productId), eq(productVariants.id, variantId)))
+        .returning({ id: productVariants.id });
+      if (!row) return null;
+
+      if (promoteId) {
+        await tx
+          .update(productVariants)
+          .set({ sortOrder: 0, updatedAt: new Date() })
+          .where(and(eq(productVariants.productId, productId), eq(productVariants.id, promoteId)));
+      }
+      return row;
+    });
   },
 
   /** Stock rows exist per variant; used to explain why a delete was refused. */

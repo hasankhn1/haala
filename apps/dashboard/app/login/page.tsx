@@ -1,5 +1,7 @@
 'use client';
 
+import { UserRole } from '@haala/shared';
+
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 
@@ -22,12 +24,17 @@ export default function LoginPage() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ phone: `${COUNTRY_CODE}${national}`, password }),
       });
-      const json = (await res.json()) as { ok: boolean; error?: { message: string } };
+      const json = (await res.json()) as {
+        ok: boolean;
+        data?: { role: string };
+        error?: { message: string };
+      };
       if (!json.ok) {
         setError(json.error?.message ?? 'Could not sign in');
         return;
       }
-      router.replace('/orders');
+      // Staff and vendors share this form and land in different places.
+      router.replace(json.data?.role === UserRole.BrandUser ? '/brand' : '/orders');
       router.refresh();
     } catch {
       setError('Could not reach the server');
