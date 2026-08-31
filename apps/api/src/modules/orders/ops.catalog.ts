@@ -4,7 +4,7 @@ import type {
   OpsCatalogRow,
   OpsStoreView,
   UpdateInventoryInput,
-  UpdateProductInput,
+  OpsUpdateProductInput,
   UpdateStoreInput,
 } from '@haala/shared';
 import { AppError } from '../../common/errors';
@@ -109,7 +109,7 @@ export const opsCatalogService = {
     });
   },
 
-  async updateProduct(productId: string, input: UpdateProductInput): Promise<OpsCatalogRow | null> {
+  async updateProduct(productId: string, input: OpsUpdateProductInput): Promise<OpsCatalogRow | null> {
     const [updated] = await db
       .update(products)
       .set({ ...input, updatedAt: new Date() })

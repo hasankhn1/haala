@@ -8,7 +8,13 @@ import { z } from 'zod';
  * converts at the input edge so an operator can type rupees.
  */
 
-export const updateProductSchema = z
+/**
+ * What an *operator* may change on any brand's product — prefixed because the
+ * brand's own, much wider, edit surface lives in `contracts/brand-catalog.ts`.
+ * This one exists for the cases ops has to intervene: a wrong price, a bad
+ * photo, taking something off sale.
+ */
+export const opsUpdateProductSchema = z
   .object({
     name: z.string().min(2).max(120).optional(),
     description: z.string().max(2000).nullable().optional(),
@@ -19,7 +25,7 @@ export const updateProductSchema = z
     isActive: z.boolean().optional(),
   })
   .strict();
-export type UpdateProductInput = z.infer<typeof updateProductSchema>;
+export type OpsUpdateProductInput = z.infer<typeof opsUpdateProductSchema>;
 
 export const updateInventorySchema = z
   .object({

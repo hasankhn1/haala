@@ -8,6 +8,7 @@ export * from './contracts/addresses';
 export * from './contracts/stores';
 export * from './contracts/catalog';
 export * from './contracts/brands';
+export * from './contracts/brand-catalog';
 export * from './contracts/business-types';
 export * from './contracts/cart';
 export * from './contracts/orders';

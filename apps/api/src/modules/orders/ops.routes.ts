@@ -7,7 +7,7 @@ import {
   createStoreSchema,
   updateInventorySchema,
   updateOrderStatusSchema,
-  updateProductSchema,
+  opsUpdateProductSchema,
   updateStoreSchema,
 } from '@haala/shared';
 import { asyncHandler } from '../../common/http';
@@ -151,7 +151,7 @@ router.get(
 
 router.patch(
   '/products/:id',
-  validate({ body: updateProductSchema }),
+  validate({ body: opsUpdateProductSchema }),
   asyncHandler(async (req, res) => {
     const { id } = req.params as { id: string };
     await opsCatalogService.updateProduct(id, req.body);
