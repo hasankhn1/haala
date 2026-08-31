@@ -64,6 +64,13 @@
       "when": 1788192876267,
       "tag": "0008_brands_contract",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788199656091,
+      "tag": "0009_product_images",
+      "breakpoints": true
     }
   ]
 }

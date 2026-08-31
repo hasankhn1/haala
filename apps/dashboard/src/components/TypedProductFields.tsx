@@ -49,11 +49,37 @@ export function TypedProductFields({
     onChange(merged);
   };
 
+  // `half` fields pair up. Weight and serves belong side by side; ingredients
+  // does not, and forcing everything into one column makes a nine-field form
+  // read as longer than it is.
+  const rows: AttributeField[][] = [];
+  for (const f of spec.fields) {
+    const last = rows[rows.length - 1];
+    if (f.half && last?.length === 1 && last[0]?.half) last.push(f);
+    else rows.push([f]);
+  }
+
   return (
     <div style={{ display: 'grid', gap: 14 }}>
       <h2>{spec.name} details</h2>
-      {spec.fields.map((f) => (
-        <AttributeInput key={f.key} field={f} value={value[f.key]} onChange={(v) => set(f.key, v)} />
+      {rows.map((row) => (
+        <div
+          key={row.map((f) => f.key).join('-')}
+          style={
+            row.length === 2
+              ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }
+              : undefined
+          }
+        >
+          {row.map((f) => (
+            <AttributeInput
+              key={f.key}
+              field={f}
+              value={value[f.key]}
+              onChange={(v) => set(f.key, v)}
+            />
+          ))}
+        </div>
       ))}
     </div>
   );
@@ -91,7 +117,20 @@ function AttributeInput({
         {field.suffix ? <span className="muted"> ({field.suffix})</span> : null}
       </label>
 
-      {field.kind === 'textarea' ? (
+      {field.kind === 'select' ? (
+        <select
+          id={id}
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => onChange(e.target.value || undefined)}
+        >
+          <option value="">Not stated</option>
+          {(field.options ?? []).map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+      ) : field.kind === 'textarea' ? (
         <textarea
           id={id}
           rows={3}
@@ -116,7 +155,7 @@ function AttributeInput({
         <input
           id={id}
           value={Array.isArray(value) ? (value as string[]).join(', ') : ''}
-          placeholder="Flour, butter, sugar"
+          placeholder={field.placeholder ?? 'Flour, butter, sugar'}
           onChange={(e) =>
             onChange(
               e.target.value

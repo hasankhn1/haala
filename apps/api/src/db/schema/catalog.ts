@@ -44,7 +44,21 @@ export const products = pgTable(
     name: text().notNull(),
     slug: text().notNull(),
     description: text(),
+    /**
+     * The cover photo — the one a card shows.
+     *
+     * Denormalised from `images[0]` and kept in step by the service on every
+     * write. It exists because cart lines, order items and the customer
+     * catalogue all read a single image today, and none of them should have to
+     * learn about a gallery to keep working.
+     */
     imageUrl: text(),
+    /**
+     * Every photo, in the order the vendor arranged them. A clothing brand
+     * needs the front, the back and the fabric close-up; one picture of a suit
+     * sells nothing.
+     */
+    images: jsonb().$type<string[]>().notNull().default([]),
     /** Display unit, e.g. "1 L", "500 g", "6 pcs". */
     unit: text().notNull(),
     /** Base price in paisa (integer minor units). What the customer is charged. */

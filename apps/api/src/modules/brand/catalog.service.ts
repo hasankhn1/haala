@@ -64,6 +64,7 @@ const toProductView = (
   slug: r.product.slug,
   description: r.product.description,
   imageUrl: r.product.imageUrl,
+  images: r.product.images,
   unit: r.product.unit,
   basePrice: r.product.basePrice,
   compareAtPrice: r.product.compareAtPrice,
@@ -89,6 +90,15 @@ async function freeSlug(
   }
   throw AppError.conflict(`Could not derive a free slug from "${base}"`);
 }
+
+/**
+ * The cover is always the first photo.
+ *
+ * Derived here rather than accepted from the client, because two fields that
+ * can disagree eventually will — and the one that disagrees is the one every
+ * card, cart line and order item reads.
+ */
+const coverOf = (images: string[] | undefined): string | null => images?.[0] ?? null;
 
 /** Validate `attributes` against whatever the owning brand's type declares. */
 async function checkAttributes(
@@ -238,7 +248,8 @@ export const brandCatalogService = {
       name: input.name,
       slug,
       description: input.description ?? null,
-      imageUrl: input.imageUrl ?? null,
+      images: input.images ?? [],
+      imageUrl: coverOf(input.images),
       unit: input.unit,
       basePrice: input.basePrice,
       compareAtPrice: input.compareAtPrice ?? null,
@@ -286,7 +297,10 @@ export const brandCatalogService = {
       ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.description !== undefined ? { description: input.description } : {}),
-      ...(input.imageUrl !== undefined ? { imageUrl: input.imageUrl } : {}),
+      // Cover and gallery move together or not at all.
+      ...(input.images !== undefined
+        ? { images: input.images, imageUrl: coverOf(input.images) }
+        : {}),
       ...(input.unit !== undefined ? { unit: input.unit } : {}),
       ...(input.basePrice !== undefined ? { basePrice: input.basePrice } : {}),
       ...(input.compareAtPrice !== undefined ? { compareAtPrice: input.compareAtPrice } : {}),

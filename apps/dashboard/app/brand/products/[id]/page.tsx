@@ -10,8 +10,8 @@ import type {
   BrandProfileView,
   BrandVariantView,
 } from '@haala/shared';
-import { businessTypeSpecs, isBusinessTypeKey } from '@haala/shared';
-import { ImageUploader } from '@/components/ImageUploader';
+import { businessTypeSpecs, coreLabelsFor, isBusinessTypeKey } from '@haala/shared';
+import { ImageGallery } from '@/components/ImageGallery';
 import { type Attributes, TypedProductFields } from '@/components/TypedProductFields';
 import { ApiError, api, money, toPaisa } from '@/lib/api';
 
@@ -53,7 +53,6 @@ export default function BrandProductPage() {
     categoryId: '',
     name: '',
     description: '',
-    imageUrl: '',
     unit: '',
     price: '',
     compareAt: '',
@@ -61,6 +60,7 @@ export default function BrandProductPage() {
     isActive: true,
   });
   const [attributes, setAttributes] = useState<Attributes>({});
+  const [images, setImages] = useState<string[]>([]);
 
   // Seed the form once the product arrives, and again if it is refetched after
   // a save, so the inputs never drift from what the server actually holds.
@@ -71,7 +71,6 @@ export default function BrandProductPage() {
       categoryId: p.categoryId,
       name: p.name,
       description: p.description ?? '',
-      imageUrl: p.imageUrl ?? '',
       unit: p.unit,
       price: rupees(p.basePrice),
       compareAt: rupees(p.compareAtPrice),
@@ -79,6 +78,7 @@ export default function BrandProductPage() {
       isActive: p.isActive,
     });
     setAttributes(p.attributes ?? {});
+    setImages(p.images ?? []);
   }, [product.data]);
 
   const invalidate = () => {
@@ -97,7 +97,7 @@ export default function BrandProductPage() {
         categoryId: form.categoryId,
         name: form.name.trim(),
         description: form.description.trim() || null,
-        imageUrl: form.imageUrl.trim() || null,
+        images,
         unit: form.unit.trim(),
         basePrice: toPaisa(form.price),
         compareAtPrice: form.compareAt.trim() ? toPaisa(form.compareAt) : null,
@@ -127,8 +127,10 @@ export default function BrandProductPage() {
   if (!p) return <div className="error-banner">Product not found.</div>;
 
   const typeKey = profile.data?.businessType.key ?? '';
-  const variantNoun =
-    isBusinessTypeKey(typeKey) ? businessTypeSpecs[typeKey].variantNoun : 'Sizes';
+  const variantNoun = isBusinessTypeKey(typeKey) ? businessTypeSpecs[typeKey].variantNoun : 'Sizes';
+  // A boutique calls it a suit title; a baker calls it what they baked. Same
+  // column, different word on the form.
+  const words = coreLabelsFor(typeKey);
 
   return (
     <>
@@ -173,7 +175,7 @@ export default function BrandProductPage() {
             <h2>What it is</h2>
 
             <div className="field">
-              <label htmlFor="f-name">Name</label>
+              <label htmlFor="f-name">{words.name}</label>
               <input
                 id="f-name"
                 value={form.name}
@@ -197,7 +199,7 @@ export default function BrandProductPage() {
             </div>
 
             <div className="field">
-              <label htmlFor="f-desc">Description</label>
+              <label htmlFor="f-desc">{words.description}</label>
               <textarea
                 id="f-desc"
                 rows={4}
@@ -207,13 +209,7 @@ export default function BrandProductPage() {
               />
             </div>
 
-            <ImageUploader
-              kind="products"
-              label="Photo"
-              value={form.imageUrl}
-              onChange={(url) => setForm({ ...form, imageUrl: url })}
-              hint="The picture customers see first. Square photos look best."
-            />
+            <ImageGallery label={words.images} value={images} onChange={setImages} />
           </div>
 
           <div className="card">
@@ -228,7 +224,7 @@ export default function BrandProductPage() {
             <h2>Price</h2>
 
             <div className="field">
-              <label htmlFor="f-unit">Sold as</label>
+              <label htmlFor="f-unit">{words.unit}</label>
               <input
                 id="f-unit"
                 value={form.unit}
@@ -237,7 +233,7 @@ export default function BrandProductPage() {
             </div>
 
             <div className="field">
-              <label htmlFor="f-price">Price (Rs)</label>
+              <label htmlFor="f-price">Now price (Rs)</label>
               <input
                 id="f-price"
                 inputMode="decimal"
@@ -247,7 +243,7 @@ export default function BrandProductPage() {
             </div>
 
             <div className="field">
-              <label htmlFor="f-was">Original price (Rs)</label>
+              <label htmlFor="f-was">Was price (Rs)</label>
               <input
                 id="f-was"
                 inputMode="decimal"
@@ -257,8 +253,8 @@ export default function BrandProductPage() {
                 }
               />
               <span className="muted" style={{ fontSize: 12 }}>
-                Optional, and must be higher than the price. Shown struck through, so customers see
-                the saving.
+                Optional, and must be higher than the now price. Shown struck through, so
+                customers see the saving.
               </span>
             </div>
 

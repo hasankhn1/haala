@@ -60,7 +60,11 @@ export const createProductSchema = z
     name: z.string().trim().min(2).max(120),
     slug: slug.optional(),
     description: z.string().trim().max(2000).nullable().optional(),
-    imageUrl: z.string().url().max(600).nullable().optional(),
+    /**
+     * The gallery, in the vendor's order. The first is the cover; `imageUrl` is
+     * derived from it server-side rather than sent, so the two cannot disagree.
+     */
+    images: z.array(z.string().url().max(600)).max(12).optional(),
     unit: z.string().trim().min(1).max(40),
     /** What the customer pays, in paisa. */
     basePrice: price,
@@ -126,7 +130,9 @@ export interface BrandProductView {
   name: string;
   slug: string;
   description: string | null;
+  /** Cover, i.e. `images[0]`. Kept for anything that shows one picture. */
   imageUrl: string | null;
+  images: string[];
   unit: string;
   basePrice: number;
   compareAtPrice: number | null;

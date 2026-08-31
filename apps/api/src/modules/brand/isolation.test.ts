@@ -562,3 +562,92 @@ describe('a suspended shop disappears from the customer app', () => {
     assert.ok(ids.includes(B.productId), 'reactivating must restore the shop');
   });
 });
+
+/**
+ * The cover photo is derived, never sent.
+ *
+ * `products.image_url` is what every card, cart line and order item reads, and
+ * `products.images` is what the vendor arranges. Two fields that can disagree
+ * eventually will, so the server owns the relationship between them.
+ */
+describe('a product’s cover follows its gallery', () => {
+  const a = 'https://example.com/a.jpg';
+  const b = 'https://example.com/b.jpg';
+  const c = 'https://example.com/c.jpg';
+
+  it('takes the cover from the first photo', async () => {
+    const p = expectOk(
+      await call('PATCH', `/api/v1/brand/products/${A.productId}`, {
+        token: A.token,
+        body: { images: [a, b, c] },
+      }),
+      'set a gallery',
+    );
+    assert.deepEqual(p.images, [a, b, c]);
+    assert.equal(p.imageUrl, a);
+  });
+
+  it('moves the cover when the photos are reordered', async () => {
+    const p = expectOk(
+      await call('PATCH', `/api/v1/brand/products/${A.productId}`, {
+        token: A.token,
+        body: { images: [c, a, b] },
+      }),
+      'reorder',
+    );
+    assert.equal(p.imageUrl, c, 'reordering is how the cover is chosen');
+  });
+
+  it('clears the cover when the last photo goes', async () => {
+    const p = expectOk(
+      await call('PATCH', `/api/v1/brand/products/${A.productId}`, {
+        token: A.token,
+        body: { images: [] },
+      }),
+      'empty the gallery',
+    );
+    assert.equal(p.imageUrl, null, 'a product with no photos must not keep a stale cover');
+  });
+
+  it('refuses a cover sent directly, so the two cannot drift', async () => {
+    const r = await call('PATCH', `/api/v1/brand/products/${A.productId}`, {
+      token: A.token,
+      body: { imageUrl: 'https://example.com/sneaky.jpg' },
+    });
+    assert.equal(r.status, 422, 'imageUrl is derived, not an input');
+  });
+});
+
+/**
+ * Closed lists stay closed. A vendor typing "unstiched" once makes that value
+ * unfilterable forever, which is the whole reason these are selects rather
+ * than free text.
+ */
+describe('business-type fields are validated per trade', () => {
+  it('accepts a value from the list', async () => {
+    // A is a bakery, so its own storage list is what applies.
+    expectOk(
+      await call('PATCH', `/api/v1/brand/products/${A.productId}`, {
+        token: A.token,
+        body: { attributes: { storage: 'Keep refrigerated', allergens: ['Nuts', 'Dairy'] } },
+      }),
+      'a bakery value',
+    );
+  });
+
+  it('refuses a misspelling of one', async () => {
+    const r = await call('PATCH', `/api/v1/brand/products/${A.productId}`, {
+      token: A.token,
+      body: { attributes: { storage: 'keep refridgerated' } },
+    });
+    assert.equal(r.status, 400);
+  });
+
+  it('refuses another trade’s field entirely', async () => {
+    const r = await call('PATCH', `/api/v1/brand/products/${A.productId}`, {
+      token: A.token,
+      body: { attributes: { suitType: 'Unstitched' } },
+    });
+    assert.equal(r.status, 400, 'a bakery has no suit type');
+  });
+});

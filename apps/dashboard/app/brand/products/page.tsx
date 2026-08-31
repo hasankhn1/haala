@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
-import type { BrandCategoryView, BrandProductView } from '@haala/shared';
+import type { BrandCategoryView, BrandProductView, BrandProfileView } from '@haala/shared';
+import { coreLabelsFor } from '@haala/shared';
 import { ApiError, api, money, toPaisa } from '@/lib/api';
 
 /**
@@ -23,6 +24,10 @@ export default function BrandProductsPage() {
   const [filter, setFilter] = useState<string>('');
   const [form, setForm] = useState({ categoryId: '', name: '', unit: '', price: '' });
 
+  const profile = useQuery({
+    queryKey: ['brand', 'profile'],
+    queryFn: () => api.get<BrandProfileView>('/brand/profile'),
+  });
   const categories = useQuery({
     queryKey: ['brand', 'categories'],
     queryFn: () => api.get<BrandCategoryView[]>('/brand/categories'),
@@ -58,6 +63,7 @@ export default function BrandProductsPage() {
   });
 
   const cats = categories.data ?? [];
+  const words = coreLabelsFor(profile.data?.businessType.key ?? '');
   const rows = (products.data ?? []).filter((p) => !filter || p.categoryId === filter);
   const priceOk = form.price.trim() !== '' && Number.isFinite(Number(form.price)) && Number(form.price) > 0;
   const canSubmit =
@@ -115,17 +121,17 @@ export default function BrandProductsPage() {
             </div>
 
             <div className="field">
-              <label htmlFor="p-name">Name</label>
+              <label htmlFor="p-name">{words.name}</label>
               <input
                 id="p-name"
                 value={form.name}
-                placeholder="Chocolate fudge cake"
+                placeholder={words.name === 'Suit title' ? 'Embroidered lawn 3-piece' : 'Chocolate fudge cake'}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </div>
 
             <div className="field">
-              <label htmlFor="p-unit">Sold as</label>
+              <label htmlFor="p-unit">{words.unit}</label>
               <input
                 id="p-unit"
                 value={form.unit}
@@ -138,7 +144,7 @@ export default function BrandProductsPage() {
             </div>
 
             <div className="field">
-              <label htmlFor="p-price">Price (Rs)</label>
+              <label htmlFor="p-price">Now price (Rs)</label>
               <input
                 id="p-price"
                 inputMode="decimal"
