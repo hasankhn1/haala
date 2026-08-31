@@ -8,6 +8,8 @@ import { inventoryRoutes } from './modules/inventory/inventory.routes';
 import { cartRoutes } from './modules/cart/cart.routes';
 import { ordersRoutes } from './modules/orders/orders.routes';
 import { brandCatalogRoutes } from './modules/brand/brand-catalog.routes';
+import { mediaRoutes } from './modules/uploads/media.routes';
+import { uploadRoutes } from './modules/uploads/upload.routes';
 import { adminRoutes } from './modules/brands/admin.routes';
 import { opsRoutes } from './modules/orders/ops.routes';
 import { paymentRoutes } from './modules/payments/payment.routes';
@@ -32,6 +34,9 @@ apiRouter.use('/orders', ordersRoutes);
 apiRouter.use('/ops', opsRoutes);
 apiRouter.use('/admin', adminRoutes);
 apiRouter.use('/brand', brandCatalogRoutes);
+apiRouter.use('/uploads', uploadRoutes);
+// Public: shoppers have no session when a catalogue card paints.
+apiRouter.use('/media', mediaRoutes);
 apiRouter.use('/payments', paymentRoutes);
 apiRouter.use('/riders', ridersRoutes);
 apiRouter.use('/delivery', deliveryRoutes);

@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useEffect, useState } from 'react';
 import type { BrandProfileView } from '@haala/shared';
+import { ImageUploader } from '@/components/ImageUploader';
 import { ApiError, api } from '@/lib/api';
 
 /**
@@ -106,28 +107,21 @@ export default function BrandProfilePage() {
             />
           </div>
 
-          <div className="field">
-            <label htmlFor="s-logo">Logo link</label>
-            <input
-              id="s-logo"
-              value={form.logoUrl}
-              placeholder="https://…"
-              onChange={(e) => setForm({ ...form, logoUrl: e.target.value })}
-            />
-          </div>
+          <ImageUploader
+            kind="brand"
+            label="Logo"
+            value={form.logoUrl}
+            onChange={(url) => setForm({ ...form, logoUrl: url })}
+            hint="A square mark works best — it sits beside your shop name."
+          />
 
-          <div className="field">
-            <label htmlFor="s-cover">Cover photo link</label>
-            <input
-              id="s-cover"
-              value={form.coverUrl}
-              placeholder="https://…"
-              onChange={(e) => setForm({ ...form, coverUrl: e.target.value })}
-            />
-            <span className="muted" style={{ fontSize: 12 }}>
-              Paste links for now — uploading straight from your phone is coming.
-            </span>
-          </div>
+          <ImageUploader
+            kind="brand"
+            label="Cover photo"
+            value={form.coverUrl}
+            onChange={(url) => setForm({ ...form, coverUrl: url })}
+            hint="A wide photo of your work, shown across the top of your shop."
+          />
 
           <div className="field">
             <label htmlFor="s-phone">Contact phone</label>

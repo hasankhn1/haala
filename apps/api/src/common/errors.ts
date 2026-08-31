@@ -54,4 +54,8 @@ export class AppError extends Error {
   static notImplemented(message = 'Not implemented yet', details?: ErrorDetail[]) {
     return new AppError(501, 'NOT_IMPLEMENTED', message, details);
   }
+  /** A feature this deployment has not been configured for, e.g. image uploads. */
+  static serviceUnavailable(message = 'This is not available right now') {
+    return new AppError(503, 'SERVICE_UNAVAILABLE', message);
+  }
 }

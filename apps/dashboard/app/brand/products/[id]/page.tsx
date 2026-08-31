@@ -11,6 +11,7 @@ import type {
   BrandVariantView,
 } from '@haala/shared';
 import { businessTypeSpecs, isBusinessTypeKey } from '@haala/shared';
+import { ImageUploader } from '@/components/ImageUploader';
 import { type Attributes, TypedProductFields } from '@/components/TypedProductFields';
 import { ApiError, api, money, toPaisa } from '@/lib/api';
 
@@ -206,18 +207,13 @@ export default function BrandProductPage() {
               />
             </div>
 
-            <div className="field">
-              <label htmlFor="f-img">Photo link</label>
-              <input
-                id="f-img"
-                value={form.imageUrl}
-                placeholder="https://…"
-                onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
-              />
-              <span className="muted" style={{ fontSize: 12 }}>
-                Paste a link for now — uploading straight from your phone is coming.
-              </span>
-            </div>
+            <ImageUploader
+              kind="products"
+              label="Photo"
+              value={form.imageUrl}
+              onChange={(url) => setForm({ ...form, imageUrl: url })}
+              hint="The picture customers see first. Square photos look best."
+            />
           </div>
 
           <div className="card">
