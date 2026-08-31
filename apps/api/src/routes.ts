@@ -7,6 +7,7 @@ import { catalogRoutes } from './modules/catalog/catalog.routes';
 import { inventoryRoutes } from './modules/inventory/inventory.routes';
 import { cartRoutes } from './modules/cart/cart.routes';
 import { ordersRoutes } from './modules/orders/orders.routes';
+import { adminRoutes } from './modules/brands/admin.routes';
 import { opsRoutes } from './modules/orders/ops.routes';
 import { paymentRoutes } from './modules/payments/payment.routes';
 import { ridersRoutes } from './modules/riders/riders.routes';
@@ -28,6 +29,7 @@ apiRouter.use('/cart', cartRoutes);
 apiRouter.use('/orders', ordersRoutes);
 // Store/ops surface (admin-only): the order pipeline the dashboard will drive.
 apiRouter.use('/ops', opsRoutes);
+apiRouter.use('/admin', adminRoutes);
 apiRouter.use('/payments', paymentRoutes);
 apiRouter.use('/riders', ridersRoutes);
 apiRouter.use('/delivery', deliveryRoutes);
