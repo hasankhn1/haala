@@ -1,19 +1,31 @@
 # Haala
 
-Quick-commerce grocery delivery — customer app, rider app, and backend.
+Quick-commerce grocery delivery for DHA Peshawar — customer app, rider app, and
+backend. Also a marketplace: home businesses each get their own login and
+dashboard for their own catalogue.
 
 A pnpm + Turborepo monorepo:
 
 - **`apps/api`** — Node.js + Express + TypeScript backend (Postgres + Redis, socket.io)
 - **`apps/customer`** — React Native (Expo) customer app
 - **`apps/rider`** — React Native (Expo) rider app
-- **`apps/dashboard`** — Next.js ops dashboard (analytics, orders, riders, pricing, promos)
+- **`apps/dashboard`** — Next.js dashboard: Haala ops (orders, riders, pricing,
+  promos, brands) and a separate vendor shell for shop owners
 - **`packages/shared`** — domain types + zod API contracts
 - **`packages/design-tokens`** — the design system tokens
 - **`packages/ui`** — shared React Native component library
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for the full technical design, and
-[DEPLOYMENT.md](./DEPLOYMENT.md) for shipping it to Railway.
+**New here? Read [ONBOARDING.md](./ONBOARDING.md) first** — what Haala is, why
+the stack is what it is, and the handful of things that are not obvious from the
+code (the design comes from a Claude Design file, not Figma; the local Postgres
+port is 5433, not 5432).
+
+| Doc | For |
+| --- | --- |
+| [ONBOARDING.md](./ONBOARDING.md) | Joining the project |
+| [CLAUDE.md](./CLAUDE.md) | Conventions, invariants and traps — kept short on purpose |
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | Module map, data model, multi-tenancy |
+| [DEPLOYMENT.md](./DEPLOYMENT.md) | Shipping it to Railway |
 
 ## Quick start
 

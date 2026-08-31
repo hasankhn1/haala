@@ -59,7 +59,7 @@ follows its shape.
 
 `auth` · `users` · `addresses` · `stores` · `catalog` · `inventory` · `cart` ·
 `orders` · `payments` · `riders` · `delivery` · `promotions` · `notifications` ·
-`analytics`
+`analytics` · `brands` · `business-types` · `brand` · `uploads`
 
 All implemented. **auth**, **users**, **payments** (abstraction + COD + stub +
 Safepay), the full **customer core** — **addresses**, **stores**
@@ -68,6 +68,12 @@ Safepay), the full **customer core** — **addresses**, **stores**
 status + live timeline) — **fulfilment**: **riders** (profile, availability,
 location) and **delivery** (claim + workflow) — and **growth**: **promotions**,
 **notifications** (inbox + Expo push), **analytics**.
+
+**Multi-tenancy** (August 2026): **brands** (platform administration —
+`/admin/*`, super-admin only), **business-types** (what kind of shop a brand is,
+paired with a code registry), **brand** (a vendor's own catalogue —
+`/brand/*`, tenant-scoped) and **uploads** (presigned R2 image uploads). See
+[Multi-tenancy](#multi-tenancy) below.
 
 ### Fulfilment
 
@@ -186,9 +192,33 @@ quoting — it used to be duplicated, which is one edit away from quoting a tota
 we don't charge. UUID primary keys; `snake_case` columns.
 
 Core tables: `users`, `addresses`, `stores`, `categories`, `products`,
-`inventory` (per-store stock with reserved qty), `carts`/`cart_items`,
+`product_variants` (the sellable sizes — inventory and baskets count these, not
+products), `inventory` (per-store stock with reserved qty), `carts`/`cart_items`,
 `orders`/`order_items`/`order_status_history`, `payments`/`refunds`, `riders`,
 `delivery_assignments`, `promotions`, `notifications`.
+
+Tenancy tables: `brands` and `business_types`. `categories` and `products` each
+carry a NOT NULL `brand_id`, and their slug uniqueness is **composite** —
+`(brand_id, slug)` — because two bakeries both wanting `cakes` is the normal
+case rather than a conflict. `users.brand_id` is set for, and only for, a
+`brand_user`:
+
+```sql
+users_brand_role_ck  CHECK ((role = 'brand_user') = (brand_id IS NOT NULL))
+```
+
+Roles: `customer` · `rider` · `admin` · `super_admin` · `brand_user`. The first
+two are the apps; `admin` and `super_admin` are Haala staff (`HAALA_STAFF_ROLES`
+in `@haala/shared`), with `super_admin` additionally managing brands.
+
+`products` also carries `compare_at_price` (the struck-through "was" price —
+never what is charged), `images` (an ordered gallery, with `image_url` as a
+derived cover) and `attributes` (jsonb, validated per business type).
+
+Exactly one variant per product sits at `sort_order = 0`, guaranteed by
+`product_variants_default_uq`. The catalogue joins on that row to resolve the
+price a card shows, so a product without one still exists and quietly stops
+being buyable.
 
 Order status flow (enforced in the Orders service):
 
@@ -196,6 +226,74 @@ Order status flow (enforced in the Orders service):
 placed → confirmed → preparing → packed → picked_up → out_for_delivery → delivered
         ↘ cancelled (pre-pickup)                     ↘ failed (post-pickup)
 ```
+
+## Multi-tenancy
+
+A **brand** owns product *definitions*; Haala owns *stock*. Home businesses do
+not fulfil their own orders — their goods sit in Haala's dark stores — so a
+vendor controls what a thing is and whether it is on sale, while ops controls
+how many are on the shelf. `stores`, `inventory`, delivery and the order
+pipeline were unchanged by the multi-tenant work.
+
+Isolation is enforced at three levels, and only the third proves anything:
+
+1. **Types** — every function in `modules/brand/catalog.repository.ts` takes
+   `brandId` as its required first parameter. No overload omits it, so
+   forgetting the tenant is a compile error rather than a cross-tenant query.
+2. **Runtime** — `common/middleware/brand-scope.ts` resolves the tenant from the
+   verified access token. For a `brand_user` no request field is consulted;
+   Haala staff must name a brand explicitly with `?brandId=`.
+3. **Tests** — `modules/brand/isolation.test.ts` points brand A at every one of
+   brand B's ids across every route. Typecheck and a clean build pass whether or
+   not isolation holds.
+
+**Cross-tenant access answers 404, never 403** — a 403 confirms the row exists,
+which is enough to enumerate a competitor's catalogue by id.
+
+Customer-facing queries in `modules/catalog` join `brands` and require
+`status = 'active'`, including the lookup the cart makes before accepting an
+item. Suspension therefore removes a shop from listings, search, product pages
+and baskets, while leaving its catalogue intact.
+
+### Business types
+
+A brand's type decides what its product form asks for. The `business_types` row
+carries identity and an on/off switch the super admin controls at runtime; the
+**field definitions live in `packages/shared/src/business-types.ts`** so they
+can be validated with zod and rendered as a typed form from one definition. The
+API validates `products.attributes` against the same entry the dashboard draws
+its inputs from.
+
+## Uploads
+
+`modules/uploads`, backed by Cloudflare R2.
+
+`POST /uploads/sign` returns a presigned PUT so the browser uploads **directly
+to Cloudflare** — a vendor's 6MB phone photo never crosses the API. The client
+downscales to 1600px first. `POST /uploads/confirm` then HEADs the object: a
+presigned PUT can pin content-type but not size, so without that check the 5MB
+limit would be a claim rather than a rule.
+
+Keys are `brands/<brandId>/<kind>/<uuid>.<ext>`, and `confirm` re-derives the
+prefix from the caller's own brand rather than trusting it.
+
+`R2_PUBLIC_BASE_URL` is optional and separate from the credentials, because the
+two are switched on independently. Set, images are addressed at Cloudflare's
+edge; unset, they are served through `GET /media/<key>` — slower, but uploads
+work the moment the bucket exists.
+
+## Dashboard
+
+One Next.js host, two shells, guarded server-side by role:
+
+- `app/(dash)/*` — Haala staff. Orders, riders, catalogue, promotions, stores,
+  staff, plus **brands**, **shop logins** and **business types**.
+- `app/brand/*` — one vendor. Their products, categories and shop details, and
+  nothing of anyone else's.
+
+`app/page.tsx` routes by role. Someone in the wrong shell is sent to `/`, not to
+`/login` — showing a sign-in form to a person who is already signed in helps
+nobody.
 
 ## Roadmap
 
