@@ -1,8 +1,10 @@
 import bcrypt from 'bcryptjs';
-import type { AdminCreateUserInput, AuthUser, UserRole } from '@haala/shared';
+import { RiderAvailability, UserRole, type AdminCreateUserInput, type AuthUser } from '@haala/shared';
 import { AppError } from '../../common/errors';
 import { logger } from '../../common/logger';
+import { db } from '../../db/client';
 import type { User } from '../../db/schema';
+import { riderRepository } from '../riders/rider.repository';
 import { userRepository } from './user.repository';
 
 const SALT_ROUNDS = 10;
@@ -54,12 +56,25 @@ export const userService = {
     if (existing) throw AppError.conflict('An account with this phone already exists');
 
     const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
-    const user = await userRepository.create({
-      name: input.name,
-      phone: input.phone,
-      email: input.email ?? null,
-      passwordHash,
-      role: input.role,
+    const user = await db.transaction(async (tx) => {
+      const created = await userRepository.create(
+        {
+          name: input.name,
+          phone: input.phone,
+          email: input.email ?? null,
+          passwordHash,
+          role: input.role,
+        },
+        tx,
+      );
+      // A rider needs a `riders` row to show up anywhere ops looks for one
+      // (roster, store assignment) — normally materialised lazily on first
+      // login (see riderService.ensureProfile), but a staff-created rider
+      // shouldn't have to sign in once just to become visible.
+      if (created.role === UserRole.Rider) {
+        await riderRepository.create({ userId: created.id, availability: RiderAvailability.Offline }, tx);
+      }
+      return created;
     });
     logger.info({ userId: user.id, role: user.role }, 'Staff account created by admin');
     return toAuthUser(user);
