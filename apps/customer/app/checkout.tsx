@@ -29,6 +29,7 @@ import { useCart, useMergeGuestCart } from '../src/hooks/useCart';
 import { haptics } from '../src/lib/haptics';
 import { runOnlineCheckout } from '../src/lib/onlineCheckout';
 import { MobileNumberDrawer } from '../src/components/MobileNumberDrawer';
+import { track } from '../src/lib/analytics';
 import { useCheckoutDraft } from '../src/store/useCheckoutDraft';
 import { useCurrentStore } from '../src/store/useCurrentStore';
 
@@ -88,6 +89,11 @@ export default function CheckoutScreen() {
       try {
         const result = await mergeGuestCart();
         if (!result) return;
+        track({
+          name: 'guest_cart_merged',
+          lines: result.cart.items.length,
+          skipped: result.skipped.length,
+        });
         if (result.skipped.length > 0) {
           toast.show(
             `${result.skipped.length} item${result.skipped.length === 1 ? '' : 's'} sold out and left your basket`,
@@ -482,6 +488,7 @@ export default function CheckoutScreen() {
             setError(null);
             if (!deliveryPhone) {
               // The blocked button is not a dead end: it reopens the sheet.
+              track({ name: 'checkout_blocked_missing_mobile' });
               setContactSheet(true);
               return;
             }
@@ -525,7 +532,13 @@ export default function CheckoutScreen() {
 
       <MobileNumberDrawer
         visible={contactSheet}
-        onClose={() => setContactSheet(false)}
+        onClose={() => {
+          // Dismissal is a real signal: it means somebody chose not to give us
+          // a number, and the pay button is about to explain why it cannot
+          // proceed.
+          if (!deliveryPhone) track({ name: 'mobile_collection_dismissed' });
+          setContactSheet(false);
+        }}
         onSaved={() => {
           setContactSheet(false);
           toast.show('Number saved');

@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { Platform } from 'react-native';
 import * as Google from 'expo-auth-session/providers/google';
 import { ApiError } from '../api/client';
+import { track } from '../lib/analytics';
 import { useAuth } from './AuthContext';
 
 /**
@@ -56,6 +57,7 @@ export function useGoogleSignIn(onSignedIn: (created: boolean) => void | Promise
 
   const signIn = useCallback(async () => {
     if (!configured) {
+      track({ name: 'google_sign_in_failed', reason: 'unconfigured' });
       setState({
         kind: 'error',
         message: 'Google sign-in isn’t set up on this build yet. Use an email address.',
@@ -63,29 +65,38 @@ export function useGoogleSignIn(onSignedIn: (created: boolean) => void | Promise
       return;
     }
 
+    track({ name: 'google_sign_in_started' });
     setState({ kind: 'pending' });
     try {
       const result = await promptAsync();
 
       if (result.type === 'dismiss' || result.type === 'cancel') {
+        track({ name: 'google_sign_in_failed', reason: 'cancelled' });
         setState({ kind: 'cancelled' });
         return;
       }
       if (result.type !== 'success') {
+        track({ name: 'google_sign_in_failed', reason: 'provider' });
         setState({ kind: 'error', message: 'Couldn’t finish sign-in. Try email instead.' });
         return;
       }
 
       const idToken = result.params.id_token;
       if (!idToken) {
+        track({ name: 'google_sign_in_failed', reason: 'provider' });
         setState({ kind: 'error', message: 'Couldn’t finish sign-in. Try email instead.' });
         return;
       }
 
       const created = await providerAuth('google', idToken);
+      track({ name: 'google_sign_in_success', created });
       setState({ kind: 'idle' });
       await onSignedIn(created);
     } catch (e) {
+      track({
+        name: 'google_sign_in_failed',
+        reason: e instanceof ApiError ? 'provider' : 'network',
+      });
       // Never surface a raw backend error; the design has specific copy for
       // each of these and none of it is a stack trace.
       setState({

@@ -4,6 +4,7 @@ import { BottomSheet, Button, Icon, Input, Text, theme } from '@haala/ui';
 import { ApiError } from '../api/client';
 import { authApi } from '../api/endpoints';
 import { useAuth } from '../auth/AuthContext';
+import { track } from '../lib/analytics';
 
 /**
  * "One last thing" — the delivery contact, from `Auth & Checkout.dc.html`.
@@ -81,6 +82,7 @@ export function MobileNumberDrawer({
     setError(null);
     // Focus after the sheet has actually appeared; the design's a11y note asks
     // for focus on the field with the reason line read before it.
+    track({ name: 'mobile_collection_viewed' });
     const t = setTimeout(() => field.current?.focus(), 250);
     return () => clearTimeout(t);
   }, [visible, user?.deliveryPhone]);
@@ -90,9 +92,12 @@ export function MobileNumberDrawer({
 
   const save = async () => {
     if (!valid) {
+      // The number itself is never in an event — only that it did not pass.
+      track({ name: 'mobile_collection_failed', reason: 'invalid' });
       setTouched(true);
       return;
     }
+    track({ name: 'mobile_collection_started' });
     setSaving(true);
     setError(null);
     try {
@@ -100,8 +105,13 @@ export function MobileNumberDrawer({
       // The canonical customer record, not the order — so the next order does
       // not ask again.
       setUser(updated);
+      track({ name: 'mobile_collection_success' });
       onSaved(updated.deliveryPhone ?? toE164(national));
     } catch (e) {
+      track({
+        name: 'mobile_collection_failed',
+        reason: e instanceof ApiError ? 'server' : 'network',
+      });
       // The sheet stays open and the number stays typed. Losing what somebody
       // just entered because a request failed is the least forgivable outcome
       // here.

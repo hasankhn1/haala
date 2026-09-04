@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -12,6 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Icon, Input, Text, theme } from '@haala/ui';
 import { ApiError } from '../api/client';
+import { track } from '../lib/analytics';
 import { useAuth } from '../auth/AuthContext';
 import { useMergeGuestCart } from '../hooks/useCart';
 import { PhoneField, toE164 } from './PhoneField';
@@ -69,6 +70,12 @@ export function SignInFlow({
 
   const emailValid = EMAIL_RE.test(email.trim());
 
+  // Once per mount, and named for where it was opened from — the funnel reads
+  // very differently for somebody interrupted at checkout.
+  useEffect(() => {
+    track({ name: 'auth_screen_viewed', from: headline ? 'checkout' : 'account' });
+  }, [headline]);
+
   const goPassword = () => {
     if (!emailValid) {
       setError('That doesn’t look like an email address.');
@@ -83,14 +90,20 @@ export function SignInFlow({
   const submitEmail = async () => {
     setError(null);
     setLoading(true);
+    track({ name: 'email_sign_in_started' });
     try {
       const created = await emailAuth({ email: email.trim().toLowerCase(), password });
+      track({ name: 'email_sign_in_success', created });
       await handOverBasket();
       // A new account is confirmed rather than slipped past — a mistyped
       // address would otherwise silently become a second account.
       if (created) setStep('created');
       else onSignedIn(false);
     } catch (e) {
+      track({
+        name: 'email_sign_in_failed',
+        reason: e instanceof ApiError ? (e.status === 401 ? 'password' : 'validation') : 'network',
+      });
       setError(e instanceof ApiError ? e.message : 'Could not sign in');
     } finally {
       setLoading(false);
