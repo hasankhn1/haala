@@ -1,5 +1,12 @@
 import type { ReactNode } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { theme } from '@haala/design-tokens';
 import { Text } from './Text';
 
@@ -16,7 +23,7 @@ export interface ButtonProps {
   fullWidth?: boolean;
   leadingIcon?: ReactNode;
   trailingIcon?: ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   /**
    * Raw label colour. Only for surfaces outside the token palette — e.g. the
    * inverted CTAs on the immersive order-confirmed screen. Prefer `variant`.
