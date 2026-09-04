@@ -7,7 +7,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { AuthUser, LoginInput, RegisterInput } from '@haala/shared';
+import type { AuthUser, LoginInput, EmailAuthInput,
+  RegisterInput } from '@haala/shared';
 import { setAccessToken, setUnauthorizedHandler } from '../api/client';
 import { authApi } from '../api/endpoints';
 import { unregisterPushToken } from '../lib/usePushRegistration';
@@ -20,6 +21,14 @@ interface AuthContextValue {
   user: AuthUser | null;
   login: (input: LoginInput) => Promise<void>;
   register: (input: RegisterInput) => Promise<void>;
+  /**
+   * Sign in with an email address, creating the account if it is new.
+   * Resolves to `true` when it created one, so the screen can say so rather
+   * than a customer discovering it later.
+   */
+  emailAuth: (input: EmailAuthInput) => Promise<boolean>;
+  /** Replaces the cached user after a profile change, e.g. saving a mobile. */
+  setUser: (user: AuthUser) => void;
   logout: () => Promise<void>;
 }
 
@@ -82,6 +91,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(result.user);
         setStatus('authenticated');
       },
+      async emailAuth(input) {
+        const result = await authApi.email(input);
+        await tokenStore.save(result.tokens);
+        setAccessToken(result.tokens.accessToken);
+        setUser(result.user);
+        setStatus('authenticated');
+        return result.created;
+      },
+      setUser,
       async register(input) {
         const result = await authApi.register(input);
         await tokenStore.save(result.tokens);

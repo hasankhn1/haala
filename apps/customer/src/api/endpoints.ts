@@ -6,6 +6,8 @@ import type {
   CartView,
   CategoryView,
   CreateAddressInput,
+  EmailAuthInput,
+  EmailAuthResult,
   LoginInput,
   OrderSummaryView,
   OrderView,
@@ -30,6 +32,8 @@ const qs = (params: Record<string, string | number | undefined>): string => {
 
 export const authApi = {
   login: (input: LoginInput) => api.post<AuthResult>('/auth/login', input),
+  /** Signs in, or creates the account — `created` says which. */
+  email: (input: EmailAuthInput) => api.post<EmailAuthResult>('/auth/email', input),
   register: (input: RegisterInput) => api.post<AuthResult>('/auth/register', input),
   refresh: (refreshToken: string) => api.post<AuthResult>('/auth/refresh', { refreshToken }),
   logout: (refreshToken: string) => api.post<{ success: boolean }>('/auth/logout', { refreshToken }),

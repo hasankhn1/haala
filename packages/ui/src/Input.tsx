@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { forwardRef, useState } from 'react';
 import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 import { theme } from '@haala/design-tokens';
 import { Text } from './Text';
@@ -9,11 +9,18 @@ export interface InputProps extends TextInputProps {
 }
 
 /**
- * Onyx & Ink text field: a soft slate fill with a hairline border at rest that
- * **darkens to Onyx on focus**. No shadow at rest — depth here would compete
+ * Text field: a muted fill with a hairline border at rest that lifts to white
+ * with an ember edge on focus. No shadow at rest — depth here would compete
  * with the cards around it.
+ *
+ * Forwards its ref, because focus is sometimes the caller's business: moving to
+ * the password field after an email, or to the phone field when a bottom sheet
+ * opens, which the design's accessibility notes require.
  */
-export function Input({ label, error, style, ...rest }: InputProps) {
+export const Input = forwardRef<TextInput, InputProps>(function Input(
+  { label, error, style, onFocus, onBlur, ...rest },
+  ref,
+) {
   const [focused, setFocused] = useState(false);
   return (
     <View style={styles.wrap}>
@@ -23,10 +30,20 @@ export function Input({ label, error, style, ...rest }: InputProps) {
         </Text>
       ) : null}
       <TextInput
+        ref={ref}
         placeholderTextColor={theme.colors.textTertiary}
         style={[styles.input, focused && styles.focused, error ? styles.errored : null, style]}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
+        // Composed rather than spread over: `{...rest}` used to sit after these,
+        // so a caller passing `onFocus` silently replaced the internal one and
+        // the field stopped showing that it was focused.
+        onFocus={(e) => {
+          setFocused(true);
+          onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          onBlur?.(e);
+        }}
         {...rest}
       />
       {error ? (
@@ -36,7 +53,7 @@ export function Input({ label, error, style, ...rest }: InputProps) {
       ) : null}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrap: { gap: theme.spacing.sm },
@@ -51,7 +68,7 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.body,
     color: theme.colors.textPrimary,
   },
-  /** Focus lifts the field to white and draws the Onyx edge. */
+  /** Focus lifts the field to white and draws the ember edge. */
   focused: {
     borderColor: theme.colors.primary,
     backgroundColor: theme.colors.surface,

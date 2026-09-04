@@ -45,6 +45,30 @@ export const adminCreateUserSchema = z.object({
 });
 export type AdminCreateUserInput = z.infer<typeof adminCreateUserSchema>;
 
+/**
+ * Email sign-in, which is also email sign-up.
+ *
+ * One schema and one endpoint for both, because the design has no separate
+ * signup screen: an address we do not recognise becomes an account. The server
+ * reports which happened via `created` so the client can confirm it rather than
+ * silently making one.
+ *
+ * The email is lower-cased and trimmed here so `Hassan@X.com` and
+ * `hassan@x.com` cannot become two accounts.
+ */
+export const emailAuthSchema = z
+  .object({
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .email()
+      .max(160),
+    password: z.string().min(8).max(128),
+  })
+  .strict();
+export type EmailAuthInput = z.infer<typeof emailAuthSchema>;
+
 export const loginSchema = z.object({
   phone: phoneSchema,
   password: z.string().min(1),
@@ -80,6 +104,11 @@ export interface AuthUser {
   role: UserRole;
   /** Set for `brand_user` and nobody else — see the `users_brand_role_ck`. */
   brandId: string | null;
+}
+
+/** An email sign-in, plus whether it made the account. */
+export interface EmailAuthResult extends AuthResult {
+  created: boolean;
 }
 
 export interface AuthResult {

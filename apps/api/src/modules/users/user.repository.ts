@@ -18,6 +18,18 @@ export const userRepository = {
     return row;
   },
 
+  /**
+   * Lookup by email, for the account-linking step of email sign-in.
+   *
+   * Finding a user this way is **not** authorization. It only narrows down whose
+   * password to check; ownership is proved by the password that follows, never
+   * by the address itself.
+   */
+  async findByEmail(email: string, ex: Executor = db): Promise<User | undefined> {
+    const [row] = await ex.select().from(users).where(eq(users.email, email)).limit(1);
+    return row;
+  },
+
   async listByRole(role: UserRole, ex: Executor = db): Promise<User[]> {
     return ex.select().from(users).where(eq(users.role, role)).orderBy(asc(users.name));
   },

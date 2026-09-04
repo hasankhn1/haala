@@ -1,6 +1,14 @@
-import { useState } from 'react';
-import { Link, useRouter } from 'expo-router';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { useRouter } from 'expo-router';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Icon, Input, Text, theme } from '@haala/ui';
@@ -9,26 +17,71 @@ import { useAuth } from '../src/auth/AuthContext';
 import { PhoneField, toE164 } from '../src/components/PhoneField';
 
 /**
- * Sign in.
+ * Sign in — email first, from `Auth & Checkout.dc.html`.
  *
- * The Basket comps have no auth screens, so this borrows the system's own
- * language: the ember hero with the 26px sweep from Home, and a white sheet
- * carrying the form. The previous version put a white card on what had become a
- * white canvas after the re-theme, so the card was invisible and the screen read
- * as unstyled.
+ * Two steps, one screen: the address, then the password. There is deliberately
+ * **no sign-up screen** — an address we have never seen becomes an account when
+ * the password is submitted, which is the design's central idea and the reason
+ * nothing else is asked for. No name, no phone: checkout collects a delivery
+ * number when it actually needs one.
  *
- * Authentication is **phone + password** — there is no OTP issuer. When one
- * lands, only the second field changes.
+ * **Why the password label does not change before you type it.** The design
+ * shows a "we already know this email" badge at step two, which needs the
+ * server to answer "does this address have an account" before a password is
+ * given — an enumeration oracle, and the brief forbids adding one. So the label
+ * stays neutral and the *server* decides on submit; a created account is then
+ * confirmed on screen rather than happening silently.
+ *
+ * Phone sign-in still works and is reachable from the bottom of the screen. It
+ * is not offered first because everything new is email-first, but 22 of the 23
+ * existing customers have no email address and must not be locked out.
  */
+type Step = 'email' | 'password' | 'created' | 'phone';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
 export default function LoginScreen() {
-  const { login } = useAuth();
+  const { emailAuth, login } = useAuth();
   const router = useRouter();
-  const [national, setNational] = useState('');
+  const passwordRef = useRef<TextInput>(null);
+
+  const [step, setStep] = useState<Step>('email');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [national, setNational] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const onSubmit = async () => {
+  const emailValid = EMAIL_RE.test(email.trim());
+
+  const goPassword = () => {
+    if (!emailValid) {
+      setError('That doesn’t look like an email address.');
+      return;
+    }
+    setError(null);
+    setStep('password');
+    // The field is not mounted until this render lands.
+    requestAnimationFrame(() => passwordRef.current?.focus());
+  };
+
+  const submitEmail = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const created = await emailAuth({ email: email.trim().toLowerCase(), password });
+      // A new account is confirmed rather than slipped past — a mistyped
+      // address would otherwise silently become a second account.
+      if (created) setStep('created');
+      else router.replace('/(tabs)');
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not sign in');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitPhone = async () => {
     setError(null);
     setLoading(true);
     try {
@@ -40,6 +93,34 @@ export default function LoginScreen() {
       setLoading(false);
     }
   };
+
+  const back = () => {
+    setError(null);
+    if (step === 'password' || step === 'phone') {
+      setPassword('');
+      setStep('email');
+    } else {
+      router.back();
+    }
+  };
+
+  const title =
+    step === 'email'
+      ? 'What’s your email?'
+      : step === 'password'
+        ? 'And a password'
+        : step === 'created'
+          ? 'You’re all set'
+          : 'Sign in with your number';
+
+  const sub =
+    step === 'email'
+      ? 'No separate sign-up — if you’re new we’ll set the account up as you go.'
+      : step === 'password'
+        ? email.trim()
+        : step === 'created'
+          ? 'That’s everything we need. No phone number, no profile forms — we’ll ask for delivery details when they matter.'
+          : 'For accounts made before we added email sign-in.';
 
   return (
     <View style={styles.root}>
@@ -54,57 +135,116 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
         >
           <SafeAreaView style={styles.hero} edges={['top', 'left', 'right']}>
-            <Pressable
-              style={styles.back}
-              onPress={() => router.back()}
-              accessibilityLabel="Back"
-            >
-              <Icon name="arrow-back" size={16} color={theme.colors.onPrimary} />
+            <Pressable style={styles.back} onPress={back} accessibilityLabel="Back">
+              <Icon name="arrow-back" size={20} color={theme.colors.onPrimary} />
             </Pressable>
-            <Text variant="h1" color="onPrimary" style={styles.heroTitle}>
-              Welcome back
+            <Text variant="display" color="onPrimary" style={styles.title}>
+              {title}
             </Text>
-            <Text variant="bodySm" style={styles.heroSub}>
-              Sign in to pick up where you left off.
+            <Text variant="bodySm" style={styles.sub}>
+              {sub}
             </Text>
           </SafeAreaView>
 
           <View style={styles.sheet}>
-            <PhoneField value={national} onChangeText={setNational} />
-
-            <Input
-              label="Password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              placeholder="Your password"
-              textContentType="password"
-            />
-
             {error ? (
-              <Text variant="bodySm" color="error">
-                {error}
-              </Text>
+              <View style={styles.error} accessibilityLiveRegion="polite">
+                <Icon name="alert-circle-outline" size={18} color={theme.colors.error} />
+                <Text variant="bodySm" style={styles.errorText}>
+                  {error}
+                </Text>
+              </View>
             ) : null}
 
-            <Button
-              label="Sign in"
-              style={styles.cta}
-              onPress={onSubmit}
-              loading={loading}
-              disabled={national.length < 10 || password.length === 0}
-            />
-
-            <View style={styles.footer}>
-              <Text variant="bodySm" color="textSecondary">
-                New to Haala?
-              </Text>
-              <Link href="/register">
-                <Text variant="label" style={styles.link}>
-                  Create an account
+            {step === 'email' ? (
+              <>
+                <Input
+                  label="EMAIL"
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="you@example.com"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="email"
+                  textContentType="emailAddress"
+                  returnKeyType="next"
+                  onSubmitEditing={goPassword}
+                />
+                <Button label="Continue" onPress={goPassword} disabled={!emailValid} />
+                <Text variant="caption" color="textTertiary" align="center">
+                  We never send marketing without asking first.
                 </Text>
-              </Link>
-            </View>
+                <Pressable onPress={() => setStep('phone')} style={styles.altLink}>
+                  <Text variant="label" color="primary">
+                    Sign in with a phone number instead
+                  </Text>
+                </Pressable>
+              </>
+            ) : null}
+
+            {step === 'password' ? (
+              <>
+                <Input
+                  ref={passwordRef}
+                  label="PASSWORD"
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="At least 8 characters"
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoComplete="password"
+                  textContentType="password"
+                  returnKeyType="go"
+                  onSubmitEditing={submitEmail}
+                />
+                <Button
+                  label="Continue"
+                  onPress={submitEmail}
+                  loading={loading}
+                  disabled={password.length < 8}
+                />
+                <Text variant="caption" color="textTertiary" align="center">
+                  If you already shop with us this signs you in. If not, it creates your account.
+                </Text>
+              </>
+            ) : null}
+
+            {step === 'created' ? (
+              <>
+                <View style={styles.tick}>
+                  <Icon name="checkmark" size={26} color={theme.colors.onPrimary} />
+                </View>
+                <Button label="Start shopping" onPress={() => router.replace('/(tabs)')} />
+              </>
+            ) : null}
+
+            {step === 'phone' ? (
+              <>
+                <PhoneField value={national} onChangeText={setNational} />
+                <Input
+                  label="PASSWORD"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoComplete="password"
+                  returnKeyType="go"
+                  onSubmitEditing={submitPhone}
+                />
+                <Button
+                  label="Sign in"
+                  onPress={submitPhone}
+                  loading={loading}
+                  disabled={national.length < 10 || password.length < 1}
+                />
+                <Pressable onPress={() => setStep('email')} style={styles.altLink}>
+                  <Text variant="label" color="primary">
+                    Use an email address instead
+                  </Text>
+                </Pressable>
+              </>
+            ) : null}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -116,42 +256,47 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.primary },
   flex: { flex: 1 },
   content: { flexGrow: 1 },
-
   hero: {
     paddingHorizontal: theme.layout.margin,
     paddingBottom: theme.spacing['2xl'],
-    gap: theme.spacing.xs,
+    gap: theme.spacing.sm,
   },
   back: {
-    width: 34,
-    height: 34,
+    width: 40,
+    height: 40,
     borderRadius: theme.radii.pill,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: theme.spacing.xl,
-    marginTop: theme.spacing.md,
+    marginVertical: theme.spacing.md,
   },
-  heroTitle: { marginTop: theme.spacing.sm },
-  heroSub: { color: 'rgba(255,255,255,0.86)' },
-
-  /** White sheet sweeping up over the ember, same 26px curve as Home's hero. */
+  title: { lineHeight: 34 },
+  sub: { color: 'rgba(255,255,255,0.86)' },
   sheet: {
     flex: 1,
     backgroundColor: theme.colors.surface,
-    borderTopLeftRadius: theme.radii.xl,
-    borderTopRightRadius: theme.radii.xl,
-    padding: theme.spacing.xl,
-    paddingTop: theme.spacing['2xl'],
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    padding: theme.layout.margin,
     gap: theme.spacing.lg,
   },
-  cta: { borderRadius: theme.radii.pill, height: 52, marginTop: theme.spacing.xs },
-  link: { color: theme.colors.primaryPressed },
-  footer: {
+  error: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    gap: theme.spacing.xs,
-    marginTop: theme.spacing.sm,
+    gap: theme.spacing.sm,
+    backgroundColor: theme.colors.errorSoft,
+    borderRadius: theme.radii.sm,
+    padding: theme.spacing.md,
+  },
+  errorText: { flex: 1, color: theme.colors.error },
+  altLink: { alignItems: 'center', paddingVertical: theme.spacing.sm },
+  tick: {
+    width: 56,
+    height: 56,
+    borderRadius: theme.radii.pill,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
   },
 });
