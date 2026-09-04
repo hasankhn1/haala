@@ -18,6 +18,10 @@ import CircleCheckBig from 'lucide-react-native/dist/esm/icons/circle-check-big.
 import CircleQuestionMark from 'lucide-react-native/dist/esm/icons/circle-question-mark.mjs';
 import CircleX from 'lucide-react-native/dist/esm/icons/circle-x.mjs';
 import Clock from 'lucide-react-native/dist/esm/icons/clock.mjs';
+import Eye from 'lucide-react-native/dist/esm/icons/eye.mjs';
+import EyeOff from 'lucide-react-native/dist/esm/icons/eye-off.mjs';
+import Mail from 'lucide-react-native/dist/esm/icons/mail.mjs';
+import ShieldCheck from 'lucide-react-native/dist/esm/icons/shield-check.mjs';
 import CreditCard from 'lucide-react-native/dist/esm/icons/credit-card.mjs';
 import Heart from 'lucide-react-native/dist/esm/icons/heart.mjs';
 import House from 'lucide-react-native/dist/esm/icons/house.mjs';
@@ -74,7 +78,18 @@ import { theme } from '@haala/design-tokens';
  */
 type IconComponent = LucideIcon;
 
-const ICONS: Record<string, IconComponent> = {
+/**
+ * `satisfies` rather than a type annotation, so `keyof typeof ICONS` below is
+ * the union of the names actually present.
+ *
+ * It used to be annotated `Record<string, IconComponent>`, which made
+ * `IconName` widen to `string` — every name typechecked, present or not, and a
+ * missing one hit the `!Glyph` guard and rendered **nothing**. Four call sites
+ * across the auth and checkout screens were asking for `mail-outline` and
+ * `call-outline`, neither of which was in this map, so those rows simply had no
+ * icon and the code gave no hint of it. A missing icon is now a compile error.
+ */
+const ICONS = {
   'add': Plus,
   'alert-circle-outline': CircleAlert,
   'arrow-back': ArrowLeft,
@@ -83,8 +98,10 @@ const ICONS: Record<string, IconComponent> = {
   'basket-outline': ShoppingBasket,
   'bicycle-outline': Bike,
   'briefcase': Briefcase,
+  'briefcase-outline': Briefcase,
   'business-outline': Building2,
   'call': Phone,
+  'call-outline': Phone,
   'card-outline': CreditCard,
   'cart': ShoppingCart,
   'cart-outline': ShoppingCart,
@@ -98,6 +115,8 @@ const ICONS: Record<string, IconComponent> = {
   'close-circle': CircleX,
   'close-circle-outline': CircleX,
   'cube-outline': Package,
+  'eye-off-outline': EyeOff,
+  'eye-outline': Eye,
   'flash-outline': Zap,
   'grid': LayoutGrid,
   'grid-outline': LayoutGrid,
@@ -109,6 +128,7 @@ const ICONS: Record<string, IconComponent> = {
   'information-circle-outline': Info,
   'list': List,
   'list-outline': List,
+  'mail-outline': Mail,
   'locate': LocateFixed,
   'location': MapPin,
   'location-outline': MapPin,
@@ -127,10 +147,11 @@ const ICONS: Record<string, IconComponent> = {
   'search': Search,
   'search-outline': Search,
   'share-outline': Share2,
+  'shield-checkmark-outline': ShieldCheck,
   'storefront-outline': Store,
   'time': Clock,
   'time-outline': Clock,
-};
+} satisfies Record<string, IconComponent>;
 
 export type IconName = keyof typeof ICONS;
 
