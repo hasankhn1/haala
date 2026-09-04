@@ -1,6 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { HAALA_STAFF_ROLES, UserRole, adminCreateUserSchema, enumValues } from '@haala/shared';
+import {
+  HAALA_STAFF_ROLES,
+  UserRole,
+  adminCreateUserSchema,
+  enumValues,
+  phoneSchema,
+} from '@haala/shared';
 import { asyncHandler } from '../../common/http';
 import { authenticate } from '../../common/middleware/authenticate';
 import { authorize } from '../../common/middleware/authorize';
@@ -11,6 +17,17 @@ const updateProfileSchema = z
   .object({
     name: z.string().min(2).max(80).optional(),
     email: z.string().email().nullable().optional(),
+    /**
+     * The number a rider calls at the door.
+     *
+     * Reuses `phoneSchema`, so the server validates and normalises it rather
+     * than trusting what the sheet sent — client-side validation is a courtesy
+     * to the customer, not a check.
+     *
+     * Explicitly **not** the login. Changing this never changes how anybody
+     * signs in, which is the entire reason it is a separate column.
+     */
+    deliveryPhone: phoneSchema.nullable().optional(),
   })
   .strict();
 

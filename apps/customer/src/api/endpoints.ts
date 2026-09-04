@@ -47,6 +47,9 @@ export const authApi = {
   refresh: (refreshToken: string) => api.post<AuthResult>('/auth/refresh', { refreshToken }),
   logout: (refreshToken: string) => api.post<{ success: boolean }>('/auth/logout', { refreshToken }),
   me: () => api.get<AuthUser>('/users/me'),
+  /** Save the delivery contact. Returns the updated customer. */
+  updateProfile: (input: { name?: string; email?: string | null; deliveryPhone?: string | null }) =>
+    api.patch<AuthUser>('/users/me', input),
 };
 
 export const storesApi = {

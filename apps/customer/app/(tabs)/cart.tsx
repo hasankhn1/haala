@@ -31,7 +31,9 @@ import { useCurrentStore } from '../../src/store/useCurrentStore';
  *
  * The design collapses the old two-step cart → checkout flow: items, delivery
  * details, payment method and the bill all live on this page, with a single
- * Place Order action. `/checkout` now redirects here.
+ * Place Order action. `/checkout` is still a screen of its own — it carries the
+ * address, payment method, tip, voucher and the auth gate — and this bar is
+ * what leads there.
  */
 export default function CartScreen() {
   const router = useRouter();

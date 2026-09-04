@@ -21,6 +21,8 @@ export const toAuthUser = (u: User): AuthUser => ({
 export interface UpdateProfileInput {
   name?: string;
   email?: string | null;
+  /** The delivery contact. Validated by `phoneSchema` at the route. */
+  deliveryPhone?: string | null;
 }
 
 export const userService = {
