@@ -22,6 +22,20 @@ export const userRoleEnum = pgEnum('user_role', [
 ]);
 
 /**
+ * How a customer proves who they are. See `auth_providers`.
+ *
+ * `phone` is the original phone+password login, kept as one provider among
+ * several rather than a special case. `apple` is accepted by the model and the
+ * server before any button exists, so adding it later is a screen change.
+ */
+export const authProviderEnum = pgEnum('auth_provider', [
+  'phone',
+  'email',
+  'google',
+  'apple',
+]);
+
+/**
  * Only `active` may sell. `pending` exists so an application-and-approval flow
  * is a UI addition later rather than a migration — brands are created directly
  * by a super admin today.

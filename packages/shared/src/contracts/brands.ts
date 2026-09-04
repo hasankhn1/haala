@@ -82,7 +82,13 @@ export interface BrandBusinessTypeView {
 export interface BrandUserView {
   id: string;
   name: string;
-  phone: string;
+  /**
+   * Nullable because `users.phone` became nullable when identity went plural.
+   * In practice a brand login always has one — `createBrandUserSchema` requires
+   * it, and it is how they sign in — but the column permits NULL, so the view
+   * does too rather than coercing an anomaly into an empty string.
+   */
+  phone: string | null;
   email: string | null;
   isActive: boolean;
   createdAt: string;

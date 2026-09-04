@@ -3,7 +3,12 @@ import type { PaymentMethod, PaymentStatus } from '@haala/shared';
 export interface PaymentCustomer {
   id: string;
   name: string;
-  phone: string;
+  /**
+   * The delivery contact. Nullable because a customer who signed in with
+   * Google has no phone until checkout asks for one — providers that require a
+   * number must say so rather than assume.
+   */
+  phone: string | null;
   email?: string | null;
 }
 

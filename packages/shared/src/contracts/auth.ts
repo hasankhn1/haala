@@ -65,8 +65,18 @@ export interface AuthTokens {
 export interface AuthUser {
   id: string;
   name: string;
-  phone: string;
+  /**
+   * Identity phone, for accounts created that way. Null for an email- or
+   * Google-first signup, which is why it is no longer what checkout reads.
+   */
+  phone: string | null;
   email: string | null;
+  /**
+   * The number a rider calls. **This is what checkout checks** — present means
+   * carry on, absent means open the delivery-contact sheet. Kept distinct from
+   * `phone` so changing it is never a change of login.
+   */
+  deliveryPhone: string | null;
   role: UserRole;
   /** Set for `brand_user` and nobody else — see the `users_brand_role_ck`. */
   brandId: string | null;

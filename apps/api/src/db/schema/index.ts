@@ -2,6 +2,7 @@ export * from './enums';
 export * from './business-types';
 export * from './brands';
 export * from './users';
+export * from './auth-providers';
 export * from './addresses';
 export * from './stores';
 export * from './catalog';

@@ -31,7 +31,8 @@ export interface RiderView {
   id: string;
   userId: string;
   name: string;
-  phone: string;
+  /** Nullable since `users.phone` became nullable; the call button hides. */
+  phone: string | null;
   availability: RiderAvailability;
   vehicleType: string | null;
   currentLat: number | null;
@@ -61,7 +62,8 @@ export type PoolScope = 'store' | 'proximity' | 'unavailable';
  */
 export interface RiderPublicView {
   name: string;
-  phone: string;
+  /** Nullable; `app/order/[id].tsx` already disables the call button on null. */
+  phone: string | null;
   vehicleType: string | null;
   lat: number | null;
   lng: number | null;

@@ -13,6 +13,7 @@ export const toAuthUser = (u: User): AuthUser => ({
   name: u.name,
   phone: u.phone,
   email: u.email,
+  deliveryPhone: u.deliveryPhone,
   role: u.role,
   brandId: u.brandId,
 });

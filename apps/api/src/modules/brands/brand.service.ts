@@ -74,7 +74,7 @@ const toView = (r: BrandRow): BrandView => ({
 const toUserView = (u: {
   id: string;
   name: string;
-  phone: string;
+  phone: string | null;
   email: string | null;
   isActive: boolean;
   createdAt: Date;

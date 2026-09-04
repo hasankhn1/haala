@@ -9,7 +9,16 @@ export const users = pgTable(
   {
     id: pk(),
     name: text().notNull(),
-    phone: text().notNull(),
+    /**
+     * Identity for accounts created the original way, and **nullable** since
+     * email-first signups have no phone at all. A unique index tolerates
+     * repeated NULLs, so `users_phone_uq` still holds for those that have one.
+     *
+     * This is no longer the only way in — see `auth_providers`. It is also not
+     * the delivery contact: that is `deliveryPhone` below, and conflating the
+     * two is what made "change my number" mean "change my login".
+     */
+    phone: text(),
     email: text(),
     passwordHash: text().notNull(),
     role: userRoleEnum().notNull().default('customer'),
@@ -19,6 +28,14 @@ export const users = pgTable(
      * into the access token at login so the common path costs no extra query.
      */
     brandId: uuid().references(() => brands.id, { onDelete: 'restrict' }),
+    /**
+     * The number a rider calls at the door. Deliberately separate from
+     * identity: a customer may change it freely, it is not unique, and someone
+     * who signed in with Google has one without it ever being a credential.
+     *
+     * E.164, validated against `phoneSchema` server-side.
+     */
+    deliveryPhone: text(),
     isActive: boolean().notNull().default(true),
     ...timestamps(),
   },

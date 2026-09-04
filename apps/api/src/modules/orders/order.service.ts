@@ -213,7 +213,16 @@ export const orderService = {
           method: input.paymentMethod,
           amount: total,
           idempotencyKey: `pay_${created.id}`,
-          customer: { id: user.id, name: user.name, phone: user.phone, email: user.email },
+          customer: {
+            id: user.id,
+            name: user.name,
+            // The delivery contact, falling back to the identity phone for
+            // accounts that predate the split. This is the number a rider or a
+            // payment provider would actually ring, which is the whole reason
+            // `deliveryPhone` exists as a separate column.
+            phone: user.deliveryPhone ?? user.phone,
+            email: user.email,
+          },
         },
         tx,
       );

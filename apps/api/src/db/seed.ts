@@ -3,7 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { BrandStatus, BusinessTypeKey, businessTypeSpecs, rupees } from '@haala/shared';
 import { logger } from '../common/logger';
 import { closeDb, db } from './client';
-import { brands, businessTypes, categories, inventory, productVariants,
+import { authProviders, brands, businessTypes, categories, inventory, productVariants,
   products, promotions, riders, stores, users } from './schema';
 import {
   SEED_CATEGORIES,
@@ -51,11 +51,33 @@ const seed = async (): Promise<void> => {
     const { homeStoreCode: _ignored, ...user } = u as typeof u & { homeStoreCode?: string };
     await db
       .insert(users)
-      .values({ ...user, passwordHash })
+      // `deliveryPhone` belongs in both branches: the conflict path alone
+      // leaves it NULL on a fresh database, which only shows up when you seed
+      // one from scratch rather than re-seeding an existing one.
+      .values({ ...user, passwordHash, deliveryPhone: user.phone })
       .onConflictDoUpdate({
         target: users.phone,
-        set: { name: user.name, role: user.role, passwordHash, isActive: true },
+        set: {
+          name: user.name,
+          role: user.role,
+          passwordHash,
+          isActive: true,
+          // Everyone seeded signed up by phone, so that is also the number a
+          // rider would call. Matches what migration 0010 backfills, and keeps
+          // the delivery-contact sheet from opening for a seeded account.
+          deliveryPhone: user.phone,
+        },
       });
+
+    // Identity is plural now: the original phone+password login is one
+    // provider row rather than an implicit special case.
+    const [row] = await db.select().from(users).where(eq(users.phone, user.phone)).limit(1);
+    if (row) {
+      await db
+        .insert(authProviders)
+        .values({ userId: row.id, provider: 'phone', providerUserId: user.phone })
+        .onConflictDoNothing();
+    }
   }
   logger.info({ count: SEED_USERS.length }, 'demo accounts ready');
 
