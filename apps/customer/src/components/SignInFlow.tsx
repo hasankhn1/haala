@@ -15,7 +15,6 @@ import { ApiError } from '../api/client';
 import { track } from '../lib/analytics';
 import { useAuth } from '../auth/AuthContext';
 import { useCart, useMergeGuestCart } from '../hooks/useCart';
-import { PhoneField, toE164 } from './PhoneField';
 import { ProviderButtons } from './ProviderButtons';
 import { ProviderHandoff } from './ProviderHandoff';
 
@@ -38,9 +37,15 @@ import { ProviderHandoff } from './ProviderHandoff';
  * is rendered from the *response* on the confirmation step instead, and the
  * password step stays neutral about which it is.
  *
- * Phone sign-in still works and is reachable from the bottom of the screen. It
- * is not offered first because everything new is email-first, but 22 of the 23
- * existing customers have no email address and must not be locked out.
+ * **Phone sign-in is no longer offered here**, per the comp, which has no such
+ * row — the Mobile slot is reserved for OTP. `POST /auth/login` still accepts
+ * phone + password and the rider and ops apps still use it, so this is the
+ * removal of an affordance rather than of a capability.
+ *
+ * It has a consequence worth stating: the existing customers who signed up by
+ * phone have no `users.email`, so entering one here would **create a second
+ * account** rather than reach theirs. They need an address attached through ops,
+ * or phone OTP, before they can sign in to this app again.
  *
  * **On type sizes.** The comp sets the landing title at 28px and the email
  * title at 24px, and the scale has no step between `h1` (20) and `display`
@@ -49,7 +54,7 @@ import { ProviderHandoff } from './ProviderHandoff';
  * sizes, this uses `display` and `h1`, which keeps the step-down between the
  * two screens that the comp is actually expressing.
  */
-type Step = 'landing' | 'email' | 'password' | 'created' | 'phone';
+type Step = 'landing' | 'email' | 'password' | 'created';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -68,7 +73,7 @@ export function SignInFlow({
   /** Overrides the landing title, so checkout can say why it is asking. */
   headline?: { title: string; sub: string };
 }) {
-  const { emailAuth, login } = useAuth();
+  const { emailAuth } = useAuth();
   const mergeGuestCart = useMergeGuestCart();
   const cart = useCart();
   const basketCount = cart.data?.itemCount ?? 0;
@@ -78,7 +83,6 @@ export function SignInFlow({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [reveal, setReveal] = useState(false);
-  const [national, setNational] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
@@ -134,19 +138,6 @@ export function SignInFlow({
     }
   };
 
-  const submitPhone = async () => {
-    setError(null);
-    setLoading(true);
-    try {
-      await login({ phone: toE164(national), password });
-      await handOverBasket();
-      onSignedIn(false);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Could not sign in');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   /**
    * Hand the device basket to the account that just signed in.
@@ -170,7 +161,7 @@ export function SignInFlow({
       setPassword('');
       setReveal(false);
       setStep('email');
-    } else if (step === 'email' || step === 'phone') {
+    } else if (step === 'email') {
       setPassword('');
       setStep('landing');
     } else {
@@ -196,7 +187,7 @@ export function SignInFlow({
             {onLanding ? (
               <View style={styles.brand}>
                 <Text variant="h1" color="textInverse" style={styles.brandMark}>
-                  B
+                  H
                 </Text>
               </View>
             ) : (
@@ -249,17 +240,9 @@ export function SignInFlow({
                   />
                 </View>
                 <View style={styles.spacer} />
-                {/* "Keep browsing" rather than the comp's "Continue as guest":
-                    since Phase 4 browsing needs no account at all, so there is
-                    no guest mode to enter — only a screen to leave. */}
                 <Pressable onPress={onDismiss} style={styles.textLink}>
                   <Text variant="label" style={styles.textLinkLabel}>
-                    Keep browsing
-                  </Text>
-                </Pressable>
-                <Pressable onPress={() => setStep('phone')} style={styles.textLinkTight}>
-                  <Text variant="label" color="primary">
-                    Sign in with a phone number instead
+                    Continue as guest
                   </Text>
                 </Pressable>
                 <Text variant="caption" color="textTertiary" align="center" style={styles.legal}>
@@ -399,36 +382,6 @@ export function SignInFlow({
               </>
             ) : null}
 
-            {step === 'phone' ? (
-              <>
-                <View style={styles.fields}>
-                  <PhoneField value={national} onChangeText={setNational} />
-                  <Input
-                    label="PASSWORD"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    autoComplete="password"
-                    returnKeyType="go"
-                    onSubmitEditing={submitPhone}
-                  />
-                </View>
-                <View style={styles.spacer} />
-                <Button
-                  label="Sign in"
-                  onPress={submitPhone}
-                  loading={loading}
-                  disabled={national.length < 10 || password.length < 1}
-                  size="lg"
-                />
-                <Pressable onPress={() => setStep('landing')} style={styles.textLink}>
-                  <Text variant="label" color="primary">
-                    Use another way to sign in
-                  </Text>
-                </Pressable>
-              </>
-            ) : null}
           </ScrollView>
         </SafeAreaView>
       </KeyboardAvoidingView>
@@ -507,8 +460,7 @@ function titleFor(step: Step, headline?: { title: string; sub: string }): string
   if (step === 'landing') return headline?.title ?? 'Welcome back';
   if (step === 'email') return 'What’s your email?';
   if (step === 'password') return 'And a password';
-  if (step === 'created') return 'You’re all set';
-  return 'Sign in with your number';
+  return 'You’re all set';
 }
 
 function subFor(step: Step, headline: { title: string; sub: string } | undefined, email: string): string {
@@ -520,9 +472,7 @@ function subFor(step: Step, headline: { title: string; sub: string } | undefined
   if (step === 'email')
     return 'We’ll check if you already shop with us — no separate sign-up needed.';
   if (step === 'password') return `Signing in restores your basket and saved addresses.`;
-  if (step === 'created')
-    return `Your account is set up under ${email.trim()}. Nothing else to fill in.`;
-  return 'For accounts made before we added email sign-in.';
+  return `Your account is set up under ${email.trim()}. Nothing else to fill in.`;
 }
 
 const styles = StyleSheet.create({
@@ -618,7 +568,6 @@ const styles = StyleSheet.create({
   reassureText: { flex: 1, color: theme.colors.textPrimary },
   spacer: { flex: 1, minHeight: 18 },
   textLink: { alignItems: 'center', paddingVertical: 14 },
-  textLinkTight: { alignItems: 'center', paddingBottom: theme.spacing.sm },
   textLinkLabel: { color: theme.colors.textPrimary, fontSize: 13 },
   legal: { maxWidth: 290, alignSelf: 'center' },
   footnote: { marginTop: 14 },

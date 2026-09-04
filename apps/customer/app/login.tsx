@@ -3,7 +3,8 @@ import { SignInFlow } from '../src/components/SignInFlow';
 import { RouteError } from '../src/components/RouteError';
 
 /**
- * Sign in, reached from the account tab or Welcome.
+ * Sign in — the app's entry point while signed out, and reached from the
+ * account tab.
  *
  * The flow itself lives in `SignInFlow`, because the same steps are also
  * presented as a modal over checkout. Here they are a screen, so signing in
@@ -14,7 +15,16 @@ export default function LoginScreen() {
   return (
     <SignInFlow
       onSignedIn={() => router.replace('/(tabs)')}
-      onDismiss={() => router.back()}
+      /*
+       * "Continue as guest" — and the back arrow, when there is somewhere to go
+       * back to.
+       *
+       * `back()` alone was wrong once this became the app's entry point: at
+       * launch there is no history, so the guest link did nothing at all and
+       * the screen looked stuck. Reached from Profile there *is* history, and
+       * popping is better than replacing because it keeps the tab they were on.
+       */
+      onDismiss={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
     />
   );
 }

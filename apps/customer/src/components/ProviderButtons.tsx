@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text, theme } from '@haala/ui';
 import { GOOGLE_CONFIGURED, type ProviderState, useGoogleSignIn } from '../auth/useProviderSignIn';
+import { AppleMark, GoogleMark } from './BrandMarks';
 
 /**
  * The ways in, from `Auth & Checkout.dc.html`.
@@ -88,7 +89,7 @@ function WithoutGoogle(props: ProviderButtonsProps) {
   return (
     <Rows
       {...props}
-      google={{ state: { kind: 'idle' }, disabled: true, hint: 'Not set up on this build' }}
+      google={{ state: { kind: 'idle' }, disabled: true, hint: '' }}
     />
   );
 }
@@ -149,7 +150,7 @@ function Rows({
         renders Apple's compliant button rather than an approximation of it.
       */}
       {Platform.OS !== 'android' ? (
-        <Row label="Continue with Apple" tone="dark" disabled hint="Coming soon" />
+        <Row label="Continue with Apple" mark={<AppleMark />} tone="dark" disabled hint="Coming soon" />
       ) : null}
 
       <View style={styles.divider}>
@@ -170,17 +171,6 @@ function Rows({
       />
 
       {showReserved ? <ReservedRow /> : null}
-    </View>
-  );
-}
-
-/** Google's mark is four fixed brand colours, so it is drawn, not tinted. */
-function GoogleMark() {
-  return (
-    <View style={styles.googleMark}>
-      <Text variant="h3" style={styles.googleG}>
-        G
-      </Text>
     </View>
   );
 }
@@ -320,10 +310,6 @@ const styles = StyleSheet.create({
   rowPressed: { opacity: 0.8 },
   reservedLabel: { color: theme.colors.textReserved },
   hint: { position: 'absolute', right: theme.spacing.lg },
-  googleMark: { width: 19, alignItems: 'center' },
-  // Google's blue, from their brand guidelines — not a theme colour, and not
-  // one to substitute.
-  googleG: { color: '#4285F4' },
   divider: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, marginVertical: 5 },
   rule: { flex: 1, height: 1, backgroundColor: theme.colors.border },
   pill: {
