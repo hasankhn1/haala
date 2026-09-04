@@ -45,6 +45,40 @@ async function verifyPassword(plain: string, hash: string | null): Promise<boole
  * A stand-in display name from an email's local part: `sara.khan@x.com` →
  * `Sara Khan`. Only ever a default — the account screen can change it.
  */
+/**
+ * Did this fail because somebody else won a race to the same identity?
+ *
+ * `23505` is Postgres' unique-violation. Every creation path below looks for an
+ * identity and creates one when it is missing, so two requests arriving together
+ * both find nothing and the loser's insert hits a unique index —
+ * `auth_providers_identity_uq`, or the users' phone or email index. That
+ * surfaced as `500 Something went wrong`, which is the wrong answer twice over:
+ * the account exists by then, and the customer did nothing wrong. A double-tap
+ * on "Continue" over a slow connection is enough to cause it.
+ */
+function isUniqueViolation(e: unknown): boolean {
+  // Drizzle rethrows the driver's error and node-postgres puts the SQLSTATE on
+  // `code`. The wrapped `cause` is checked too: allowing for it is cheap, and a
+  // missed race is a 500 in somebody's face.
+  const code = (e as { code?: string })?.code ?? (e as { cause?: { code?: string } })?.cause?.code;
+  return code === '23505';
+}
+
+/**
+ * Run a create that can race, yielding `null` if it lost instead of throwing.
+ *
+ * Wrapping the call rather than the transaction keeps the lost-race branch out
+ * of the middle of the creation logic, where it would read as part of it.
+ */
+async function orNullIfRaced<T>(create: () => Promise<T>): Promise<T | null> {
+  try {
+    return await create();
+  } catch (e) {
+    if (isUniqueViolation(e)) return null;
+    throw e;
+  }
+}
+
 function nameFromEmail(email: string): string {
   const local = email.split('@')[0] ?? 'there';
   const words = local
@@ -67,7 +101,8 @@ export const authService = {
     if (existing) throw AppError.conflict('An account with this phone already exists');
 
     const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
-    const user = await db.transaction(async (tx) => {
+    const user = await orNullIfRaced(() =>
+      db.transaction(async (tx) => {
       const created = await userRepository.create(
         {
           name: input.name,
@@ -86,7 +121,20 @@ export const authService = {
       // account in the table without an identity row.
       await authProviderRepository.link(created.id, 'phone', input.phone, tx);
       return created;
-    });
+      }),
+    );
+    if (!user) {
+      // Lost the race described on `isUniqueViolation`. A phone signup arriving
+      // twice is the same customer twice, so sign them in rather than failing —
+      // with the password checked, as everywhere else.
+      const now = await userRepository.findByPhone(input.phone);
+      if (!now) throw AppError.internal('Could not resolve the account just created');
+      if (!now.isActive) throw AppError.unauthorized('Account is no longer active');
+      if (!(await verifyPassword(input.password, now.passwordHash))) {
+        throw AppError.unauthorized(INVALID_CREDENTIALS);
+      }
+      return { user: toAuthUser(now), tokens: await tokenService.issue(now) };
+    }
 
     const tokens = await tokenService.issue(user);
     return { user: toAuthUser(user), tokens };
@@ -137,7 +185,8 @@ export const authService = {
     }
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-    const created = await db.transaction(async (tx) => {
+    const created = await orNullIfRaced(() =>
+      db.transaction(async (tx) => {
       const user = await userRepository.create(
         {
           // No name is asked for — the design is explicit that sign-up collects
@@ -155,7 +204,20 @@ export const authService = {
       );
       await authProviderRepository.link(user.id, 'email', email, tx);
       return user;
-    });
+      }),
+    );
+    if (!created) {
+      // Lost the race described on `isUniqueViolation`: the identity exists
+      // now, so answer as we would have a moment earlier — and the password
+      // still has to match, because losing a race proves nothing.
+      const now = await authProviderRepository.findUser('email', email);
+      if (!now) throw AppError.internal('Could not resolve the account just created');
+      if (!now.isActive) throw AppError.unauthorized('Account is no longer active');
+      if (!(await verifyPassword(password, now.passwordHash))) {
+        throw AppError.unauthorized(INVALID_PASSWORD);
+      }
+      return { user: toAuthUser(now), tokens: await tokenService.issue(now), created: false };
+    }
 
     return { user: toAuthUser(created), tokens: await tokenService.issue(created), created: true };
   },
@@ -212,7 +274,8 @@ export const authService = {
       }
     }
 
-    const user = await db.transaction(async (tx) => {
+    const user = await orNullIfRaced(() =>
+      db.transaction(async (tx) => {
       const created = await userRepository.create(
         {
           name: identity.name?.trim() || (identity.email ? nameFromEmail(identity.email) : 'There'),
@@ -229,7 +292,17 @@ export const authService = {
       );
       await authProviderRepository.link(created.id, identity.provider, identity.subject, tx);
       return created;
-    });
+      }),
+    );
+    if (!user) {
+      // Lost the race described on `isUniqueViolation`. Nothing to re-check
+      // here: the provider already vouched for this identity, which is the
+      // whole point of `VerifiedIdentity`.
+      const now = await authProviderRepository.findUser(identity.provider, identity.subject);
+      if (!now) throw AppError.internal('Could not resolve the account just created');
+      if (!now.isActive) throw AppError.unauthorized('Account is no longer active');
+      return { user: toAuthUser(now), tokens: await tokenService.issue(now), created: false };
+    }
 
     return { user: toAuthUser(user), tokens: await tokenService.issue(user), created: true };
   },

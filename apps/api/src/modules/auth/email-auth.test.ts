@@ -3,6 +3,8 @@ import type { AddressInfo } from 'node:net';
 import { after, before, describe, it } from 'node:test';
 import { createApp } from '../../app';
 import { closeDb, db } from '../../db/client';
+import { authProviderRepository } from './auth-provider.repository';
+import { userRepository } from '../users/user.repository';
 import { closeRedis } from '../../redis/client';
 
 /**
@@ -161,5 +163,85 @@ describe('a phone customer using their email stays one customer', () => {
       (r) => r.provider,
     );
     assert.deepEqual(providers, ['email', 'phone']);
+  });
+});
+
+describe('losing a race to the same identity is not an error', () => {
+  /*
+   * Found by double-tapping "Continue" in a browser, which is how a customer
+   * would find it: both requests looked for the identity, both found nothing,
+   * and the loser's insert hit `auth_providers_identity_uq`. That reached the
+   * customer as `500 Something went wrong` on a screen that had, in fact, just
+   * created their account.
+   *
+   * **Why this forces the collision instead of racing for it.** Five real
+   * parallel requests reproduce it every time from separate processes, and never
+   * from inside this one: the test's client and server share an event loop, so
+   * each handler reaches its first `await` before the next request has even been
+   * written, and the inserts never overlap. A version of this built on
+   * `Promise.all` passed with the fix removed — green for the wrong reason,
+   * which is worse than no test. So the collision is injected: `link` throws
+   * SQLSTATE 23505 exactly once, which is precisely what Postgres does to the
+   * loser.
+   */
+  const conflict = () => Object.assign(new Error('duplicate key value'), { code: '23505' });
+
+  it('signs the loser in instead of failing', async (t) => {
+    const email = `race.${SUFFIX}@example.test`;
+    // Make the account exist, as the winner of the race would have.
+    const winner = expectOk(
+      await call('/api/v1/auth/email', { email, password: PASSWORD }),
+      'the winner',
+    );
+
+    // Now force the loser's path: the lookups miss, the insert collides.
+    t.mock.method(authProviderRepository, 'findUser', async () => undefined, { times: 1 });
+    t.mock.method(userRepository, 'findByEmail', async () => undefined, { times: 1 });
+    t.mock.method(authProviderRepository, 'link', async () => {
+      throw conflict();
+    }, { times: 1 });
+
+    const loser = expectOk(
+      await call('/api/v1/auth/email', { email, password: PASSWORD }),
+      'the loser must not see an error',
+    );
+
+    assert.equal(loser.created, false, 'the loser did not create the account');
+    assert.equal(loser.user.id, winner.user.id, 'and is the same customer');
+    assert.ok(loser.tokens.accessToken, 'signed in, with a usable session');
+
+    await db.execute(`delete from users where email = '${email}'` as never);
+  });
+
+  it('still refuses a wrong password on that path', async (t) => {
+    // The recovery must not become a way past the password check — losing a
+    // race proves nothing about who is asking.
+    const email = `race.wrong.${SUFFIX}@example.test`;
+    expectOk(await call('/api/v1/auth/email', { email, password: PASSWORD }), 'create it');
+
+    t.mock.method(authProviderRepository, 'findUser', async () => undefined, { times: 1 });
+    t.mock.method(userRepository, 'findByEmail', async () => undefined, { times: 1 });
+    t.mock.method(authProviderRepository, 'link', async () => {
+      throw conflict();
+    }, { times: 1 });
+
+    const r = await call('/api/v1/auth/email', { email, password: 'not-the-password' });
+    assert.equal(r.status, 401, 'a wrong password is a wrong password, race or not');
+
+    await db.execute(`delete from users where email = '${email}'` as never);
+  });
+
+  it('does not swallow a constraint failure that is not this race', async (t) => {
+    // A unique violation on something unrelated must still be an error rather
+    // than a silent sign-in attempt for an account that does not exist.
+    const email = `race.other.${SUFFIX}@example.test`;
+    t.mock.method(authProviderRepository, 'link', async () => {
+      throw conflict();
+    }, { times: 1 });
+
+    const r = await call('/api/v1/auth/email', { email, password: PASSWORD });
+    assert.ok(r.status >= 500, `an unresolvable conflict should not look like success: ${r.status}`);
+
+    await db.execute(`delete from users where email = '${email}'` as never);
   });
 });
