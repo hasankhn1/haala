@@ -29,6 +29,15 @@ let storeId = '';
 let otherStoreId = '';
 /** Two sellable variants at `storeId`, and how many of each exist. */
 let inStock: { variantId: string; qty: number }[] = [];
+/**
+ * A variant that is sellable **at `otherStoreId`**.
+ *
+ * Stock is held per store *and* variant, so a variant with stock at `storeId`
+ * says nothing about the other store — seeding the "different store" basket
+ * with one of `inStock` only worked here by luck, and started returning
+ * `OUT_OF_STOCK` as soon as the seeded quantities moved.
+ */
+let otherStoreVariant: string | null = null;
 const madeUsers: string[] = [];
 
 type Json = Record<string, any>;
@@ -97,6 +106,16 @@ before(async () => {
     .slice(0, 2)
     .map((p) => ({ variantId: p.defaultVariantId as string, qty: Number(p.availableQty) }));
   assert.equal(inStock.length, 2, 'the seeded catalogue needs two stocked products');
+
+  if (otherStoreId !== storeId) {
+    const otherPage = expectOk(
+      await call('GET', `/api/v1/catalog/products?storeId=${otherStoreId}&pageSize=40`, { token }),
+      'the other store’s catalogue',
+    );
+    otherStoreVariant =
+      ((otherPage.items as Json[]).find((p) => p.inStock && p.defaultVariantId)
+        ?.defaultVariantId as string) ?? null;
+  }
 });
 
 async function adminToken(): Promise<string> {
@@ -224,12 +243,13 @@ describe('what cannot be merged is reported, never dropped', () => {
   });
 
   it('replaces a basket from a different store, and flags that it did', async () => {
-    if (otherStoreId === storeId) return; // needs two seeded stores
+    // Needs two seeded stores, and something actually sellable at the second.
+    if (otherStoreId === storeId || !otherStoreVariant) return;
     const t = await signUp('twostores');
     expectOk(
       await call('POST', '/api/v1/cart/items', {
         token: t,
-        body: { storeId: otherStoreId, variantId: inStock[0].variantId, quantity: 1 },
+        body: { storeId: otherStoreId, variantId: otherStoreVariant, quantity: 1 },
       }),
       'seed a basket at the other store',
     );
