@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AddCartItemInput, CartItemView, CartMergeResult, CartView } from '@haala/shared';
+import { useToast } from '@haala/ui';
 import { cartApi } from '../api/endpoints';
 import { qk } from '../api/queryKeys';
 import { useAuth } from '../auth/AuthContext';
+import { track } from '../lib/analytics';
 import { useGuestCart } from '../store/useGuestCart';
 
 /**
@@ -183,16 +185,57 @@ export function useCartMutations() {
  * Returns null when there was nothing to merge, so a caller can tell "nothing
  * to do" from "merged, here is what changed".
  */
+/**
+ * Hand the device basket to the account that just signed in — **and say what
+ * happened to it**.
+ *
+ * The reporting lives here rather than in the callers, and that is the fix for a
+ * real bug rather than a tidy-up. The server goes to some trouble to distinguish
+ * "merged", "this line sold out" and "you asked for six and there are two"
+ * (`merge.test.ts`: *one bad line must not cost the basket... merge what can be
+ * merged, and say what could not*). Checkout had careful handling for all three
+ * — but `SignInFlow` merges first and clears the device basket, so by the time
+ * checkout's effect ran `mergePayload()` returned `null` and it returned early.
+ * The customer arrived at checkout short of items they had chosen and was told
+ * nothing, in every path, because the one caller that reported was never the
+ * one that merged.
+ *
+ * Reporting from the single place a merge can happen means it cannot go
+ * unreported again, and cannot be reported twice.
+ */
 export function useMergeGuestCart() {
   const qc = useQueryClient();
+  const toast = useToast();
 
   return async (): Promise<CartMergeResult | null> => {
     const payload = useGuestCart.getState().mergePayload();
     if (!payload) return null;
 
     const result = await cartApi.merge(payload);
+    // Only cleared once the server has confirmed, so a failed merge leaves the
+    // basket on the device to try again rather than dropping it.
     useGuestCart.getState().clear();
     qc.setQueryData(qk.cart, result.cart);
+
+    track({
+      name: 'guest_cart_merged',
+      lines: result.cart.items.length,
+      skipped: result.skipped.length,
+    });
+
+    // Most specific thing first: a customer who lost a line needs to know that
+    // far more than they need a welcome.
+    if (result.skipped.length > 0) {
+      const n = result.skipped.length;
+      toast.show(`${n} item${n === 1 ? '' : 's'} sold out and left your basket`, 'error');
+    } else if (result.adjusted.length > 0) {
+      toast.show('Some quantities were reduced to what is in stock', 'error');
+    } else if (result.replacedOtherStore) {
+      toast.show('Your basket from another store was replaced');
+    } else if (result.cart.items.length > 0) {
+      toast.show('Welcome back — your basket is here');
+    }
+
     return result;
   };
 }
