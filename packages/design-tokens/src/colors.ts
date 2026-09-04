@@ -25,8 +25,19 @@
 export const palette = {
   /** Brand — Ember. Burnt orange; the single source of visual heat. */
   ember: {
+    /**
+     * The three below arrived with `Auth & Checkout.dc.html`, which needed
+     * gentler steps than the grocery comps between white and ember 200.
+     *
+     * 25 serves two values the comp draws separately, `#FFFBF7` and `#FFFCF7`
+     * — they differ by one unit in a single channel, which is not a difference
+     * anybody can see and not one worth two tokens.
+     */
+    25: '#FFFBF7', // faintest wash — a card whose field is still empty
     50: '#FFF6EF', // faintest wash — category tile backing
+    75: '#FFF1E6', // icon tile inside a sheet
     100: '#FFEDE4', // soft fill — "Top offers" tile, selected chips
+    150: '#FFCBA8', // edge on a card asking for something
     200: '#FFD9C6',
     500: '#FF5A1F', // primary — Ember
     600: '#E8480F', // pressed / links
@@ -55,8 +66,58 @@ export const palette = {
     500: '#FFD84D',
   },
   // Semantic hues.
-  green: { 50: '#DCFCE7', 100: '#BBF7D0', 500: '#16A34A', 600: '#15803D', 700: '#166534' },
+  green: {
+    25: '#EAF6EF', // soft ground behind a confirmation tick
+    50: '#DCFCE7',
+    100: '#BBF7D0',
+    500: '#16A34A',
+    /**
+     * The auth comps' green, and a **muted** one — it has to sit beside ember
+     * on a warm ground without shouting. Took the 600 slot because nothing
+     * referenced the vivid `#15803D` that was here.
+     *
+     * Worth knowing: `success` above is still `#16A34A`, which reads as a
+     * pre-Basket leftover next to this. They should probably converge, but
+     * `success` colours the cart, the bill and the delivery states, so that is
+     * a visual change to make deliberately rather than in passing.
+     */
+    600: '#2F7D5B',
+    700: '#166534',
+  },
+
+  /**
+   * Warm sand — hairlines and ink a step warmer than `clay`, from the auth
+   * comps. Only three steps exist because only three are used; a full ramp
+   * invented ahead of need is a ramp nobody trusts.
+   */
+  sand: {
+    200: '#F2E4D6', // hairline around an ember wash
+    300: '#E0C9AE', // dashed edge on the reserved row
+    500: '#B98A4E', // the icon on it
+    700: '#8A6636', // ink on that row
+  },
   red: { 50: '#FEF2F2', 500: '#DC2626', 600: '#BA1A1A', 700: '#93000A' },
+
+  /**
+   * Warm red, for telling somebody something went wrong **on a warm ground**.
+   *
+   * A second red family needs justifying, so: `red` above is a cool,
+   * high-chroma red inherited from before Basket, and the auth comps' error
+   * card is a warm one that sits in the same world as ember. Dropping `red`'s
+   * values onto that card makes it look like a browser alert pasted onto the
+   * page. Retuning `red` itself was the other option, but it colours the
+   * cancelled and failed order states in three apps, so that is a visual change
+   * to make on purpose rather than as a side effect of styling a sign-in
+   * screen.
+   *
+   * Use `rust` on warm surfaces, `red` for hard failure states.
+   */
+  rust: {
+    50: '#FEF1EE', // card ground
+    100: '#F6CFC5', // card hairline
+    400: '#A0503C', // the explanation
+    800: '#8E2814', // what went wrong
+  },
   amber: { 50: '#FFFBEB', 500: '#F59E0B', 600: '#D97706' },
   neutral: { 0: '#FFFFFF', 1000: '#000000' },
 } as const;
@@ -123,6 +184,40 @@ export const colors = {
   warningSoft: palette.amber[50],
   info: palette.ember[600],
   infoSoft: palette.ember[50],
+
+  /**
+   * Confirmed, as distinct from `success`. Used where something the customer
+   * just entered is now known to be good — a valid phone field's border, the
+   * "saved to your account" line — rather than for an outcome like a delivered
+   * order.
+   */
+  confirmed: palette.green[600],
+
+  // ── Surfaces and edges from the auth comps ────────────────────────────────
+  /** A card that is waiting for something: faintest ember over white. */
+  surfaceAttention: palette.ember[25],
+  /** Its edge — ember-family, deliberately not `warning`. Nothing is wrong. */
+  borderAttention: palette.ember[150],
+  /** The icon tile inside a bottom sheet. */
+  emberTile: palette.ember[75],
+  /** Hairline on an ember wash, a step warmer than `border`. */
+  borderWarm: palette.sand[200],
+  /** The dashed edge, icon and ink of a row reserved but not yet real. */
+  borderReserved: palette.sand[300],
+  iconReserved: palette.sand[500],
+  textReserved: palette.sand[700],
+
+  /** Ground behind a confirmation tick — softer than `successSoft`'s mint. */
+  confirmedSoft: palette.green[25],
+
+  /**
+   * An explanation of something that failed, on a warm surface. Distinct from
+   * `error`, which is for a hard failure; see the `rust` note above.
+   */
+  surfaceAlert: palette.rust[50],
+  borderAlert: palette.rust[100],
+  textAlert: palette.rust[800],
+  textAlertSoft: palette.rust[400],
 
   // Disabled / secondary UI
   disabled: palette.clay[200],
