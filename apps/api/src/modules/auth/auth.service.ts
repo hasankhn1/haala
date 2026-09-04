@@ -11,6 +11,7 @@ import { AppError } from '../../common/errors';
 import { db } from '../../db/client';
 import { userRepository } from '../users/user.repository';
 import { authProviderRepository } from './auth-provider.repository';
+import { type VerifiedIdentity, verifierFor } from './providers/verify';
 import { toAuthUser } from '../users/user.service';
 import { tokenService } from './token.service';
 
@@ -18,6 +19,27 @@ const SALT_ROUNDS = 10;
 const INVALID_CREDENTIALS = 'Invalid phone or password';
 /** Deliberately does not say whether the account exists. */
 const INVALID_PASSWORD = 'That password doesn’t match. Try again or reset it.';
+
+/**
+ * A real bcrypt hash of a value nobody knows, compared against when an account
+ * has no password. Without it, "this account has no password" returns
+ * instantly while a wrong password costs ~80ms — a difference that tells an
+ * attacker which accounts are Google-only.
+ */
+const ABSENT_PASSWORD_HASH = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
+
+/**
+ * Check a password against a hash that may not exist.
+ *
+ * Every read of `users.passwordHash` goes through here, because the column
+ * became nullable when provider-only accounts arrived and `bcrypt.compare`
+ * cannot be handed a null. Answers false for a missing hash, having spent the
+ * same time as a genuine mismatch.
+ */
+async function verifyPassword(plain: string, hash: string | null): Promise<boolean> {
+  const ok = await bcrypt.compare(plain, hash ?? ABSENT_PASSWORD_HASH);
+  return hash === null ? false : ok;
+}
 
 /**
  * A stand-in display name from an email's local part: `sara.khan@x.com` →
@@ -99,7 +121,7 @@ export const authService = {
     const linked = await authProviderRepository.findUser('email', email);
     if (linked) {
       if (!linked.isActive) throw AppError.unauthorized('Account is no longer active');
-      const ok = await bcrypt.compare(password, linked.passwordHash);
+      const ok = await verifyPassword(password, linked.passwordHash);
       if (!ok) throw AppError.unauthorized(INVALID_PASSWORD);
       return { user: toAuthUser(linked), tokens: await tokenService.issue(linked), created: false };
     }
@@ -107,7 +129,7 @@ export const authService = {
     const owner = await userRepository.findByEmail(email);
     if (owner) {
       if (!owner.isActive) throw AppError.unauthorized('Account is no longer active');
-      const ok = await bcrypt.compare(password, owner.passwordHash);
+      const ok = await verifyPassword(password, owner.passwordHash);
       if (!ok) throw AppError.unauthorized(INVALID_PASSWORD);
       // Proved by password, so the identity may be attached.
       await authProviderRepository.link(owner.id, 'email', email);
@@ -138,11 +160,85 @@ export const authService = {
     return { user: toAuthUser(created), tokens: await tokenService.issue(created), created: true };
   },
 
+  /**
+   * Sign in with Google or Apple.
+   *
+   * The token is verified before anything else happens, so `identity.subject`
+   * is the provider's word rather than the client's. From there:
+   *
+   *   1. We have seen this `sub` → that is the customer, done.
+   *   2. New `sub`, but the provider **states the email is verified** and an
+   *      account already owns it → attach and sign in. This is the "I signed up
+   *      with a password, now I'm using the Google button" case, and it is safe
+   *      precisely because Google asserted the address.
+   *   3. Otherwise → a new customer.
+   *
+   * Case 2 turns on `emailVerified`, and that is the whole security of it. An
+   * unverified address in a provider profile is just a string the account holder
+   * chose; honouring it would let anyone claim somebody else's account by
+   * putting their address in a Google profile. When it is false we fall through
+   * to case 3 and make a separate account, which is recoverable — wrongly
+   * merging two people's accounts is not.
+   *
+   * Nothing here reads a password. A provider-only customer has none, which is
+   * why `users.passwordHash` is nullable.
+   */
+  async providerAuth(provider: 'google' | 'apple', idToken: string): Promise<EmailAuthResult> {
+    // Verification and resolution are deliberately two steps. The first talks
+    // to Google; the second is where every decision that matters happens, and
+    // keeping it separate is what makes those decisions testable without a
+    // real signed token.
+    return this.resolveIdentity(await verifierFor(provider)(idToken));
+  },
+
+  /**
+   * Attach a **already-verified** identity to a customer, creating one if
+   * needed. Never call this with anything a client supplied directly — the
+   * whole point of `VerifiedIdentity` is that a provider vouched for it.
+   */
+  async resolveIdentity(identity: VerifiedIdentity): Promise<EmailAuthResult> {
+    const known = await authProviderRepository.findUser(identity.provider, identity.subject);
+    if (known) {
+      if (!known.isActive) throw AppError.unauthorized('Account is no longer active');
+      return { user: toAuthUser(known), tokens: await tokenService.issue(known), created: false };
+    }
+
+    if (identity.email && identity.emailVerified) {
+      const owner = await userRepository.findByEmail(identity.email);
+      if (owner) {
+        if (!owner.isActive) throw AppError.unauthorized('Account is no longer active');
+        await authProviderRepository.link(owner.id, identity.provider, identity.subject);
+        return { user: toAuthUser(owner), tokens: await tokenService.issue(owner), created: false };
+      }
+    }
+
+    const user = await db.transaction(async (tx) => {
+      const created = await userRepository.create(
+        {
+          name: identity.name?.trim() || (identity.email ? nameFromEmail(identity.email) : 'There'),
+          // Only stored when the provider vouched for it, so `users.email`
+          // never holds an address nobody confirmed. Apple's relay addresses
+          // and its absent-after-first-login behaviour both land here as null.
+          email: identity.emailVerified ? identity.email : null,
+          phone: null,
+          // No password at all, rather than a placeholder to compare against.
+          passwordHash: null,
+          role: UserRole.Customer,
+        },
+        tx,
+      );
+      await authProviderRepository.link(created.id, identity.provider, identity.subject, tx);
+      return created;
+    });
+
+    return { user: toAuthUser(user), tokens: await tokenService.issue(user), created: true };
+  },
+
   async login(input: LoginInput): Promise<AuthResult> {
     const user = await userRepository.findByPhone(input.phone);
     // Compare against a hash even when missing to reduce timing signal.
     const ok =
-      user && user.isActive ? await bcrypt.compare(input.password, user.passwordHash) : false;
+      user && user.isActive ? await verifyPassword(input.password, user.passwordHash) : false;
     if (!user || !ok) throw AppError.unauthorized(INVALID_CREDENTIALS);
 
     const tokens = await tokenService.issue(user);

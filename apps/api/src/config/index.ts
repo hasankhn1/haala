@@ -40,6 +40,14 @@ export const config = {
     publicBaseUrl: env.R2_PUBLIC_BASE_URL?.replace(/\/$/, ''),
   },
 
+  oauth: {
+    /** Empty means Google sign-in is switched off, not misconfigured. */
+    googleAudiences: (env.GOOGLE_OAUTH_AUDIENCES ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  },
+
   payments: {
     onlineProvider: env.PAYMENT_ONLINE_PROVIDER,
     safepay: {

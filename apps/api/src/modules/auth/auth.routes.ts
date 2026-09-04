@@ -1,5 +1,11 @@
 import { Router } from 'express';
-import { emailAuthSchema, loginSchema, refreshSchema, registerSchema } from '@haala/shared';
+import {
+  emailAuthSchema,
+  loginSchema,
+  providerAuthSchema,
+  refreshSchema,
+  registerSchema,
+} from '@haala/shared';
 import { asyncHandler } from '../../common/http';
 import { validate } from '../../common/middleware/validate';
 import { authLimiter } from '../../common/middleware/rate-limit';
@@ -19,6 +25,16 @@ router.post(
   '/email',
   validate({ body: emailAuthSchema }),
   asyncHandler(authController.emailAuth),
+);
+router.post(
+  '/google',
+  validate({ body: providerAuthSchema }),
+  asyncHandler(authController.google),
+);
+router.post(
+  '/apple',
+  validate({ body: providerAuthSchema }),
+  asyncHandler(authController.apple),
 );
 router.post('/refresh', validate({ body: refreshSchema }), asyncHandler(authController.refresh));
 router.post('/logout', validate({ body: refreshSchema }), asyncHandler(authController.logout));

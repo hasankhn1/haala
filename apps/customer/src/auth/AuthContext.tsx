@@ -27,6 +27,8 @@ interface AuthContextValue {
    * than a customer discovering it later.
    */
   emailAuth: (input: EmailAuthInput) => Promise<boolean>;
+  /** Google or Apple. Resolves to `true` when it created the account. */
+  providerAuth: (provider: 'google' | 'apple', idToken: string) => Promise<boolean>;
   /** Replaces the cached user after a profile change, e.g. saving a mobile. */
   setUser: (user: AuthUser) => void;
   logout: () => Promise<void>;
@@ -90,6 +92,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAccessToken(result.tokens.accessToken);
         setUser(result.user);
         setStatus('authenticated');
+      },
+      async providerAuth(provider, idToken) {
+        const result = await authApi.provider(provider, idToken);
+        await tokenStore.save(result.tokens);
+        setAccessToken(result.tokens.accessToken);
+        setUser(result.user);
+        setStatus('authenticated');
+        return result.created;
       },
       async emailAuth(input) {
         const result = await authApi.email(input);

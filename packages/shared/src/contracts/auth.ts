@@ -69,6 +69,16 @@ export const emailAuthSchema = z
   .strict();
 export type EmailAuthInput = z.infer<typeof emailAuthSchema>;
 
+/**
+ * Sign in with a provider. The client sends only the token it received — never
+ * an email, a name or a user id, because none of those could be trusted and
+ * all of them are inside the token anyway.
+ */
+export const providerAuthSchema = z
+  .object({ idToken: z.string().min(20).max(8192) })
+  .strict();
+export type ProviderAuthInput = z.infer<typeof providerAuthSchema>;
+
 export const loginSchema = z.object({
   phone: phoneSchema,
   password: z.string().min(1),

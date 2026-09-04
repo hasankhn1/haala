@@ -34,6 +34,13 @@ export const authApi = {
   login: (input: LoginInput) => api.post<AuthResult>('/auth/login', input),
   /** Signs in, or creates the account — `created` says which. */
   email: (input: EmailAuthInput) => api.post<EmailAuthResult>('/auth/email', input),
+  /**
+   * Only the provider's own token travels. The server verifies it and reads
+   * the identity out; sending an email or a name would be unverifiable and is
+   * therefore not sent.
+   */
+  provider: (provider: 'google' | 'apple', idToken: string) =>
+    api.post<EmailAuthResult>(`/auth/${provider}`, { idToken }),
   register: (input: RegisterInput) => api.post<AuthResult>('/auth/register', input),
   refresh: (refreshToken: string) => api.post<AuthResult>('/auth/refresh', { refreshToken }),
   logout: (refreshToken: string) => api.post<{ success: boolean }>('/auth/logout', { refreshToken }),

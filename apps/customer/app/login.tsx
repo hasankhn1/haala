@@ -15,15 +15,19 @@ import { Button, Icon, Input, Text, theme } from '@haala/ui';
 import { ApiError } from '../src/api/client';
 import { useAuth } from '../src/auth/AuthContext';
 import { PhoneField, toE164 } from '../src/components/PhoneField';
+import { ProviderButtons } from '../src/components/ProviderButtons';
 
 /**
- * Sign in — email first, from `Auth & Checkout.dc.html`.
+ * Sign in, from `Auth & Checkout.dc.html`.
  *
- * Two steps, one screen: the address, then the password. There is deliberately
- * **no sign-up screen** — an address we have never seen becomes an account when
- * the password is submitted, which is the design's central idea and the reason
- * nothing else is asked for. No name, no phone: checkout collects a delivery
- * number when it actually needs one.
+ * A landing offering every way in, then the email route as two steps: the
+ * address, then the password. There is deliberately **no sign-up screen** — an
+ * address we have never seen becomes an account when the password is submitted,
+ * which is the design's central idea and the reason nothing else is asked for.
+ * No name, no phone: checkout collects a delivery number when it needs one.
+ *
+ * In Phase 5 this same set of steps becomes a modal over checkout, which is why
+ * the provider rows live in `ProviderButtons` rather than inline here.
  *
  * **Why the password label does not change before you type it.** The design
  * shows a "we already know this email" badge at step two, which needs the
@@ -36,7 +40,7 @@ import { PhoneField, toE164 } from '../src/components/PhoneField';
  * is not offered first because everything new is email-first, but 22 of the 23
  * existing customers have no email address and must not be locked out.
  */
-type Step = 'email' | 'password' | 'created' | 'phone';
+type Step = 'landing' | 'email' | 'password' | 'created' | 'phone';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -45,7 +49,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const passwordRef = useRef<TextInput>(null);
 
-  const [step, setStep] = useState<Step>('email');
+  const [step, setStep] = useState<Step>('landing');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [national, setNational] = useState('');
@@ -96,16 +100,21 @@ export default function LoginScreen() {
 
   const back = () => {
     setError(null);
-    if (step === 'password' || step === 'phone') {
+    if (step === 'password') {
       setPassword('');
       setStep('email');
+    } else if (step === 'email' || step === 'phone') {
+      setPassword('');
+      setStep('landing');
     } else {
       router.back();
     }
   };
 
   const title =
-    step === 'email'
+    step === 'landing'
+      ? 'Welcome back'
+      : step === 'email'
       ? 'What’s your email?'
       : step === 'password'
         ? 'And a password'
@@ -114,7 +123,9 @@ export default function LoginScreen() {
           : 'Sign in with your number';
 
   const sub =
-    step === 'email'
+    step === 'landing'
+      ? 'Pick any way in — if you’re new we’ll set the account up as you go.'
+      : step === 'email'
       ? 'No separate sign-up — if you’re new we’ll set the account up as you go.'
       : step === 'password'
         ? email.trim()
@@ -156,6 +167,25 @@ export default function LoginScreen() {
               </View>
             ) : null}
 
+            {step === 'landing' ? (
+              <>
+                <ProviderButtons
+                  onSignedIn={(created) =>
+                    created ? setStep('created') : router.replace('/(tabs)')
+                  }
+                  onEmail={() => setStep('email')}
+                />
+                <Text variant="caption" color="textTertiary" align="center">
+                  By continuing you agree to our Terms and Privacy Policy. We never post anything.
+                </Text>
+                <Pressable onPress={() => setStep('phone')} style={styles.altLink}>
+                  <Text variant="label" color="primary">
+                    Sign in with a phone number instead
+                  </Text>
+                </Pressable>
+              </>
+            ) : null}
+
             {step === 'email' ? (
               <>
                 <Input
@@ -175,11 +205,6 @@ export default function LoginScreen() {
                 <Text variant="caption" color="textTertiary" align="center">
                   We never send marketing without asking first.
                 </Text>
-                <Pressable onPress={() => setStep('phone')} style={styles.altLink}>
-                  <Text variant="label" color="primary">
-                    Sign in with a phone number instead
-                  </Text>
-                </Pressable>
               </>
             ) : null}
 
@@ -238,9 +263,9 @@ export default function LoginScreen() {
                   loading={loading}
                   disabled={national.length < 10 || password.length < 1}
                 />
-                <Pressable onPress={() => setStep('email')} style={styles.altLink}>
+                <Pressable onPress={() => setStep('landing')} style={styles.altLink}>
                   <Text variant="label" color="primary">
-                    Use an email address instead
+                    Use another way to sign in
                   </Text>
                 </Pressable>
               </>

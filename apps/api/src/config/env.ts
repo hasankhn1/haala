@@ -63,6 +63,16 @@ const envSchema = z.object({
    * broken.
    */
   R2_PUBLIC_BASE_URL: blankAsUndefined(z.string().url().optional()),
+
+  /**
+   * Comma-separated Google OAuth client IDs this API will accept tokens for —
+   * the Android, iOS and Web client ids from the Cloud Console. These are
+   * **audiences, not secrets**: pinning them is what stops a validly-signed
+   * token minted for somebody else's app being accepted here.
+   *
+   * Unset, `/auth/google` answers 503 and email sign-in carries on working.
+   */
+  GOOGLE_OAUTH_AUDIENCES: blankAsUndefined(z.string().optional()),
 });
 
 const parsed = envSchema.safeParse(process.env);

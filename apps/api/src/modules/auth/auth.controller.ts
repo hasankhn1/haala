@@ -20,6 +20,21 @@ export const authController = {
     sendSuccess(res, result, result.created ? 201 : 200);
   },
 
+  async google(req: Request, res: Response): Promise<void> {
+    const result = await authService.providerAuth('google', req.body.idToken);
+    sendSuccess(res, result, result.created ? 201 : 200);
+  },
+
+  /**
+   * Wired now, answering 501 until `verifyAppleIdToken` exists. A route that
+   * says "not yet" is easier to reason about than one that appears with the
+   * button.
+   */
+  async apple(req: Request, res: Response): Promise<void> {
+    const result = await authService.providerAuth('apple', req.body.idToken);
+    sendSuccess(res, result, result.created ? 201 : 200);
+  },
+
   async login(req: Request, res: Response): Promise<void> {
     const result = await authService.login(req.body);
     sendSuccess(res, result);

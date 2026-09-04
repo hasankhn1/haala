@@ -20,7 +20,16 @@ export const users = pgTable(
      */
     phone: text(),
     email: text(),
-    passwordHash: text().notNull(),
+    /**
+     * Null for an account that has never had one — someone who arrived through
+     * Google or Apple and only ever will. A password is one credential among
+     * several now, not a property every user has.
+     *
+     * Every read must go through `verifyPassword`, which answers false for null
+     * while still spending the same time, so "no password set" and "wrong
+     * password" are indistinguishable from outside.
+     */
+    passwordHash: text(),
     role: userRoleEnum().notNull().default('customer'),
     /**
      * The brand this login belongs to. Set for — and only for — `brand_user`.
