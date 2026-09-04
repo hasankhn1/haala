@@ -82,34 +82,29 @@ export default function CheckoutScreen() {
    * before they pay.
    */
   const merged = useRef(false);
+  /**
+   * A guest basket arrived with them on this visit, so the header can say so —
+   * the comp's "4 items · basket restored". Only true when a merge actually
+   * moved something, not merely because a basket exists.
+   */
+  const [restored, setRestored] = useState(false);
   useEffect(() => {
     if (!signedIn || merged.current) return;
     merged.current = true;
     void (async () => {
       try {
+        // `useMergeGuestCart` reports the outcome itself — skipped lines,
+        // reduced quantities, a replaced basket. It has to, because this effect
+        // is not the only caller and used to be the only reporter; see the note
+        // on that hook.
         const result = await mergeGuestCart();
-        if (!result) return;
-        track({
-          name: 'guest_cart_merged',
-          lines: result.cart.items.length,
-          skipped: result.skipped.length,
-        });
-        if (result.skipped.length > 0) {
-          toast.show(
-            `${result.skipped.length} item${result.skipped.length === 1 ? '' : 's'} sold out and left your basket`,
-            'error',
-          );
-        } else if (result.adjusted.length > 0) {
-          toast.show('Some quantities were reduced to what is in stock', 'error');
-        } else {
-          toast.show('Welcome back — your basket is here');
-        }
+        setRestored(result !== null && result.cart.items.length > 0);
       } catch {
         // The basket is still on the device; it merges on the next attempt.
         // Nothing is lost, so nothing needs saying.
       }
     })();
-  }, [signedIn, mergeGuestCart, toast]);
+  }, [signedIn, mergeGuestCart]);
 
   /** Both of these 401 for a guest, so they wait for the gate. */
   const addresses = useQuery({
@@ -124,6 +119,14 @@ export default function CheckoutScreen() {
    */
   const deliveryPhone = user?.deliveryPhone ?? null;
   const [contactSheet, setContactSheet] = useState(false);
+  /**
+   * Saved during *this* visit to checkout, so the card can confirm it.
+   *
+   * Not derived from `deliveryPhone` being present — that is also true for
+   * somebody who saved it weeks ago, and confirming a fact they never entered
+   * here would be noise.
+   */
+  const [justSaved, setJustSaved] = useState(false);
   const offeredContact = useRef(false);
   useEffect(() => {
     // Opened once, and only for somebody who has not already given us one.
@@ -240,8 +243,20 @@ export default function CheckoutScreen() {
    * backend validation error about a phone number, which is the confusing
    * state the design explicitly rules out.
    */
+  /**
+   * Missing only the delivery number — everything else about this order is
+   * ready. Kept out of `canPlace` on purpose: the button stays **pressable** so
+   * it can reopen the sheet, and goes grey rather than dimmed-ember to say
+   * "not yet" instead of "broken", which is what the comp draws.
+   *
+   * It used to be part of `canPlace`, which disabled the button and so made its
+   * own `onPress` unreachable — the tap that was supposed to reopen the sheet
+   * did nothing at all, which is exactly the dead end the design rules out.
+   */
+  const missingPhone = signedIn && !deliveryPhone;
+
   const canPlace =
-    signedIn && !!deliveryPhone && !!addressId && !!data && data.itemCount > 0 && !place.isPending;
+    signedIn && !!addressId && !!data && data.itemCount > 0 && !place.isPending;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -249,14 +264,30 @@ export default function CheckoutScreen() {
         <Pressable style={styles.backCircle} onPress={() => router.back()} accessibilityLabel="Back">
           <Icon name="arrow-back" size={16} color={theme.colors.textPrimary} />
         </Pressable>
-        <View>
+        <View style={styles.flex}>
           <Text variant="h2">Checkout</Text>
           {store ? (
             <Text variant="bodySm" color="textSecondary">
               {store.name} · {store.area}
+              {restored ? ' · basket restored' : ''}
             </Text>
           ) : null}
         </View>
+
+        {/* Who is placing this order, and how they got here. Reassurance at the
+            moment of paying that they are not about to order as somebody else. */}
+        {signedIn ? (
+          <View style={styles.accountPill}>
+            <View style={styles.accountInitial}>
+              <Text variant="caption" color="textInverse" style={styles.accountInitialText}>
+                {(user.name || user.email || 'H').charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <Text variant="labelSm" color="textSecondary">
+              {user.email ? 'with email' : 'with phone'}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       <StateView loading={cart.isLoading} error={cart.error} onRetry={() => cart.refetch()}>
@@ -317,24 +348,42 @@ export default function CheckoutScreen() {
                 deliveryPhone ? `Delivery number ${deliveryPhone}. Edit` : 'Add a mobile number'
               }
             >
-              <View style={[styles.contactIcon, !deliveryPhone && styles.contactIconMissing]}>
-                <Icon
-                  name="call-outline"
-                  size={18}
-                  color={deliveryPhone ? theme.colors.primary : theme.colors.warning}
-                />
+              <View style={styles.contactRow}>
+                <View style={[styles.contactIcon, !deliveryPhone && styles.contactIconMissing]}>
+                  <Icon
+                    name="call-outline"
+                    size={18}
+                    color={deliveryPhone ? theme.colors.textSecondary : theme.colors.primary}
+                  />
+                </View>
+                <View style={styles.flex}>
+                  <Text variant="bodyStrong">{deliveryPhone ?? 'Add a mobile number'}</Text>
+                  <Text variant="bodySm" color="textSecondary" style={styles.contactBody}>
+                    {deliveryPhone
+                      ? 'Saved to your account — you won’t be asked again.'
+                      : 'The rider needs a number to reach you at the door.'}
+                  </Text>
+                </View>
+                {/* A filled pill when something is needed, an outlined one when
+                    it is only editable — not a text link either way. */}
+                <View style={[styles.contactAction, !deliveryPhone && styles.contactActionFilled]}>
+                  <Text
+                    variant="labelSm"
+                    color={deliveryPhone ? 'textSecondary' : 'onPrimary'}
+                  >
+                    {deliveryPhone ? 'Edit' : 'Add'}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.flex}>
-                <Text variant="bodyStrong">{deliveryPhone ?? 'Add a mobile number'}</Text>
-                <Text variant="bodySm" color="textSecondary">
-                  {deliveryPhone
-                    ? 'Saved to your account — you won’t be asked again.'
-                    : 'The rider needs a number to reach you at the door.'}
-                </Text>
-              </View>
-              <Text variant="label" style={styles.link}>
-                {deliveryPhone ? 'Edit' : 'Add'}
-              </Text>
+
+              {justSaved ? (
+                <View style={styles.contactSaved}>
+                  <Icon name="checkmark" size={14} color={theme.colors.confirmed} strokeWidth={2.6} />
+                  <Text variant="labelSm" style={styles.contactSavedText}>
+                    Saved to your account — you won’t be asked again.
+                  </Text>
+                </View>
+              ) : null}
             </Pressable>
           </View>
 
@@ -477,13 +526,15 @@ export default function CheckoutScreen() {
           label={
             place.isPending
               ? 'Placing…'
-              : !deliveryPhone && signedIn
+              : missingPhone
                 ? 'Add mobile number to continue'
                 : `Place order · ${formatPKR(total)}`
           }
           loading={place.isPending}
           disabled={!canPlace}
-          style={styles.cta}
+          // Grey while the number is the only thing missing; see `missingPhone`.
+          style={[styles.cta, missingPhone && styles.ctaBlocked]}
+          labelColor={missingPhone ? theme.colors.onDisabled : undefined}
           onPress={() => {
             setError(null);
             if (!deliveryPhone) {
@@ -495,6 +546,11 @@ export default function CheckoutScreen() {
             place.mutate();
           }}
         />
+        {missingPhone ? (
+          <Text variant="bodySm" color="textSecondary" align="center" style={styles.ctaBlockedNote}>
+            The rider needs a number to reach you at the door.
+          </Text>
+        ) : null}
       </View>
 
       <BottomSheet visible={sheet} onClose={() => setSheet(false)} title="Choose address">
@@ -541,7 +597,9 @@ export default function CheckoutScreen() {
         }}
         onSaved={() => {
           setContactSheet(false);
-          toast.show('Number saved');
+          // The sheet confirms the save itself now, and the card picks it up
+          // below — a toast on top of both would be the third time we say it.
+          setJustSaved(true);
         }}
       />
     </SafeAreaView>
@@ -772,26 +830,76 @@ const styles = StyleSheet.create({
 
   contactSection: { gap: theme.spacing.sm },
   contact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.md,
-    padding: theme.spacing.md,
+    padding: 14,
     borderRadius: theme.radii.md,
-    borderWidth: 1,
+    borderWidth: 1.6,
     borderColor: theme.colors.border,
     backgroundColor: theme.colors.surface,
   },
-  /** Amber, not red: something is missing, nothing has gone wrong. */
-  contactMissing: { borderColor: theme.colors.warning, backgroundColor: theme.colors.warningSoft },
+  contactRow: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  /**
+   * Ember-family, not amber. Nothing has gone wrong — we are asking for one
+   * more thing — so this reads as part of the brand asking a question rather
+   * than a warning about a problem.
+   */
+  contactMissing: {
+    borderColor: theme.colors.borderAttention,
+    backgroundColor: theme.colors.surfaceAttention,
+  },
+  contactBody: { marginTop: 5 },
   contactIcon: {
     width: 36,
     height: 36,
     borderRadius: 11,
-    backgroundColor: theme.colors.primarySoft,
+    backgroundColor: theme.colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  contactIconMissing: { backgroundColor: theme.colors.surface },
+  contactIconMissing: { backgroundColor: theme.colors.emberTile },
+  contactAction: {
+    borderRadius: theme.radii.pill,
+    borderWidth: 1.4,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+  },
+  contactActionFilled: {
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.primary,
+  },
+  contactSaved: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.borderWarm,
+  },
+  contactSavedText: { color: theme.colors.confirmed },
+  accountPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: theme.colors.surfaceSunken,
+    borderRadius: theme.radii.pill,
+    paddingLeft: 5,
+    paddingRight: 9,
+    paddingVertical: 5,
+  },
+  accountInitial: {
+    width: 22,
+    height: 22,
+    borderRadius: theme.radii.pill,
+    backgroundColor: theme.colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accountInitialText: { fontSize: 9.5 },
+  /** Grey, not dimmed ember: "not yet" rather than "broken". */
+  ctaBlocked: { backgroundColor: theme.colors.disabled },
+  ctaBlockedNote: { marginTop: 10 },
 
   sheetRow: {
     flexDirection: 'row',
