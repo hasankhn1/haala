@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SignInFlow } from '../../src/components/SignInFlow';
+import { RouteError } from '../../src/components/RouteError';
 
 /**
  * The sign-in modal, opened by checkout.
@@ -30,5 +31,20 @@ export default function SignInModal() {
       onSignedIn={() => router.back()}
       onDismiss={() => router.back()}
     />
+  );
+}
+
+/**
+ * As on `/login`. Dismissal here is `back()` rather than a redirect, because
+ * checkout is still mounted underneath and must not be replaced.
+ */
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
+  return <ModalErrorScreen error={error} retry={retry} />;
+}
+
+function ModalErrorScreen({ error, retry }: { error: Error; retry: () => void }) {
+  const router = useRouter();
+  return (
+    <RouteError error={error} retry={retry} what="Sign in" onDismiss={() => router.back()} />
   );
 }

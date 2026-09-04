@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import * as Google from 'expo-auth-session/providers/google';
 import { ApiError } from '../api/client';
@@ -30,45 +30,72 @@ export type ProviderState =
 /**
  * Client ids come from the environment, per platform. `EXPO_PUBLIC_` is
  * deliberate — these are not secrets, and Metro inlines them at build time.
- *
- * Unset, `configured` is false and the button renders disabled with a reason
- * rather than opening a browser that will fail.
  */
-const ANDROID_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID;
-const IOS_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS;
-const WEB_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB;
+const blank = (v: string | undefined) => (v && v.trim() !== '' ? v : undefined);
 
+const ANDROID_ID = blank(process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID);
+const IOS_ID = blank(process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS);
+const WEB_ID = blank(process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB);
+
+/**
+ * Whether Google sign-in can work **on this platform**, decided at module load
+ * so a caller can check it *before* mounting the hook below.
+ *
+ * This has to be readable without rendering anything, because
+ * `useIdTokenAuthRequest` does not fail politely: it resolves the id for the
+ * current platform inside a `useMemo` and calls `invariantClientId`, which
+ * *throws* when that id is `undefined`. The throw happens during render, so a
+ * guard inside `signIn` — which is where this check used to live — can never
+ * run. The whole sign-in screen died before painting a single button, on every
+ * platform, and the only symptom was a red error overlay and a bounce back to
+ * the homepage.
+ *
+ * So: never mount `useGoogleSignIn` unless this is true. `ProviderButtons`
+ * enforces that by choosing between two components rather than two branches.
+ */
+export const GOOGLE_CONFIGURED = Boolean(
+  Platform.select({ android: ANDROID_ID, ios: IOS_ID, default: WEB_ID }),
+);
+
+/**
+ * **Only call this when `GOOGLE_CONFIGURED` is true.** See the note above — it
+ * throws during render otherwise, and no `try` around a hook can catch that.
+ */
 export function useGoogleSignIn(onSignedIn: (created: boolean) => void | Promise<void>) {
   const { providerAuth } = useAuth();
   const [state, setState] = useState<ProviderState>({ kind: 'idle' });
-
-  const platformId = Platform.select({ android: ANDROID_ID, ios: IOS_ID, default: WEB_ID });
-  const configured = Boolean(platformId ?? WEB_ID);
+  /**
+   * Set when the customer taps Cancel on the hand-off screen.
+   *
+   * Nothing can recall a browser that is already open, so `promptAsync` may
+   * still resolve — successfully — well after they said no. Without this, a
+   * cancelled attempt could sign them in a second later, which is worse than
+   * either outcome they chose between.
+   */
+  const abandoned = useRef(false);
 
   // `useIdTokenAuthRequest` rather than the access-token variant: an ID token is
   // what the server can verify, and an access token would only let us ask
   // Google who this is — which is the same question, one round trip later and
   // with no signature to check.
+  //
+  // `webClientId` is named explicitly rather than left to the `clientId`
+  // fallback, because the library looks for the platform-specific prop first
+  // and only then falls back — so naming it is the difference between a
+  // deliberate value and a coincidence.
   const [request, , promptAsync] = Google.useIdTokenAuthRequest({
     androidClientId: ANDROID_ID,
     iosClientId: IOS_ID,
-    clientId: WEB_ID,
+    webClientId: WEB_ID,
   });
 
   const signIn = useCallback(async () => {
-    if (!configured) {
-      track({ name: 'google_sign_in_failed', reason: 'unconfigured' });
-      setState({
-        kind: 'error',
-        message: 'Google sign-in isn’t set up on this build yet. Use an email address.',
-      });
-      return;
-    }
-
     track({ name: 'google_sign_in_started' });
+    abandoned.current = false;
     setState({ kind: 'pending' });
     try {
       const result = await promptAsync();
+      if (abandoned.current) return;
 
       if (result.type === 'dismiss' || result.type === 'cancel') {
         track({ name: 'google_sign_in_failed', reason: 'cancelled' });
@@ -89,10 +116,14 @@ export function useGoogleSignIn(onSignedIn: (created: boolean) => void | Promise
       }
 
       const created = await providerAuth('google', idToken);
+      // Checked again: the exchange is a second round trip, and Cancel during
+      // it must not be undone by its result either.
+      if (abandoned.current) return;
       track({ name: 'google_sign_in_success', created });
       setState({ kind: 'idle' });
       await onSignedIn(created);
     } catch (e) {
+      if (abandoned.current) return;
       track({
         name: 'google_sign_in_failed',
         reason: e instanceof ApiError ? 'provider' : 'network',
@@ -107,14 +138,22 @@ export function useGoogleSignIn(onSignedIn: (created: boolean) => void | Promise
             : 'You’re offline, or we couldn’t reach Google. Nothing has been lost — try again.',
       });
     }
-  }, [configured, promptAsync, providerAuth, onSignedIn]);
+  }, [promptAsync, providerAuth, onSignedIn]);
 
   return {
     signIn,
     state,
     reset: () => setState({ kind: 'idle' }),
-    /** False until the auth request has been prepared, or if ids are missing. */
-    ready: configured && Boolean(request),
-    configured,
+    /**
+     * Stop waiting and treat the attempt as cancelled — the hand-off screen's
+     * Cancel. Any result that arrives afterwards is discarded.
+     */
+    cancel: useCallback(() => {
+      abandoned.current = true;
+      track({ name: 'google_sign_in_failed', reason: 'cancelled' });
+      setState({ kind: 'cancelled' });
+    }, []),
+    /** False until the auth request has finished being prepared. */
+    ready: Boolean(request),
   };
 }
