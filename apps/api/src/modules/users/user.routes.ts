@@ -38,6 +38,13 @@ const listUsersQuerySchema = z.object({
 const router: Router = Router();
 
 router.get('/me', authenticate, asyncHandler(userController.me));
+/**
+ * Declared before nothing in particular, but note it is `/me/providers` rather
+ * than `/users/:id/providers`: a customer may only ever see their own, and a
+ * route with an id in it is a route somebody will eventually pass a different
+ * id to.
+ */
+router.get('/me/providers', authenticate, asyncHandler(userController.myProviders));
 router.patch(
   '/me',
   authenticate,

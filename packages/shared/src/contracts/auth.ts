@@ -125,3 +125,19 @@ export interface AuthResult {
   user: AuthUser;
   tokens: AuthTokens;
 }
+
+/**
+ * One way a customer can sign in, as the client is allowed to see it.
+ *
+ * **`providerUserId` is deliberately not here.** In the database that column
+ * holds Google's `sub` — and, for our own two providers, the customer's email
+ * or phone. It is the value `authProviderRepository.findUser` matches on, which
+ * is exactly why it should not travel: an identifier the linking logic trusts
+ * has no business being round-tripped through a client that could then be
+ * tempted to send it back. The account screen needs to know *which* methods
+ * exist and when they were added, and nothing more.
+ */
+export interface LinkedProvider {
+  provider: 'phone' | 'email' | 'google' | 'apple';
+  linkedAt: string;
+}

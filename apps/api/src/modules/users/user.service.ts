@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
-import type { AdminCreateUserInput, AuthUser, UserRole } from '@haala/shared';
+import type { AdminCreateUserInput, AuthUser, LinkedProvider, UserRole } from '@haala/shared';
+import { authProviderRepository } from '../auth/auth-provider.repository';
 import { AppError } from '../../common/errors';
 import { logger } from '../../common/logger';
 import type { User } from '../../db/schema';
@@ -18,6 +19,19 @@ export const toAuthUser = (u: User): AuthUser => ({
   brandId: u.brandId,
 });
 
+/**
+ * A linked identity, stripped to what a client may see.
+ *
+ * The mapping is the point: `providerUserId` is dropped here, once, rather than
+ * relying on every future caller to remember. It holds Google's `sub` and our
+ * own providers' email or phone, and it is what identity resolution matches on
+ * — so it stays server-side. See `LinkedProvider`.
+ */
+const toLinkedProvider = (row: { provider: LinkedProvider['provider']; createdAt: Date }): LinkedProvider => ({
+  provider: row.provider,
+  linkedAt: row.createdAt.toISOString(),
+});
+
 export interface UpdateProfileInput {
   name?: string;
   email?: string | null;
@@ -26,6 +40,18 @@ export interface UpdateProfileInput {
 }
 
 export const userService = {
+  /**
+   * Which ways in this customer has. Drives the account screen's list, and the
+   * design's promise that every method points at one customer.
+   */
+  async listProviders(userId: string): Promise<LinkedProvider[]> {
+    const rows = await authProviderRepository.listForUser(userId);
+    return rows
+      .map(toLinkedProvider)
+      // Oldest first, so the list reads as the order they were added.
+      .sort((a, b) => a.linkedAt.localeCompare(b.linkedAt));
+  },
+
   async getById(id: string): Promise<User> {
     const user = await userRepository.findById(id);
     if (!user) throw AppError.notFound('User not found');

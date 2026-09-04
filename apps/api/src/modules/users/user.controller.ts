@@ -10,6 +10,11 @@ export const userController = {
     sendSuccess(res, profile);
   },
 
+  /** The ways this customer can sign in. Never includes `providerUserId`. */
+  async myProviders(req: Request, res: Response): Promise<void> {
+    sendSuccess(res, await userService.listProviders(req.auth!.userId));
+  },
+
   async updateMe(req: Request, res: Response): Promise<void> {
     const profile = await userService.updateProfile(req.auth!.userId, req.body);
     sendSuccess(res, profile);
