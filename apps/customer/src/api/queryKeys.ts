@@ -1,5 +1,6 @@
 export const qk = {
   me: ['me'] as const,
+  myProviders: ['me', 'providers'] as const,
   stores: (lat: number, lng: number) => ['stores', lat, lng] as const,
   categories: ['categories'] as const,
   products: (storeId: string, categoryId?: string, q?: string) =>

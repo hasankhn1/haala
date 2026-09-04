@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import type { LinkedProvider } from '@haala/shared';
 import { Button, Card, Divider, Icon, type IconName, Text, theme } from '@haala/ui';
-import { notificationsApi } from '../../src/api/endpoints';
+import { authApi, notificationsApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
 import { useAuth } from '../../src/auth/AuthContext';
 
@@ -32,9 +33,30 @@ export default function AccountScreen() {
   });
   const unread = notifications.data?.unreadCount ?? 0;
 
+  /**
+   * How this customer can sign in.
+   *
+   * Worth showing because the whole identity model rests on a claim they cannot
+   * otherwise check: that arriving by Google, by email or by phone all reach the
+   * *same* account. Listing the methods makes that promise inspectable instead
+   * of something we simply assert.
+   */
+  const providers = useQuery({
+    queryKey: qk.myProviders,
+    queryFn: authApi.providers,
+    enabled: signedIn,
+    staleTime: 5 * 60_000,
+  });
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <View style={styles.content}>
+      {/* Scrolls now: the provider list and the sign-out note pushed this past
+          a short screen's height, and a clipped Sign out is the one control on
+          here somebody genuinely needs to reach. */}
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         <Text variant="h1" style={{ marginBottom: theme.spacing.lg }}>
           Account
         </Text>
@@ -47,9 +69,11 @@ export default function AccountScreen() {
               </Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text variant="title">{user.name}</Text>
-              <Text variant="bodySm" color="textSecondary">
-                {user.email ?? user.deliveryPhone ?? user.phone ?? ''}
+              <Text variant="title" numberOfLines={1}>
+                {user.email ?? user.name}
+              </Text>
+              <Text variant="bodySm" color="textSecondary" style={styles.userMeta}>
+                Signed in {viaFor(providers.data)}
               </Text>
             </View>
           </Card>
@@ -63,6 +87,36 @@ export default function AccountScreen() {
             <Button label="Sign in or create an account" onPress={() => router.push('/login')} />
           </Card>
         )}
+
+        {/* The methods, and the sentence they exist to make checkable. */}
+        {signedIn && (providers.data?.length ?? 0) > 0 ? (
+          <Card padded={false} style={styles.providerCard}>
+            {providers.data!.map((p, i) => (
+              <View
+                key={p.provider}
+                style={[styles.providerRow, i < providers.data!.length - 1 && styles.providerRowRule]}
+              >
+                <View style={styles.providerBadge}>
+                  <Text variant="caption" color="textSecondary">
+                    {BADGE[p.provider]}
+                  </Text>
+                </View>
+                <Text variant="bodyStrong" style={styles.flex}>
+                  {LABEL[p.provider]}
+                </Text>
+                <Text variant="labelSm" style={styles.providerState}>
+                  Linked
+                </Text>
+              </View>
+            ))}
+            <View style={styles.providerNote}>
+              <Text variant="bodySm" color="textSecondary">
+                All methods point at one customer ID — signing in with Google using the same email
+                never creates a second account.
+              </Text>
+            </View>
+          </Card>
+        ) : null}
 
         <Card padded={false} style={{ marginTop: theme.spacing.lg }}>
           {/* Everything above the divider needs an account. Offering these to a
@@ -93,11 +147,57 @@ export default function AccountScreen() {
           <MenuRow icon="help-circle-outline" label="Help & support" onPress={() => {}} />
         </Card>
 
-        <View style={{ flex: 1 }} />
-        {signedIn ? <Button label="Log out" variant="secondary" onPress={logout} /> : null}
-      </View>
+        <View style={{ flex: 1, minHeight: theme.spacing.lg }} />
+
+        {/* Said before signing out rather than after, when it would be too late
+            to be reassuring. */}
+        {signedIn ? (
+          <>
+            <View style={styles.basketNote}>
+              <Icon name="bag-handle-outline" size={17} color={theme.colors.info} />
+              <Text variant="bodySm" style={styles.basketNoteText}>
+                Your basket stays on this device after you sign out, and merges back in next time
+                you sign in.
+              </Text>
+            </View>
+            <Pressable style={styles.signOut} onPress={logout} accessibilityRole="button">
+              <Text variant="label" style={styles.signOutLabel}>
+                Sign out
+              </Text>
+            </Pressable>
+          </>
+        ) : null}
+      </ScrollView>
     </SafeAreaView>
   );
+}
+
+/** Short marks for the provider rows, in the comp's treatment. */
+const BADGE: Record<LinkedProvider['provider'], string> = {
+  google: 'G',
+  apple: '',
+  email: '@',
+  phone: '#',
+};
+
+const LABEL: Record<LinkedProvider['provider'], string> = {
+  google: 'Google',
+  apple: 'Apple',
+  email: 'Email and password',
+  phone: 'Phone number',
+};
+
+/**
+ * "Signed in with email", from the linked methods.
+ *
+ * Falls back to a bare "in" while the list is loading rather than guessing from
+ * `user.email` — which is present for a Google customer too, so guessing would
+ * confidently say the wrong thing.
+ */
+function viaFor(providers: LinkedProvider[] | undefined): string {
+  if (!providers || providers.length === 0) return 'in';
+  const first = providers[0].provider;
+  return `with ${LABEL[first].toLowerCase().replace(' and password', '')}`;
 }
 
 function MenuRow({
@@ -132,8 +232,53 @@ function MenuRow({
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.background },
-  content: { flex: 1, padding: theme.spacing.lg },
+  content: { flexGrow: 1, padding: theme.spacing.lg },
+  flex: { flex: 1 },
   userCard: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md },
+  userMeta: { marginTop: 5 },
+  providerCard: { marginTop: theme.spacing.md },
+  providerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+  },
+  providerRowRule: { borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  providerBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    backgroundColor: theme.colors.surfaceSunken,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  providerState: { color: theme.colors.confirmed },
+  providerNote: {
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    backgroundColor: theme.colors.surfaceSunken,
+  },
+  basketNote: {
+    flexDirection: 'row',
+    gap: 10,
+    padding: 14,
+    borderRadius: theme.radii.md,
+    backgroundColor: theme.colors.infoSoft,
+  },
+  basketNoteText: { flex: 1, color: theme.colors.textPrimary },
+  /** Outlined in the error family: destructive enough to look it, not a button
+      you press by accident. */
+  signOut: {
+    marginTop: theme.spacing.md,
+    height: 54,
+    borderRadius: theme.radii.pill,
+    borderWidth: 1.5,
+    borderColor: theme.colors.borderAlert,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  signOutLabel: { color: theme.colors.error },
   avatar: {
     width: 52,
     height: 52,
