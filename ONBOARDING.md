@@ -80,8 +80,16 @@ pnpm infra:up                        # Postgres :5433, Redis :6380
 pnpm db:migrate
 pnpm --filter @haala/api db:seed
 pnpm dev:api                         # :4000, health at /health
+
+cp apps/dashboard/.env.example apps/dashboard/.env.local
 pnpm --filter @haala/dashboard dev   # :3000
 ```
+
+**The dashboard talks to whichever API `HAALA_API_URL` names**, and it reads
+that once at boot. If you change it, restart the server — a running one keeps
+the old value, which is how an afternoon of edits once went to the production
+database unnoticed. A red strip across the top of every page tells you when the
+API is not your own machine; no strip means you are local.
 
 **The ports are not the defaults.** Homebrew Postgres and Redis hold 5432/6379
 on the machine this was built on, so the containers publish on **5433** and

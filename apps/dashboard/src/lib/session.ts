@@ -49,6 +49,41 @@ export function readSession(): Partial<SessionTokens> {
     refreshToken: jar.get(REFRESH_COOKIE)?.value,
   };
 }
+/**
+ * Origin of the Haala API, as seen from the Next **server**.
+ *
+ * Falls back to localhost, and that direction matters. This used to default to
+ * the Railway production URL, which meant a forgotten — or merely stale —
+ * `HAALA_API_URL` sent a developer's edits to real data with nothing on screen
+ * to say so. Defaulting the other way makes a missing variable an obviously
+ * broken local dashboard instead of a silent write to production.
+ *
+ * A bare origin, no `/api/v1`: `API_BASE` appends the prefix, so setting it
+ * yourself produces `/api/v1/api/v1` and every call 404s.
+ */
+export const API_ORIGIN = process.env.HAALA_API_URL ?? 'http://localhost:4000';
 
-/** Base URL of the Haala API, as seen from the Next **server**. */
-export const API_BASE = `${process.env.HAALA_API_URL ?? 'https://haala-production.up.railway.app'}/api/v1`;
+export const API_BASE = `${API_ORIGIN}/api/v1`;
+
+/** True when this dashboard is pointed at something other than a local API. */
+export const IS_REMOTE_API = !/^https?:\/\/(localhost|127\.0\.0\.1)(:|$|\/)/.test(API_ORIGIN);
+
+/**
+ * Announce the target once per server process.
+ *
+ * Next reads env once at boot, so a dev server started before you edited
+ * `.env.local` keeps the old value indefinitely — which is exactly how an
+ * afternoon of edits went to production unnoticed. Printing it next to the
+ * value being reported means the log and the behaviour cannot drift.
+ *
+ * The `globalThis` guard is for dev, where HMR re-evaluates modules.
+ */
+const ANNOUNCED = Symbol.for('haala.dashboard.apiTargetAnnounced');
+const announced = globalThis as unknown as Record<symbol, boolean>;
+if (!announced[ANNOUNCED]) {
+  announced[ANNOUNCED] = true;
+  // eslint-disable-next-line no-console
+  console.log(
+    `  - API:   ${API_BASE}${IS_REMOTE_API ? '   ← REMOTE. Edits here change real data.' : ''}`,
+  );
+}

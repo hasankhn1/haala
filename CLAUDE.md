@@ -47,6 +47,7 @@ Each of these has already cost a debugging session.
 | Drizzle runs **all pending migrations in one transaction** | `ALTER TYPE … ADD VALUE` then using that value fails. Recreate the type instead |
 | `ADD COLUMN … NOT NULL` fails on a table with rows | Expand → backfill → contract, in separate files |
 | A dev server on :3000 corrupts a concurrent `next build` | Stop it first |
+| Next reads env **once at boot**, so a dashboard started before you edited `.env.local` keeps the old value — and every screen looks normal while it does | Before believing a data bug, check the red strip at the top of the dashboard, or the `- API:` line in its startup log. No strip means localhost |
 
 ## Verifying
 

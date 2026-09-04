@@ -442,6 +442,43 @@ input.inline {
   font-weight: 500;
 }
 
+/*
+ * Which API this dashboard is pointed at.
+ *
+ * Only rendered when that is *not* localhost, so it is never decoration. Given
+ * it means "you are editing real data", it takes the full width above the shell
+ * rather than sitting politely inside a page.
+ */
+.api-banner {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 9px 16px;
+  background: var(--red-600);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  /* Above the sticky sidebar, which would otherwise cover it. */
+  position: relative;
+  z-index: 20;
+}
+.api-banner-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+  align-self: center;
+  flex: none;
+}
+.api-banner-host {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+}
+.api-banner-note {
+  color: rgba(255, 255, 255, 0.8);
+}
+
 /* Login */
 .login-wrap {
   min-height: 100vh;
