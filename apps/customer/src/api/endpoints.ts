@@ -3,7 +3,9 @@ import type {
   AddressView,
   AuthResult,
   AuthUser,
+  CartMergeResult,
   CartView,
+  MergeCartInput,
   CategoryView,
   CreateAddressInput,
   EmailAuthInput,
@@ -66,6 +68,12 @@ export const cartApi = {
     api.patch<CartView>(`/cart/items/${variantId}`, { quantity }),
   removeItem: (variantId: string) => api.del<CartView>(`/cart/items/${variantId}`),
   clear: () => api.del<CartView>('/cart'),
+  /**
+   * Hand a guest basket over after signing in. Only ids and quantities go —
+   * the server re-reads prices, so a snapshot on the phone cannot become a
+   * stale charge.
+   */
+  merge: (input: MergeCartInput) => api.post<CartMergeResult>('/cart/merge', input),
 };
 
 export const addressesApi = {

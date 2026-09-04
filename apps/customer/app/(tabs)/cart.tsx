@@ -179,6 +179,18 @@ export default function CartScreen() {
                         storeId: storeId as string,
                         variantId: u.defaultVariantId as string,
                         quantity: 1,
+                        // A guest basket holds its own display fields; see
+                        // `useGuestCart`.
+                        line: {
+                          variantId: u.defaultVariantId as string,
+                          productId: u.id,
+                          name: u.name,
+                          unit: u.unit,
+                          imageUrl: u.imageUrl,
+                          unitPrice: u.price,
+                          basePrice: u.basePrice,
+                          inStock: u.inStock,
+                        },
                       })
                     }
                   />

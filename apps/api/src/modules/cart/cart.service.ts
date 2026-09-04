@@ -1,4 +1,10 @@
-import { deliveryFeeFor, type AddCartItemInput, type CartView } from '@haala/shared';
+import {
+  deliveryFeeFor,
+  type AddCartItemInput,
+  type CartMergeResult,
+  type CartView,
+  type MergeCartInput,
+} from '@haala/shared';
 import { AppError } from '../../common/errors';
 import { availableToSell, inventoryRepository } from '../inventory/inventory.repository';
 import { catalogRepository } from '../catalog/catalog.repository';
@@ -78,6 +84,61 @@ export const cartService = {
 
     await cartRepository.upsertItem(cart.id, input.variantId, desiredQty, Number(variant.price));
     return this.getCart(userId);
+  },
+
+  /**
+   * Fold a device-held guest basket into this customer's cart.
+   *
+   * Every line is re-validated exactly as `addItem` would: the variant must
+   * still be sellable at this store — which, since Phase 6 of the brands work,
+   * also means its shop must still be active — and stock still caps the
+   * quantity. The client's prices are not consulted at all.
+   *
+   * **One bad line does not lose the basket.** A guest may have added something
+   * that has since sold out or whose shop was suspended; the rest still merges
+   * and the result says what did not. Failing the whole request would throw
+   * away the good lines, and dropping them quietly would be worse — the
+   * customer would reach checkout short of items they believe they chose.
+   *
+   * Quantities **add** rather than replace, matching `addItem`: someone with
+   * two bags of rice on their phone and one in their account wants three.
+   */
+  async merge(userId: string, input: MergeCartInput): Promise<CartMergeResult> {
+    const cart = await cartRepository.getOrCreate(userId);
+
+    // An order cannot span two stores. The basket they were just filling is
+    // the one they meant, so it wins — but the caller is told it happened.
+    const replacedOtherStore = Boolean(cart.storeId && cart.storeId !== input.storeId);
+    if (replacedOtherStore) await cartRepository.clear(cart.id);
+    if (cart.storeId !== input.storeId) await cartRepository.setStore(cart.id, input.storeId);
+
+    const skipped: CartMergeResult['skipped'] = [];
+    const adjusted: CartMergeResult['adjusted'] = [];
+
+    for (const line of input.items) {
+      const variant = await catalogRepository.findVariantForStore(line.variantId, input.storeId);
+      if (!variant) {
+        skipped.push({ variantId: line.variantId, reason: 'No longer available at this store' });
+        continue;
+      }
+
+      const available = Number(variant.availableQty);
+      if (available <= 0) {
+        skipped.push({ variantId: line.variantId, reason: 'Out of stock' });
+        continue;
+      }
+
+      const existing = await cartRepository.findItem(cart.id, line.variantId);
+      const wanted = (existing?.quantity ?? 0) + line.quantity;
+      const quantity = Math.min(wanted, available);
+      if (quantity < wanted) {
+        adjusted.push({ variantId: line.variantId, requested: wanted, added: quantity });
+      }
+
+      await cartRepository.upsertItem(cart.id, line.variantId, quantity, Number(variant.price));
+    }
+
+    return { cart: await this.getCart(userId), skipped, adjusted, replacedOtherStore };
   },
 
   async updateItem(userId: string, variantId: string, quantity: number): Promise<CartView> {

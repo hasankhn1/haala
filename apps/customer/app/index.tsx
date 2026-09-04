@@ -14,7 +14,14 @@ export default function Index() {
     );
   }
 
-  // Signed-out customers land on Welcome, which routes on to register or
-  // sign-in. Signed-in ones never see it.
-  return <Redirect href={status === 'authenticated' ? '/(tabs)' : '/welcome'} />;
+  /**
+   * Everyone lands in the shop.
+   *
+   * Signed-out customers used to be sent to Welcome and on to a sign-in form
+   * before they had seen a single product — which is a lot to ask of somebody
+   * who has not yet decided they want anything. Welcome is still reachable, and
+   * the account tab still offers signing in; the difference is that browsing no
+   * longer requires it.
+   */
+  return <Redirect href="/(tabs)" />;
 }

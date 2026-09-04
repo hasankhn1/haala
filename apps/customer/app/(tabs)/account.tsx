@@ -8,16 +8,27 @@ import { qk } from '../../src/api/queryKeys';
 import { useAuth } from '../../src/auth/AuthContext';
 
 
+/**
+ * Account, which a guest can now reach.
+ *
+ * Since the app-wide sign-in wall came down, this screen renders for somebody
+ * with no account at all. It used to show a dash where their name goes and four
+ * rows that would each answer 401, so the signed-out state is explicit: what
+ * signing in gets you, and nothing that cannot work without it.
+ */
 export default function AccountScreen() {
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, status, logout } = useAuth();
+  const signedIn = status === 'authenticated' && user !== null;
 
   // Cheap enough to keep fresh; this is where the unread count is discovered
-  // when a push was missed or dismissed.
+  // when a push was missed or dismissed. Not asked for at all while signed
+  // out — the route is authenticated and would only ever 401.
   const notifications = useQuery({
     queryKey: qk.notifications,
     queryFn: notificationsApi.list,
     staleTime: 30_000,
+    enabled: signedIn,
   });
   const unread = notifications.data?.unreadCount ?? 0;
 
@@ -28,45 +39,62 @@ export default function AccountScreen() {
           Account
         </Text>
 
-        <Card style={styles.userCard}>
-          <View style={styles.avatar}>
-            <Text variant="h2" color="onPrimary">
-              {(user?.name ?? 'H').charAt(0).toUpperCase()}
-            </Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text variant="title">{user?.name ?? '—'}</Text>
+        {signedIn ? (
+          <Card style={styles.userCard}>
+            <View style={styles.avatar}>
+              <Text variant="h2" color="onPrimary">
+                {(user.name || 'H').charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text variant="title">{user.name}</Text>
+              <Text variant="bodySm" color="textSecondary">
+                {user.email ?? user.deliveryPhone ?? user.phone ?? ''}
+              </Text>
+            </View>
+          </Card>
+        ) : (
+          <Card style={{ gap: theme.spacing.md }}>
+            <Text variant="title">Sign in to order</Text>
             <Text variant="bodySm" color="textSecondary">
-              {user?.phone}
+              Keep your addresses, follow a delivery, and see what you bought last time. Your
+              basket comes with you.
             </Text>
-          </View>
-        </Card>
+            <Button label="Sign in or create an account" onPress={() => router.push('/login')} />
+          </Card>
+        )}
 
         <Card padded={false} style={{ marginTop: theme.spacing.lg }}>
-          <MenuRow
-            icon="location-outline"
-            label="Delivery addresses"
-            onPress={() => router.push('/addresses')}
-          />
-          <Divider />
-          <MenuRow
-            icon="receipt-outline"
-            label="Your orders"
-            onPress={() => router.push('/orders')}
-          />
-          <Divider />
-          <MenuRow
-            icon="notifications-outline"
-            label="Notifications"
-            badge={unread}
-            onPress={() => router.push('/notifications')}
-          />
-          <Divider />
+          {/* Everything above the divider needs an account. Offering these to a
+              guest would send them to a screen that answers 401. */}
+          {signedIn ? (
+            <>
+              <MenuRow
+                icon="location-outline"
+                label="Delivery addresses"
+                onPress={() => router.push('/addresses')}
+              />
+              <Divider />
+              <MenuRow
+                icon="receipt-outline"
+                label="Your orders"
+                onPress={() => router.push('/orders')}
+              />
+              <Divider />
+              <MenuRow
+                icon="notifications-outline"
+                label="Notifications"
+                badge={unread}
+                onPress={() => router.push('/notifications')}
+              />
+              <Divider />
+            </>
+          ) : null}
           <MenuRow icon="help-circle-outline" label="Help & support" onPress={() => {}} />
         </Card>
 
         <View style={{ flex: 1 }} />
-        <Button label="Log out" variant="secondary" onPress={logout} />
+        {signedIn ? <Button label="Log out" variant="secondary" onPress={logout} /> : null}
       </View>
     </SafeAreaView>
   );

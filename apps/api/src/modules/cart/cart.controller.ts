@@ -6,6 +6,10 @@ export const cartController = {
   async get(req: Request, res: Response): Promise<void> {
     sendSuccess(res, await cartService.getCart(req.auth!.userId));
   },
+  async merge(req: Request, res: Response): Promise<void> {
+    sendSuccess(res, await cartService.merge(req.auth!.userId, req.body));
+  },
+
   async addItem(req: Request, res: Response): Promise<void> {
     sendSuccess(res, await cartService.addItem(req.auth!.userId, req.body), 201);
   },

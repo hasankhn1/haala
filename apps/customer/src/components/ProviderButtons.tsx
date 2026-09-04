@@ -27,7 +27,11 @@ export function ProviderButtons({
   onEmail,
   showReserved = true,
 }: {
-  onSignedIn: (created: boolean) => void;
+  /**
+   * Awaited, because the caller hands the guest basket over before navigating
+   * and that is a request. `void` alone would typecheck and then not wait.
+   */
+  onSignedIn: (created: boolean) => void | Promise<void>;
   onEmail: () => void;
   /** The reserved OTP row. Hidden in tight spaces like the checkout modal. */
   showReserved?: boolean;

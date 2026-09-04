@@ -1,7 +1,6 @@
-import { Redirect, Tabs } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
 import { Icon, type IconName, theme } from '@haala/ui';
-import { useAuth } from '../../src/auth/AuthContext';
 import { useCart } from '../../src/hooks/useCart';
 
 
@@ -22,12 +21,22 @@ const tabIcon =
     />
   );
 
+/**
+ * The shop, open to everybody.
+ *
+ * There used to be a `<Redirect href="/login" />` here, which put the entire
+ * app — home, search, basket, account — behind a sign-in. The design's first
+ * rule is the opposite: guests browse, fill a basket, pick a store, and are
+ * asked for nothing until checkout, where an account is genuinely needed to
+ * place an order.
+ *
+ * The basket is safe to show either way: `useCart` reads the device's basket
+ * while signed out and the server's once signed in, and hands back the same
+ * shape, so the badge below needs no branch of its own.
+ */
 export default function TabsLayout() {
-  const { status } = useAuth();
   const cart = useCart();
   const itemCount = cart.data?.itemCount ?? 0;
-
-  if (status === 'unauthenticated') return <Redirect href="/login" />;
 
   return (
     <Tabs

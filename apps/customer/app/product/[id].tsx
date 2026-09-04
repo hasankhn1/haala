@@ -34,7 +34,8 @@ export default function ProductDetailScreen() {
     enabled: !!storeId && !!id,
   });
 
-  const { cart, qtyByProduct, busy, busyVariantId, addOne, setQty } = useProductActions(storeId);
+  const { cart, qtyByProduct, busy, busyVariantId, addProduct, addVariant, setQty } =
+    useProductActions(storeId);
 
   /**
    * The size being bought. Defaults to the first variant — they arrive ordered
@@ -195,7 +196,7 @@ export default function ProductDetailScreen() {
                     quantity={qtyByProduct.get(item.defaultVariantId ?? "") ?? 0}
                     busy={busyVariantId === item.defaultVariantId}
                     onPress={() => router.push(`/product/${item.id}`)}
-                    onAdd={() => addOne(item.defaultVariantId)}
+                    onAdd={() => addProduct(item)}
                     onIncrement={() =>
                         setQty(item.defaultVariantId ?? "", (qtyByProduct.get(item.defaultVariantId ?? "") ?? 0) + 1)
                       }
@@ -257,7 +258,7 @@ export default function ProductDetailScreen() {
               ) : (
                 <Button
                   label={`Add  ·  ${formatPKR((selected?.price ?? p.price) * pending)}`}
-                  onPress={() => addOne(selected?.id ?? null, pending)}
+                  onPress={() => (selected ? addVariant(p, selected, pending) : undefined)}
                   loading={busy}
                   leadingIcon={
                     <Icon name="cart-outline" size={18} color={theme.colors.onPrimary} />

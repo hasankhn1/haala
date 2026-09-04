@@ -8,6 +8,51 @@ export const addCartItemSchema = z.object({
 });
 export type AddCartItemInput = z.infer<typeof addCartItemSchema>;
 
+/**
+ * Hand a device-held basket to the account that just signed in.
+ *
+ * Only variant ids and quantities travel. The client's idea of the price is
+ * display state and is never sent — the server re-reads it, so a stale snapshot
+ * on a phone cannot become a stale charge.
+ */
+export const mergeCartSchema = z
+  .object({
+    storeId: z.string().uuid(),
+    items: z
+      .array(
+        z.object({
+          variantId: z.string().uuid(),
+          quantity: z.number().int().min(1).max(99),
+        }),
+      )
+      .min(1)
+      .max(60),
+  })
+  .strict();
+export type MergeCartInput = z.infer<typeof mergeCartSchema>;
+
+/**
+ * The outcome of a merge, in full.
+ *
+ * A guest may have added something that has since sold out or whose shop was
+ * suspended. Failing the whole merge over one line would lose the rest of their
+ * basket, and silently dropping it would be worse — so what happened is
+ * reported and the client can say so.
+ */
+export interface CartMergeResult {
+  cart: CartView;
+  /** Could not be added at all. */
+  skipped: { variantId: string; reason: string }[];
+  /** Added, but fewer than asked for, because that is what is in stock. */
+  adjusted: { variantId: string; requested: number; added: number }[];
+  /**
+   * True when the account already held a basket from a *different* store and it
+   * was replaced. An order cannot span two stores, and the basket the customer
+   * was just looking at is the one they meant.
+   */
+  replacedOtherStore: boolean;
+}
+
 export const updateCartItemSchema = z.object({
   // 0 removes the item.
   quantity: z.number().int().min(0).max(99),

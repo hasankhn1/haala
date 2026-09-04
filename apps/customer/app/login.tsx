@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Icon, Input, Text, theme } from '@haala/ui';
 import { ApiError } from '../src/api/client';
 import { useAuth } from '../src/auth/AuthContext';
+import { useMergeGuestCart } from '../src/hooks/useCart';
 import { PhoneField, toE164 } from '../src/components/PhoneField';
 import { ProviderButtons } from '../src/components/ProviderButtons';
 
@@ -46,6 +47,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export default function LoginScreen() {
   const { emailAuth, login } = useAuth();
+  const mergeGuestCart = useMergeGuestCart();
   const router = useRouter();
   const passwordRef = useRef<TextInput>(null);
 
@@ -74,6 +76,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       const created = await emailAuth({ email: email.trim().toLowerCase(), password });
+      await handOverBasket();
       // A new account is confirmed rather than slipped past — a mistyped
       // address would otherwise silently become a second account.
       if (created) setStep('created');
@@ -90,11 +93,28 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login({ phone: toE164(national), password });
+      await handOverBasket();
       router.replace('/(tabs)');
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not sign in');
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * Hand the device basket to the account that just signed in.
+   *
+   * A failure here must not block the sign-in that already succeeded — the
+   * basket stays on the device (it is only cleared once the server confirms),
+   * so the worst case is that it merges on the next attempt rather than being
+   * lost. Throwing would strand somebody who is, in fact, signed in.
+   */
+  const handOverBasket = async () => {
+    try {
+      await mergeGuestCart();
+    } catch {
+      // Deliberately swallowed; see above.
     }
   };
 
@@ -170,9 +190,11 @@ export default function LoginScreen() {
             {step === 'landing' ? (
               <>
                 <ProviderButtons
-                  onSignedIn={(created) =>
-                    created ? setStep('created') : router.replace('/(tabs)')
-                  }
+                  onSignedIn={async (created) => {
+                    await handOverBasket();
+                    if (created) setStep('created');
+                    else router.replace('/(tabs)');
+                  }}
                   onEmail={() => setStep('email')}
                 />
                 <Text variant="caption" color="textTertiary" align="center">

@@ -37,7 +37,7 @@ const ANDROID_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID;
 const IOS_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS;
 const WEB_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB;
 
-export function useGoogleSignIn(onSignedIn: (created: boolean) => void) {
+export function useGoogleSignIn(onSignedIn: (created: boolean) => void | Promise<void>) {
   const { providerAuth } = useAuth();
   const [state, setState] = useState<ProviderState>({ kind: 'idle' });
 
@@ -84,7 +84,7 @@ export function useGoogleSignIn(onSignedIn: (created: boolean) => void) {
 
       const created = await providerAuth('google', idToken);
       setState({ kind: 'idle' });
-      onSignedIn(created);
+      await onSignedIn(created);
     } catch (e) {
       // Never surface a raw backend error; the design has specific copy for
       // each of these and none of it is a stack trace.

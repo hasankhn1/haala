@@ -26,7 +26,7 @@ export default function SearchScreen() {
   const [term, setTerm] = useState('');
   const debounced = useDebouncedValue(term, 300);
   const { recents, addRecent, removeRecent, clearRecents } = useSearchStore();
-  const { qtyByProduct, busyVariantId, addOne, setQty } = useProductActions(storeId);
+  const { qtyByProduct, busyVariantId, addProduct, setQty } = useProductActions(storeId);
 
   const query = debounced.trim();
   const active = query.length >= MIN_QUERY;
@@ -144,7 +144,7 @@ export default function SearchScreen() {
                     addRecent(query);
                     router.push(`/product/${item.id}`);
                   }}
-                  onAdd={() => addOne(item.defaultVariantId)}
+                  onAdd={() => addProduct(item)}
                   onIncrement={() =>
                         setQty(item.defaultVariantId ?? "", (qtyByProduct.get(item.defaultVariantId ?? "") ?? 0) + 1)
                       }
