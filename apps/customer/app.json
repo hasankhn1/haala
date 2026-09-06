@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Haala",
-    "slug": "haala-customer",
+    "slug": "haala",
     "scheme": "haala",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -56,9 +56,9 @@
         "origin": false
       },
       "eas": {
-        "projectId": "eeb9a12a-f367-4c8b-a7c7-463374ee2b70"
+        "projectId": "66b491b1-af41-483d-9e8f-ecec51252a1d"
       }
     },
-    "owner": "hasan.khn"
+    "owner": "haala1"
   }
 }

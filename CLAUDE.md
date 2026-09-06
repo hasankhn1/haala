@@ -43,6 +43,7 @@ Each of these has already cost a debugging session.
 | `react-dom` unpinned crashes both Expo apps on web at runtime, and bundles fine | All three apps pin `18.3.1` |
 | Metro resolves `require()` at **bundle** time | A runtime `Platform.OS` guard does not prevent a bundling failure. Split with `.web.tsx` |
 | Maps never work in Expo Go — it uses its own Maps key | Judge maps only from a dev build or the APK |
+| `app.config.js` values reach the native project **only when prebuild runs**, and `expo run:android` reuses an existing `android/` as-is — so a key added to `.env` after the last prebuild is simply absent, and the map draws grey with nothing in the logs | `grep -c geo.API_KEY apps/customer/android/app/src/main/AndroidManifest.xml` — 0 means `npx expo prebuild --clean -p android` |
 | Drizzle qualifies column names in a `sql` template **only when the outer query has a join** | Without one, a correlated subquery silently self-compares and returns 0. Write the qualification by hand |
 | Drizzle runs **all pending migrations in one transaction** | `ALTER TYPE … ADD VALUE` then using that value fails. Recreate the type instead |
 | `ADD COLUMN … NOT NULL` fails on a table with rows | Expand → backfill → contract, in separate files |

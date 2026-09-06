@@ -2,23 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { Text, theme } from '@haala/ui';
+import type { DeliveryMapProps, LatLng, MapPickerProps } from './DeliveryMap.types';
 
-export interface LatLng {
-  latitude: number;
-  longitude: number;
-}
-
-export interface DeliveryMapProps {
-  /** Where the order is going — always plotted. */
-  destination: LatLng;
-  /** The dark store the order leaves from. */
-  origin?: LatLng | null;
-  /** Live rider position. Phase 2; omitted until the rider backend exists. */
-  rider?: LatLng | null;
-  style?: ViewStyle;
-  /** Disable gestures when the map is decorative (e.g. behind a sheet). */
-  interactive?: boolean;
-}
+// Re-exported so `import { LatLng } from './DeliveryMap'` keeps working for
+// callers; the contract itself lives in `DeliveryMap.types.ts`.
+export type { DeliveryMapProps, LatLng, MapPickerProps };
 
 /**
  * Map canvas for the tracking screen (native platforms).
@@ -195,16 +183,6 @@ export function DeliveryMap({
       ) : null}
     </MapView>
   );
-}
-
-export interface MapPickerProps {
-  /** Where the map opens. */
-  center: LatLng;
-  /** Fires when panning settles, with the new centre point. */
-  onCenterChange: (point: LatLng) => void;
-  /** Area name for the pill above the pin; hidden until the centre resolves. */
-  tip?: string;
-  style?: ViewStyle;
 }
 
 /** What `onRegionChangeComplete` hands back. */
