@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { ApiError } from '../api/client';
 import { track } from '../lib/analytics';
@@ -22,6 +23,21 @@ import { useAuth } from './AuthContext';
  * thing to do, and the design says so explicitly: return to the landing with a
  * calm line and no error styling on the buttons.
  */
+/**
+ * Hand a returning OAuth redirect back to the request that is waiting for it.
+ *
+ * **Required, and its absence is silent.** When the browser sends the customer
+ * back to `…/oauthredirect`, the URL arrives as an ordinary deep link. Without
+ * this call nothing claims it, so it falls through to the router — which has no
+ * such route and renders "Unmatched Route: page could not be found", while the
+ * `promptAsync` promise that should have resolved simply never does.
+ *
+ * Called at module scope rather than in the hook because the app may be
+ * *launched* by that redirect, in which case the session has to be completed
+ * before anything renders.
+ */
+WebBrowser.maybeCompleteAuthSession();
+
 export type ProviderState =
   | { kind: 'idle' }
   | { kind: 'pending' }
