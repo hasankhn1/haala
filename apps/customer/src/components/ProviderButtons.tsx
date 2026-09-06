@@ -89,7 +89,7 @@ function WithoutGoogle(props: ProviderButtonsProps) {
   return (
     <Rows
       {...props}
-      google={{ state: { kind: 'idle' }, disabled: true, hint: '' }}
+      google={{ state: { kind: 'idle' }, disabled: false, hint: '' }}
     />
   );
 }

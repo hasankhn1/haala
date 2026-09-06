@@ -33,7 +33,7 @@ export type ProviderState =
  */
 const blank = (v: string | undefined) => (v && v.trim() !== '' ? v : undefined);
 
-const ANDROID_ID = blank(process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID);
+const ANDROID_ID = blank(process.env.GOOGLE_CLIENT_ID_ANDROID);
 const IOS_ID = blank(process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS);
 const WEB_ID = blank(process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB);
 

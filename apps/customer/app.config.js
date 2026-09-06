@@ -22,9 +22,19 @@ module.exports = ({ config }) => {
   // Fail the build instead of shipping that.
   if (!apiKey && process.env.EAS_BUILD) {
     throw new Error(
-      'GOOGLE_MAPS_API_KEY is not set for this EAS build.\n' +
-        'Set it with: eas env:set --name GOOGLE_MAPS_API_KEY --value <key> ' +
-        '--environment preview --environment production',
+      'GOOGLE_MAPS_API_KEY is not set for this EAS build.\n\n' +
+        'On EAS this comes from an EAS *environment* variable, selected by the\n' +
+        'build profile\'s `environment` field in eas.json — not from .env, which\n' +
+        'is gitignored and never reaches the build worker. Note that\n' +
+        'EXPO_PUBLIC_API_URL is inline in eas.json, which is why that one never\n' +
+        'fails and this one can.\n\n' +
+        'Set it with:\n' +
+        '  eas env:set --name GOOGLE_MAPS_API_KEY --value <key> ' +
+        '--environment preview --environment production\n\n' +
+        'If it *was* set and has stopped being found, check whether the app was\n' +
+        'relinked to a different EAS project: these variables live per-project\n' +
+        'and do not transfer. Compare extra.eas.projectId in app.json against\n' +
+        'the project you set them on.',
     );
   }
 
