@@ -55,19 +55,6 @@ let googleClient: OAuth2Client | null = null;
  * `GOOGLE_OAUTH_AUDIENCES` that is missing an id, which is the most likely
  * cause by far and was previously invisible.
  */
-function unverifiedAudience(idToken: string): string | null {
-  try {
-    const body = idToken.split('.')[1];
-    if (!body) return null;
-    const claims = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as {
-      aud?: unknown;
-    };
-    return typeof claims.aud === 'string' ? claims.aud : null;
-  } catch {
-    // A token so malformed we cannot even read it is not an audience problem.
-    return null;
-  }
-}
 
 function audiences(): string[] {
   const list = config.oauth.googleAudiences;
