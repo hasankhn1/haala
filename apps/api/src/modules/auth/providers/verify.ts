@@ -1,5 +1,6 @@
 import { OAuth2Client } from 'google-auth-library';
 import { AppError } from '../../../common/errors';
+import { logger } from '../../../common/logger';
 import { config } from '../../../config';
 import type { ProviderKind } from '../auth-provider.repository';
 
@@ -43,6 +44,30 @@ export interface VerifiedIdentity {
 }
 
 let googleClient: OAuth2Client | null = null;
+
+/**
+ * The `aud` a token *claims*, for logging only.
+ *
+ * Reads the payload without checking the signature, which is exactly why it
+ * must never inform a decision — the whole point of this module is that only
+ * `verifyIdToken` gets to say what a token means. It exists so a
+ * "could not be verified" in the logs can be told apart from a
+ * `GOOGLE_OAUTH_AUDIENCES` that is missing an id, which is the most likely
+ * cause by far and was previously invisible.
+ */
+function unverifiedAudience(idToken: string): string | null {
+  try {
+    const body = idToken.split('.')[1];
+    if (!body) return null;
+    const claims = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as {
+      aud?: unknown;
+    };
+    return typeof claims.aud === 'string' ? claims.aud : null;
+  } catch {
+    // A token so malformed we cannot even read it is not an audience problem.
+    return null;
+  }
+}
 
 function audiences(): string[] {
   const list = config.oauth.googleAudiences;

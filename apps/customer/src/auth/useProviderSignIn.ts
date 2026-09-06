@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import * as Google from 'expo-auth-session/providers/google';
 import { ApiError } from '../api/client';
 import { track } from '../lib/analytics';
@@ -28,14 +29,41 @@ export type ProviderState =
   | { kind: 'error'; message: string };
 
 /**
- * Client ids come from the environment, per platform. `EXPO_PUBLIC_` is
- * deliberate — these are not secrets, and Metro inlines them at build time.
+ * Client ids, per platform, from the app manifest — **not `process.env`**.
+ *
+ * This is the whole reason Google sign-in did nothing in an EAS build. The ids
+ * are held as ordinary (secret) EAS variables, which are real environment
+ * entries *on the build machine* and nowhere else. A phone has no environment,
+ * so `process.env` in app code yields only what Metro inlined at bundle time —
+ * and Metro inlines only names beginning `EXPO_PUBLIC_`. Reading
+ * `process.env.GOOGLE_CLIENT_ID_ANDROID` here was therefore `undefined` in
+ * every production build, which switched the button to its disabled state and
+ * made pressing it a no-op.
+ *
+ * It worked in development, because a dev bundle resolves `process.env` at
+ * runtime rather than purely by inlining. That is the single environment where
+ * the mistake is invisible.
+ *
+ * So `app.config.js` reads the variables on the builder and puts them in
+ * `extra`, and they are read back here. One variable name, no prefix, same
+ * behaviour locally and on EAS.
+ *
+ * Anything that is not a non-empty string counts as unset — Expo serialises an
+ * unset value in `extra` as `{}`, which is truthy, so a plain presence check
+ * would be wrong.
  */
-const blank = (v: string | undefined) => (v && v.trim() !== '' ? v : undefined);
+const asId = (v: unknown): string | undefined =>
+  typeof v === 'string' && v.trim() !== '' ? v.trim() : undefined;
 
-const ANDROID_ID = blank(process.env.GOOGLE_CLIENT_ID_ANDROID);
-const IOS_ID = blank(process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS);
-const WEB_ID = blank(process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB);
+const CLIENT_IDS = (Constants.expoConfig?.extra?.googleClientIds ?? {}) as {
+  android?: unknown;
+  ios?: unknown;
+  web?: unknown;
+};
+
+const ANDROID_ID = asId(CLIENT_IDS.android);
+const IOS_ID = asId(CLIENT_IDS.ios);
+const WEB_ID = asId(CLIENT_IDS.web);
 
 /**
  * Whether Google sign-in can work **on this platform**, decided at module load

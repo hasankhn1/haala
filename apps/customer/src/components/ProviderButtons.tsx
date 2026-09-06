@@ -73,6 +73,17 @@ function WithGoogle(props: ProviderButtonsProps) {
       google={{
         state: google.state,
         disabled: !google.ready,
+        /*
+         * Every disabled state says why.
+         *
+         * `ready` is false for the moment it takes the auth request to be
+         * prepared — and stays false forever if it cannot be. Without a hint
+         * that renders as a row identical to a working one that does nothing
+         * when pressed, which is precisely the symptom that made the missing
+         * client id take three attempts to find. A silent dead control is the
+         * expensive kind.
+         */
+        hint: google.ready ? undefined : 'Just a moment…',
         onPress: google.signIn,
         reset: google.reset,
         cancel: google.cancel,
@@ -89,7 +100,17 @@ function WithoutGoogle(props: ProviderButtonsProps) {
   return (
     <Rows
       {...props}
-      google={{ state: { kind: 'idle' }, disabled: false, hint: '' }}
+      /*
+       * Disabled, **and saying so**.
+       *
+       * This briefly read `disabled: false, hint: ''`, which renders a row that
+       * looks completely ordinary and does nothing when pressed: with `disabled`
+       * false the press handler is still `undefined`, because there is no hook
+       * mounted to handle it. That is indistinguishable from a broken app, and
+       * it is the same symptom as the missing client id — two different causes
+       * behind one silent button.
+       */
+      google={{ state: { kind: 'idle' }, disabled: true, hint: 'Not set up on this build' }}
     />
   );
 }
