@@ -30,7 +30,8 @@
           "color": "#FF5A1F",
           "defaultChannel": "default"
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "ios": {
       "supportsTablet": true,
