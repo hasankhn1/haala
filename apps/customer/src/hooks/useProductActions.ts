@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import type { CartItemView, ProductVariantView, ProductView } from '@haala/shared';
 import { useToast } from '@haala/ui';
-import { ApiError } from '../api/client';
+import { messageFor } from '../api/client';
 import { haptics } from '../lib/haptics';
 import { useCart, useCartMutations } from './useCart';
 
@@ -83,7 +83,7 @@ export function useProductActions(storeId: string | null) {
           // fired, so a toast on every tap is three signals for one action — and
           // it covers the very control the customer is about to tap again.
           onError: (e) =>
-            toast.show(e instanceof ApiError ? e.message : 'Could not add item', 'error'),
+            toast.show(messageFor(e, 'Could not add item'), 'error'),
         },
       );
     },
@@ -95,7 +95,7 @@ export function useProductActions(storeId: string | null) {
         { storeId, variantId: p.defaultVariantId, quantity, line: lineFromProduct(p) },
         {
           onError: (e) =>
-            toast.show(e instanceof ApiError ? e.message : 'Could not add item', 'error'),
+            toast.show(messageFor(e, 'Could not add item'), 'error'),
         },
       );
     },
@@ -107,7 +107,7 @@ export function useProductActions(storeId: string | null) {
         { storeId, variantId: v.id, quantity, line: lineFromVariant(p, v) },
         {
           onError: (e) =>
-            toast.show(e instanceof ApiError ? e.message : 'Could not add item', 'error'),
+            toast.show(messageFor(e, 'Could not add item'), 'error'),
         },
       );
     },
@@ -117,7 +117,7 @@ export function useProductActions(storeId: string | null) {
         { variantId, quantity },
         {
           onError: (e) =>
-            toast.show(e instanceof ApiError ? e.message : 'Could not update cart', 'error'),
+            toast.show(messageFor(e, 'Could not update cart'), 'error'),
         },
       );
     },

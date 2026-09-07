@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { BottomSheet, Button, Icon, Text, theme } from '@haala/ui';
-import { ApiError } from '../api/client';
+import { ApiError, messageFor } from '../api/client';
 import { authApi } from '../api/endpoints';
 import { useAuth } from '../auth/AuthContext';
 import { track } from '../lib/analytics';
@@ -80,11 +80,30 @@ export function MobileNumberDrawer({
   /** The comp's confirmation state, shown after a successful save. */
   const [saved, setSaved] = useState<string | null>(null);
 
+  /**
+   * The saved number, readable without subscribing to it.
+   *
+   * This is the fix for the sheet asking twice. The reset below used to depend
+   * on `user?.deliveryPhone` — the very value a successful save changes. So
+   * `setUser(updated)` re-ran it, `setSaved(null)` wiped the "Number saved"
+   * confirmation, and the prefilled form came straight back as though nothing
+   * had happened. It re-fired `mobile_collection_viewed` too, so the funnel
+   * counted one customer twice.
+   *
+   * A ref carries the current value into the effect without making the effect
+   * care when it changes.
+   */
+  const savedNumber = useRef(user?.deliveryPhone ?? null);
+  savedNumber.current = user?.deliveryPhone ?? null;
+
   // Prefill when editing an existing number, so "Edit" reopens the same sheet
   // with the same value rather than an empty box.
+  //
+  // Keyed on `visible` alone: this is "the sheet just opened", and nothing else
+  // should reset it.
   useEffect(() => {
     if (!visible) return;
-    const existing = user?.deliveryPhone ?? '';
+    const existing = savedNumber.current ?? '';
     setNational(existing.startsWith('+92') ? existing.slice(3) : '');
     setTouched(false);
     setError(null);
@@ -94,7 +113,7 @@ export function MobileNumberDrawer({
     track({ name: 'mobile_collection_viewed' });
     const t = setTimeout(() => field.current?.focus(), 250);
     return () => clearTimeout(t);
-  }, [visible, user?.deliveryPhone]);
+  }, [visible]);
 
   const reason = reasonFor(national);
   const valid = national.length === NATIONAL_DIGITS && reason === null;
@@ -126,7 +145,7 @@ export function MobileNumberDrawer({
       // just entered because a request failed is the least forgivable outcome
       // here.
       setError(
-        e instanceof ApiError ? e.message : 'Could not save that number. Check your connection.',
+        messageFor(e, 'Could not save that number. Check your connection.'),
       );
     } finally {
       setSaving(false);

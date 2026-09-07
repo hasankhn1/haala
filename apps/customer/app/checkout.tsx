@@ -19,8 +19,8 @@ import {
   theme,
   useToast,
 } from '@haala/ui';
-import { ApiError } from '../src/api/client';
-import { addressesApi, ordersApi, promotionsApi } from '../src/api/endpoints';
+import { ApiError, messageFor } from '../src/api/client';
+import { addressesApi, ordersApi, promotionsApi, storesApi } from '../src/api/endpoints';
 import { qk } from '../src/api/queryKeys';
 import { DeliveryMap } from '../src/components/DeliveryMap';
 import { ETA_MINUTES, estimateDeliveryFee } from '../src/config';
@@ -146,14 +146,69 @@ export default function CheckoutScreen() {
   const [tip, setTip] = useState(0);
   const idempotencyKey = useRef(`co-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
+  /**
+   * Which address this order goes to.
+   *
+   * Two jobs, and the second one is a bug fix. On first load, pick the default
+   * (or the only one). But **when a new address appears while this screen is
+   * open, select it** — that means the customer just added it from here, and
+   * leaving the selection on the previous one sends the order to an address
+   * they believe they replaced. The old guard was `if (!addressId)`, so it only
+   * ever ran once and a newly added address was silently ignored.
+   *
+   * Identified by "the id that was not in the list before" rather than by
+   * creation time, because `AddressView` carries no timestamp. The alternative
+   * — passing the new id back through navigation — would remount checkout, and
+   * keeping it mounted is what preserves the basket, tip and promo.
+   */
+  const knownAddressIds = useRef<string[] | null>(null);
   useEffect(() => {
-    if (!addressId && addresses.data && addresses.data.length > 0) {
-      setAddressId((addresses.data.find((a) => a.isDefault) ?? addresses.data[0]).id);
+    const list = addresses.data;
+    if (!list) return;
+
+    const ids = list.map((a) => a.id);
+    const previous = knownAddressIds.current;
+    knownAddressIds.current = ids;
+
+    if (previous === null) {
+      // First load: the default, or the only one there is.
+      if (!addressId && list.length > 0) {
+        setAddressId((list.find((a) => a.isDefault) ?? list[0]).id);
+      }
+      return;
     }
+
+    const added = ids.filter((id) => !previous.includes(id));
+    if (added.length === 1) setAddressId(added[0]);
   }, [addresses.data, addressId]);
 
   const data = cart.data;
   const selected = addresses.data?.find((a) => a.id === addressId) ?? null;
+
+  /**
+   * Can the basket's store actually reach the selected address?
+   *
+   * The server asks this at placement and refuses with "We don't deliver to
+   * this address yet" — which used to be the *first* time anybody heard about
+   * it, right after pressing pay. Asked here instead so the button can explain
+   * itself beforehand.
+   *
+   * `storesApi.nearby` returns `isServiceable` per store, computed server-side
+   * by the same `isWithinDeliveryRadius` the order uses, so this cannot drift
+   * from the decision it is predicting. Undefined while unknown — a failed
+   * lookup must not block an order the server would have accepted.
+   */
+  const reachable = useQuery({
+    queryKey: qk.stores(selected?.latitude ?? 0, selected?.longitude ?? 0),
+    queryFn: () => storesApi.nearby(selected!.latitude, selected!.longitude),
+    enabled: !!selected && !!data?.storeId,
+    staleTime: 5 * 60_000,
+  });
+  const servingStore = data?.storeId
+    ? reachable.data?.find((st) => st.id === data.storeId)
+    : undefined;
+  /** True only when we positively know it cannot be delivered. */
+  const addressUnreachable = servingStore ? servingStore.isServiceable === false : false;
   const subtotal = data?.subtotal ?? 0;
 
   /**
@@ -230,7 +285,7 @@ export default function CheckoutScreen() {
     },
     onError: (e) => {
       haptics.error();
-      const message = e instanceof ApiError ? e.message : 'Could not place order';
+      const message = messageFor(e, 'Could not place order');
       setError(message);
       toast.show(message, 'error');
     },
@@ -256,7 +311,12 @@ export default function CheckoutScreen() {
   const missingPhone = signedIn && !deliveryPhone;
 
   const canPlace =
-    signedIn && !!addressId && !!data && data.itemCount > 0 && !place.isPending;
+    signedIn &&
+    !!addressId &&
+    !!data &&
+    data.itemCount > 0 &&
+    !addressUnreachable &&
+    !place.isPending;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -528,13 +588,16 @@ export default function CheckoutScreen() {
               ? 'Placing…'
               : missingPhone
                 ? 'Add mobile number to continue'
-                : `Place order · ${formatPKR(total)}`
+                : addressUnreachable
+                  ? 'Choose a different address'
+                  : `Place order · ${formatPKR(total)}`
           }
           loading={place.isPending}
           disabled={!canPlace}
-          // Grey while the number is the only thing missing; see `missingPhone`.
-          style={[styles.cta, missingPhone && styles.ctaBlocked]}
-          labelColor={missingPhone ? theme.colors.onDisabled : undefined}
+          // Grey whenever something is merely missing rather than broken; see
+          // `missingPhone` and `addressUnreachable`.
+          style={[styles.cta, (missingPhone || addressUnreachable) && styles.ctaBlocked]}
+          labelColor={missingPhone || addressUnreachable ? theme.colors.onDisabled : undefined}
           onPress={() => {
             setError(null);
             if (!deliveryPhone) {
@@ -549,6 +612,23 @@ export default function CheckoutScreen() {
         {missingPhone ? (
           <Text variant="bodySm" color="textSecondary" align="center" style={styles.ctaBlockedNote}>
             The rider needs a number to reach you at the door.
+          </Text>
+        ) : addressUnreachable ? (
+          /*
+           * Said here rather than after pressing pay. The server refuses this
+           * exact case, and hearing it for the first time at the last step is
+           * what the design rules out — so the reason names the store and the
+           * button offers the way forward.
+           */
+          <Text variant="bodySm" color="textSecondary" align="center" style={styles.ctaBlockedNote}>
+            {/*
+              `servingStore`, not `store`. The latter is `useCurrentStore` — a
+              globally selected store that can differ from the one the basket
+              was actually filled from, and naming the wrong shop in a message
+              about delivery is worse than naming none.
+            */}
+            {servingStore?.name ?? 'This store'} doesn’t deliver to{' '}
+            {selected?.area || 'this address'} yet.
           </Text>
         ) : null}
       </View>

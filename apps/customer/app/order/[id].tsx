@@ -17,7 +17,7 @@ import {
   theme,
   useToast,
 } from '@haala/ui';
-import { ApiError } from '../../src/api/client';
+import { messageFor } from '../../src/api/client';
 import { ordersApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
 import { DeliveryMap } from '../../src/components/DeliveryMap';
@@ -89,7 +89,7 @@ export default function OrderScreen() {
     },
     onError: (e) => {
       haptics.error();
-      toast.show(e instanceof ApiError ? e.message : 'Could not cancel order', 'error');
+      toast.show(messageFor(e, 'Could not cancel order'), 'error');
     },
   });
 

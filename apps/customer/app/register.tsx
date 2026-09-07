@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Button, Icon, Input, Text, theme } from '@haala/ui';
-import { ApiError } from '../src/api/client';
+import { messageFor } from '../src/api/client';
 import { useAuth } from '../src/auth/AuthContext';
 import { PhoneField, isCompletePhone, toE164 } from '../src/components/PhoneField';
 
@@ -49,7 +49,7 @@ export default function RegisterScreen() {
       });
       router.replace('/(tabs)');
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Could not create account');
+      setError(messageFor(e, 'Could not create account'));
     } finally {
       setLoading(false);
     }

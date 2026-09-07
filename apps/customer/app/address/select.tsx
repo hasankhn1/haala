@@ -14,11 +14,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { AddressLabel, CreateAddressInput } from '@haala/shared';
 import { Button, Icon, type IconName, IconButton, Text, theme, useToast } from '@haala/ui';
-import { ApiError } from '../../src/api/client';
+import { messageFor } from '../../src/api/client';
 import { addressesApi, storesApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
 import { MapPicker, type LatLng } from '../../src/components/DeliveryMap';
 import { DEFAULT_LOCATION } from '../../src/config';
+import { useCart } from '../../src/hooks/useCart';
 import { haptics } from '../../src/lib/haptics';
 import { useDebouncedValue } from '../../src/hooks/useDebouncedValue';
 
@@ -65,6 +66,19 @@ export default function SelectAddressScreen() {
   const [directions, setDirections] = useState('');
   const [label, setLabel] = useState<AddressLabel>('home');
   const [serviceable, setServiceable] = useState<boolean | null>(null);
+  /**
+   * The store the basket is from, if there is one.
+   *
+   * An order is placed against `cart.storeId`, and the server requires *that*
+   * store to reach the address (`order.service.ts`, via
+   * `isWithinDeliveryRadius`). This screen used to accept an address if **any**
+   * store served it, which is a different question — the two active Peshawar
+   * stores are ~23 km apart with 6 km radii, so an address one of them serves
+   * is refused for a basket from the other. That refusal landed on the pay
+   * button, which is the one place the design says never to fail.
+   */
+  const cartStoreId = useCart().data?.storeId ?? null;
+  const [blockingStore, setBlockingStore] = useState<string | null>(null);
   const [locating, setLocating] = useState(true);
 
   // Guards against a slow geocode for an old centre overwriting a newer one.
@@ -123,16 +137,28 @@ export default function SelectAddressScreen() {
         setResolved({ line1: 'Pinned location', area: '', city: '' });
       }
 
-      setServiceable(
-        stores.status === 'fulfilled' ? stores.value.some((s) => s.isServiceable) : null,
-      );
+      if (stores.status !== 'fulfilled') {
+        setServiceable(null);
+        setBlockingStore(null);
+      } else if (cartStoreId) {
+        // The basket's store is the only one whose opinion matters.
+        // `isServiceable` is computed server-side by the same helper the order
+        // uses, so this cannot drift from the rule that will be applied.
+        const mine = stores.value.find((s) => s.id === cartStoreId);
+        setServiceable(mine?.isServiceable ?? false);
+        setBlockingStore(mine?.name ?? null);
+      } else {
+        // No basket yet — any store serving this point is good enough.
+        setServiceable(stores.value.some((s) => s.isServiceable));
+        setBlockingStore(null);
+      }
       setResolving(false);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [debouncedCenter]);
+  }, [debouncedCenter, cartStoreId]);
 
   const recenter = useCallback(async () => {
     try {
@@ -157,7 +183,7 @@ export default function SelectAddressScreen() {
       router.back();
     },
     onError: (e) =>
-      toast.show(e instanceof ApiError ? e.message : 'Could not save address', 'error'),
+      toast.show(messageFor(e, 'Could not save address'), 'error'),
   });
 
   const confirm = () => {
@@ -242,8 +268,9 @@ export default function SelectAddressScreen() {
               <View style={styles.flex}>
                 <Text variant="bodyStrong">We don’t deliver here yet</Text>
                 <Text variant="bodySm" color="textSecondary">
-                  This spot is outside every store’s delivery radius. Try moving the pin closer to a
-                  serviced area.
+                  {blockingStore
+                    ? `This spot is outside ${blockingStore}’s delivery radius, and that is the store your basket is from. Move the pin closer, or empty the basket to order from another store.`
+                    : 'This spot is outside every store’s delivery radius. Try moving the pin closer to a serviced area.'}
                 </Text>
               </View>
             </View>

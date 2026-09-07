@@ -28,6 +28,13 @@ export default function SignInModal() {
             }
           : undefined
       }
+      /*
+       * Not "Continue as guest": this sheet only ever appears because an order
+       * needs an account, so offering guest checkout would be a promise the
+       * next screen breaks. Same action — the basket, address, tip and promo
+       * are all still there because checkout was never unmounted.
+       */
+      dismissLabel="Back to basket"
       onSignedIn={() => router.back()}
       onDismiss={() => router.back()}
     />

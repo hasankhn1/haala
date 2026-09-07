@@ -11,7 +11,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomSheet, Button, Icon, Input, Text, theme } from '@haala/ui';
-import { ApiError } from '../api/client';
+import { ApiError, messageFor } from '../api/client';
 import { track } from '../lib/analytics';
 import { useAuth } from '../auth/AuthContext';
 import { useCart, useMergeGuestCart } from '../hooks/useCart';
@@ -65,6 +65,7 @@ export function SignInFlow({
   onSignedIn,
   onDismiss,
   headline,
+  dismissLabel = 'Continue as guest',
 }: {
   /** Called once signed in **and** the guest basket has been handed over. */
   onSignedIn: (created: boolean) => void;
@@ -72,6 +73,21 @@ export function SignInFlow({
   onDismiss: () => void;
   /** Overrides the landing title, so checkout can say why it is asking. */
   headline?: { title: string; sub: string };
+  /**
+   * What the way out is called.
+   *
+   * Defaults to "Continue as guest", which is right from the account tab:
+   * browsing needs no account, so leaving really is continuing as a guest.
+   *
+   * It is **wrong from checkout**, where it promised a guest checkout that does
+   * not exist — an order needs an account, so tapping it returned to a screen
+   * whose pay button then refused to work. Checkout passes "Back to basket".
+   *
+   * The link itself always renders. On the landing step this is the only
+   * visible control — there is a brand tile where a back arrow would be — so
+   * removing it would strand anybody who opened the sheet by accident.
+   */
+  dismissLabel?: string;
 }) {
   const { emailAuth } = useAuth();
   const mergeGuestCart = useMergeGuestCart();
@@ -132,7 +148,7 @@ export function SignInFlow({
         name: 'email_sign_in_failed',
         reason: e instanceof ApiError ? (e.status === 401 ? 'password' : 'validation') : 'network',
       });
-      setError(e instanceof ApiError ? e.message : 'Could not sign in');
+      setError(messageFor(e, 'Could not sign in'));
     } finally {
       setLoading(false);
     }
@@ -242,7 +258,7 @@ export function SignInFlow({
                 <View style={styles.spacer} />
                 <Pressable onPress={onDismiss} style={styles.textLink}>
                   <Text variant="label" style={styles.textLinkLabel}>
-                    Continue as guest
+                    {dismissLabel}
                   </Text>
                 </Pressable>
                 <Text variant="caption" color="textTertiary" align="center" style={styles.legal}>

@@ -58,6 +58,13 @@ export type { ProviderState };
  */
 export const GOOGLE_CONFIGURED = Boolean(WEB_CLIENT_ID);
 
+/**
+ * Android's `CommonStatusCodes.DEVELOPER_ERROR`, which the native module
+ * stringifies as the rejection code. Not in the SDK's exported `statusCodes`,
+ * which is why it has to be spelled out here.
+ */
+const DEVELOPER_ERROR = '10';
+
 if (GOOGLE_CONFIGURED) {
   // Synchronous and cheap; documented as safe to call at module scope, and
   // doing it here means the first press does not race the configuration.
@@ -126,6 +133,39 @@ export function useGoogleSignIn(
       if (abandoned.current) return;
 
       const code = (e as { code?: string }).code;
+      const detail = e instanceof Error ? e.message : String(e);
+
+      // Named in development, whatever it is. An unrecognised code used to fall
+      // into the offline branch below and tell the customer — and us — the one
+      // thing that was definitely not true.
+      if (__DEV__) {
+        // eslint-disable-next-line no-console
+        console.error(`[auth] Google sign-in failed. code=${code ?? '(none)'} ${detail}`);
+      }
+
+      /*
+       * `DEVELOPER_ERROR`, which Android reports as status 10.
+       *
+       * It means Google would not accept the app itself: the package name and
+       * signing certificate did not match a registered Android OAuth client, or
+       * the configured `webClientId` belongs to a different project. It is
+       * nothing to do with connectivity, and it is the single most likely
+       * failure the first time a release APK is tried — a release build is
+       * signed by the EAS keystore, whose SHA-1 differs from the local debug
+       * one, so registering only the debug fingerprint produces exactly this.
+       *
+       * Reported separately because the generic message below ("you're
+       * offline") sends whoever reads it in precisely the wrong direction.
+       */
+      if (code === DEVELOPER_ERROR || detail.includes('DEVELOPER_ERROR')) {
+        track({ name: 'google_sign_in_failed', reason: 'provider' });
+        setState({
+          kind: 'error',
+          message: 'Google sign-in isn’t set up for this build yet. Use an email address.',
+        });
+        return;
+      }
+
       if (code === statusCodes.SIGN_IN_CANCELLED) {
         track({ name: 'google_sign_in_failed', reason: 'cancelled' });
         setState({ kind: 'cancelled' });

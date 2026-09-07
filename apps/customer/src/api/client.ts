@@ -13,6 +13,31 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The most useful sentence we have about a failure.
+ *
+ * A validation failure arrives as
+ * `{ code: 'VALIDATION_ERROR', message: 'Validation failed', details: [{ path, message }] }`
+ * — the *reason* is in `details`, and `message` is a category. `details` was
+ * being carried all the way from the server and then read by nothing, so every
+ * form in the app showed "Validation failed" and the customer had to guess
+ * which field and why.
+ *
+ * Prefers the first field message, then the top-level one, then the caller's
+ * fallback for anything that is not an `ApiError` at all — a dropped connection
+ * has no server message and must not surface as one.
+ *
+ * Only the first detail: the server validates a whole body at once, but these
+ * are shown in a sheet or under a single field, and a stack of messages there
+ * reads as something being badly broken rather than one thing needing a fix.
+ */
+export function messageFor(error: unknown, fallback: string): string {
+  if (!(error instanceof ApiError)) return fallback;
+  const detail = error.details?.[0]?.message?.trim();
+  if (detail) return detail;
+  return error.message?.trim() || fallback;
+}
+
 // Module-level access token + hooks the AuthProvider wires up. Keeping this out
 // of React means any layer (queries, mutations) can call the API uniformly.
 let accessToken: string | null = null;

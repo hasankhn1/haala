@@ -87,6 +87,29 @@ module.exports = ({ config }) => {
     }).filter(([, value]) => typeof value === 'string' && value.trim() !== ''),
   );
 
+  /*
+   * Say when Google sign-in will be switched off, in the build log.
+   *
+   * `GOOGLE_CLIENT_ID_WEB` is the one every platform needs: the native SDK
+   * takes it as `webClientId`, which is what makes Google return an ID token at
+   * all. Without it the Google row renders disabled, and finding *that* out
+   * previously meant building, installing and opening an APK.
+   *
+   * A warning rather than a throw, unlike the Maps key above, and the asymmetry
+   * is deliberate: a keyless map is a broken-looking screen with no
+   * alternative, whereas Google sign-in sits beside email. A build without it
+   * is a legitimate build and must not fail.
+   */
+  if (!googleClientIds.web) {
+    console.warn(
+      '[app.config] GOOGLE_CLIENT_ID_WEB unset — Google sign-in will render ' +
+        'disabled on every platform (email sign-in is unaffected). It is the ' +
+        'web client id even for Android: the native SDK mints its ID token for ' +
+        'that client, and the API must list the same id in ' +
+        'GOOGLE_OAUTH_AUDIENCES.',
+    );
+  }
+
   return {
     ...config,
     android: {

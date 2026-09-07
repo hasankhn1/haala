@@ -12,7 +12,7 @@ import {
   theme,
   useToast,
 } from '@haala/ui';
-import { ApiError } from '../src/api/client';
+import { messageFor } from '../src/api/client';
 import { addressesApi } from '../src/api/endpoints';
 import { qk } from '../src/api/queryKeys';
 
@@ -33,7 +33,7 @@ export default function AddressesScreen() {
     mutationFn: (id: string) => addressesApi.setDefault(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.addresses }),
     onError: (e) =>
-      toast.show(e instanceof ApiError ? e.message : 'Could not update address', 'error'),
+      toast.show(messageFor(e, 'Could not update address'), 'error'),
   });
 
   return (
