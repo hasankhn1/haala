@@ -52,4 +52,40 @@ describe('isWithinDeliveryRadius', () => {
     const wide = { ...DHA, deliveryRadiusMeters: 30_000 };
     assert.equal(isWithinDeliveryRadius(wide, HAYATABAD.lat, HAYATABAD.lng), true);
   });
+
+  // A square roughly around DHA's coordinates — real polygons come from ops
+  // pasting Google Maps points, but the shape doesn't matter for this test,
+  // only that it's a real quadrilateral.
+  const SQUARE = [
+    { lat: 33.99, lng: 71.68 },
+    { lat: 33.99, lng: 71.70 },
+    { lat: 33.97, lng: 71.70 },
+    { lat: 33.97, lng: 71.68 },
+  ];
+
+  it('a store with no polygon still uses radius (fallback is untouched)', () => {
+    assert.equal(isWithinDeliveryRadius(DHA, DHA.latitude, DHA.longitude), true);
+  });
+
+  it('a drawn polygon takes precedence over the radius', () => {
+    const withPolygon = { ...DHA, deliveryRadiusMeters: 100, polygon: SQUARE };
+    // Inside the square but far outside the tiny 100m radius — polygon wins.
+    assert.equal(isWithinDeliveryRadius(withPolygon, 33.98, 71.69), true);
+  });
+
+  it('a point outside the polygon is rejected even with a huge radius', () => {
+    const withPolygon = { ...DHA, deliveryRadiusMeters: 100_000, polygon: SQUARE };
+    assert.equal(isWithinDeliveryRadius(withPolygon, HAYATABAD.lat, HAYATABAD.lng), false);
+  });
+
+  it('fewer than 3 points is not a shape — falls back to radius', () => {
+    const twoPoints = { ...DHA, polygon: SQUARE.slice(0, 2) };
+    assert.equal(isWithinDeliveryRadius(twoPoints, DHA.latitude, DHA.longitude), true);
+    assert.equal(isWithinDeliveryRadius(twoPoints, HAYATABAD.lat, HAYATABAD.lng), false);
+  });
+
+  it('an empty polygon array falls back to radius', () => {
+    const empty = { ...DHA, polygon: [] };
+    assert.equal(isWithinDeliveryRadius(empty, DHA.latitude, DHA.longitude), true);
+  });
 });

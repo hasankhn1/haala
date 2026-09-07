@@ -30,6 +30,7 @@ const toStoreView = (s: typeof stores.$inferSelect): OpsStoreView => ({
   latitude: s.latitude,
   longitude: s.longitude,
   deliveryRadiusMeters: s.deliveryRadiusMeters,
+  polygon: s.polygon ?? null,
   isActive: s.isActive,
 });
 

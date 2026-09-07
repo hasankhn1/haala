@@ -71,6 +71,11 @@ export interface OpsCatalogRow {
  * ops when talking about a site, so it's required on create and immutable
  * after — renaming a store is fine, re-keying it silently is not.
  */
+const storePolygonPointSchema = z.object({
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+});
+
 export const createStoreSchema = z.object({
   name: z.string().min(2).max(120),
   code: z
@@ -83,8 +88,15 @@ export const createStoreSchema = z.object({
   city: z.string().min(2).max(80),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
-  /** How far this store will deliver, in metres. */
+  /** How far this store will deliver, in metres. Fallback when `polygon` is unset. */
   deliveryRadiusMeters: z.number().int().min(500).max(50_000).default(5000),
+  /**
+   * Precise delivery boundary. Optional — a real, irregular area (e.g. DHA
+   * Peshawar) can't be represented by a circle, but most stores don't need
+   * one and just use `deliveryRadiusMeters`. Null/omitted means "not drawn
+   * yet"; when provided, must be a real shape (≥3 points).
+   */
+  polygon: z.array(storePolygonPointSchema).min(3).nullable().optional(),
   isActive: z.boolean().default(true),
 });
 export type CreateStoreInput = z.infer<typeof createStoreSchema>;
@@ -102,5 +114,6 @@ export interface OpsStoreView {
   latitude: number;
   longitude: number;
   deliveryRadiusMeters: number;
+  polygon: { lat: number; lng: number }[] | null;
   isActive: boolean;
 }
