@@ -150,7 +150,14 @@ function GridCard({
           {eyebrow}
         </Text>
       ) : null}
-      <Text variant="bodySm" numberOfLines={2}>
+      {/*
+        Two lines' worth of room, whether the name needs it or not.
+        `flexWrap` does not align rows the way a CSS grid does, so a one-line
+        name beside a two-line one pushed the next row down on one side only and
+        the whole grid staggered. Reserving the space keeps prices on a line and
+        rows square. 30 = two lines of `bodySm`'s 15px leading.
+      */}
+      <Text variant="bodySm" numberOfLines={2} style={styles.gridName}>
         {name}
       </Text>
       {/* Suppressed when the caller has nothing to say. The home grid passes an
@@ -233,7 +240,14 @@ function CompactCard({
         ) : null}
       </View>
 
-      <Text variant="bodySm" numberOfLines={2}>
+      {/*
+        Two lines' worth of room, whether the name needs it or not.
+        `flexWrap` does not align rows the way a CSS grid does, so a one-line
+        name beside a two-line one pushed the next row down on one side only and
+        the whole grid staggered. Reserving the space keeps prices on a line and
+        rows square. 30 = two lines of `bodySm`'s 15px leading.
+      */}
+      <Text variant="bodySm" numberOfLines={2} style={styles.gridName}>
         {name}
       </Text>
       <PriceText amount={price} original={original} variant="price" />
@@ -341,6 +355,7 @@ const priceLabel = (paisa: number): string =>
 const styles = StyleSheet.create({
   // Grid — no surface; the photo is the card.
   grid: { gap: 6 },
+  gridName: { minHeight: 30 },
   imageWrap: {
     width: '100%',
     height: 150,

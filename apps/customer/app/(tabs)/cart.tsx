@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   Pressable,
@@ -67,6 +67,20 @@ export default function CartScreen() {
    * matches, falling back to the first one that exists.
    */
   const [picked, setPicked] = useState<string | null>(params.department ?? null);
+
+  /*
+   * Follow the department the caller asked for, on **every** arrival.
+   *
+   * The initialiser above runs once, and this is a tab screen: it stays mounted
+   * after the first visit, so tapping the basket from Clothing after having
+   * been here from Grocery kept showing Grocery and made the customer switch by
+   * hand. Syncing on the param rather than replacing the state, because once
+   * they are here the switcher is theirs to drive.
+   */
+  useEffect(() => {
+    if (params.department) setPicked(params.department);
+  }, [params.department]);
+
   const active =
     baskets.find((b) => b.departmentKey === picked) ?? baskets[0] ?? null;
   const data = active;

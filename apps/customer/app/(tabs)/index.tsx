@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BusinessTypeKey, formatPKR, type BannerView, type ProductView } from '@haala/shared';
+import { formatPKR, type BannerView, type ProductView } from '@haala/shared';
 import { Icon, ProductCard, Text, Thumb, theme } from '@haala/ui';
 import { catalogApi, ordersApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
@@ -43,13 +43,21 @@ import { useCurrentStore } from '../../src/store/useCurrentStore';
  * comps.
  */
 
-/**
- * The comp draws grocery's product photos at 150px and everything else at
- * 180px. That is not decoration: a garment photographed on a person needs the
- * vertical room a tin of beans does not, and cropping it square is what made
- * the clothing rows look wrong.
+/*
+ * A note on image height, because the comp says something this screen cannot do.
+ *
+ * The comp draws grocery's photos at 150px and everything else at 180px, and
+ * the reason is sound — a garment photographed on a person needs vertical room
+ * a tin does not. It works there because the comp is a CSS grid, where the row
+ * decides its own height and the cells align regardless.
+ *
+ * React Native has no grid. This is `flexWrap`, where a taller card pushes only
+ * its own column down, and mixing 150 with 180 on the one screen that is
+ * deliberately cross-department produced a visibly staggered mess. So the
+ * marketplace grid uses one height for every card. `ProductCard` keeps the
+ * `imageHeight` prop for a department's own grid, where every card shares a
+ * department and the rows stay square.
  */
-const IMAGE_HEIGHT = { grocery: 150, other: 180 } as const;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -309,11 +317,6 @@ export default function HomeScreen() {
                     // The comp puts the department where the unit usually goes.
                     unit=""
                     eyebrow={nameByKey.get(p.departmentKey) ?? p.departmentKey}
-                    imageHeight={
-                      p.departmentKey === BusinessTypeKey.Grocery
-                        ? IMAGE_HEIGHT.grocery
-                        : IMAGE_HEIGHT.other
-                    }
                     price={p.price}
                     original={p.basePrice > p.price ? p.basePrice : undefined}
                     imageUrl={p.imageUrl}
