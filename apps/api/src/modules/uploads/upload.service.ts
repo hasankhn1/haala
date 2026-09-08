@@ -59,6 +59,27 @@ function s3(): S3Client {
  * another tenant's namespace, and that a brand's images can be found — or
  * removed — as a set when it leaves.
  */
+/**
+ * Where the platform's own images live.
+ *
+ * A home banner belongs to Haala, not to a brand, so it cannot go under
+ * `brands/<id>/` — there is no id to use, and borrowing one would file editorial
+ * artwork inside a tenant's namespace, to be swept up when that tenant leaves.
+ *
+ * Kept as a named constant because three places have to agree on it: the key
+ * builder, the confirm guard and the media stream. They disagreed once for the
+ * brand prefix and the symptom was a 404 nobody could explain.
+ */
+const HOME_PREFIX = 'home/';
+
+function buildHomeKey(contentType: string): string {
+  const ext = EXTENSIONS[contentType];
+  if (!ext) {
+    throw AppError.badRequest('Images must be JPEG, PNG or WebP');
+  }
+  return `${HOME_PREFIX}banners/${randomUUID()}.${ext}`;
+}
+
 function buildKey(brandId: string, kind: UploadKind, contentType: string): string {
   const ext = EXTENSIONS[contentType];
   if (!ext) {
@@ -83,7 +104,17 @@ export function publicUrlFor(key: string): string {
 
 export const uploadService = {
   async sign(brandId: string, kind: UploadKind, contentType: string) {
-    const key = buildKey(brandId, kind, contentType);
+    return this.signFor(buildKey(brandId, kind, contentType), contentType);
+  },
+
+  /**
+   * The presign itself, given a key somebody else decided on.
+   *
+   * Split out so the brand and platform paths cannot drift on the parts that
+   * matter — the TTL and the size the client is told to respect. Deciding
+   * *which* key is the caller's job, and is where the tenancy rules live.
+   */
+  async signFor(key: string, contentType: string) {
     const uploadUrl = await getSignedUrl(
       s3(),
       new PutObjectCommand({
@@ -103,11 +134,41 @@ export const uploadService = {
    * confirm cannot be pointed at somebody else's object to discover whether it
    * exists.
    */
+  /**
+   * A presigned PUT for a home banner. Super admin only — enforced at the route,
+   * because this namespace has no brand to scope it.
+   */
+  async signHome(contentType: string) {
+    const key = buildHomeKey(contentType);
+    return this.signFor(key, contentType);
+  },
+
+  /**
+   * Confirm a home upload. The prefix check is the whole guard here: unlike the
+   * brand path there is no id to re-derive the key from, so the only thing
+   * standing between this and an arbitrary object in the bucket is that it must
+   * live under `home/`.
+   */
+  async confirmHome(key: string) {
+    if (!key.startsWith(HOME_PREFIX)) {
+      throw AppError.notFound('Upload not found');
+    }
+    return this.head(key);
+  },
+
   async confirm(brandId: string, key: string) {
     if (!key.startsWith(`brands/${brandId}/`)) {
       throw AppError.notFound('Upload not found');
     }
+    return this.head(key);
+  },
 
+  /**
+   * What actually landed in the bucket. Shared by both confirm paths so the
+   * size and content-type rules cannot differ between a brand's image and the
+   * platform's — the checks are the point, not the namespace.
+   */
+  async head(key: string) {
     let head;
     try {
       head = await s3().send(
@@ -143,7 +204,9 @@ export const uploadService = {
    * path stops being used for new images.
    */
   async stream(key: string): Promise<{ body: Readable; contentType: string; bytes?: number }> {
-    if (!key.startsWith('brands/')) throw AppError.notFound('Not found');
+    if (!key.startsWith('brands/') && !key.startsWith(HOME_PREFIX)) {
+      throw AppError.notFound('Not found');
+    }
     try {
       const out = await s3().send(
         new GetObjectCommand({ Bucket: config.r2.bucket as string, Key: key }),
