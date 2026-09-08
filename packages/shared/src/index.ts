@@ -2,6 +2,7 @@ export * from './enums';
 export * from './business-types';
 export * from './money';
 export * from './pricing';
+export * from './store-polygon';
 export * from './http';
 export * from './contracts/auth';
 export * from './contracts/addresses';

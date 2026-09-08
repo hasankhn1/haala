@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
-import type { OpsStoreView } from '@haala/shared';
+import { parsePolygonText, type OpsStoreView, type StorePolygonPoint } from '@haala/shared';
 import { ApiError, api } from '@/lib/api';
 
 /**
@@ -42,48 +42,29 @@ const EMPTY: FormState = {
   isActive: true,
 };
 
-const toForm = (s: OpsStoreView): FormState => ({
-  name: s.name,
-  code: s.code,
-  addressLine: s.addressLine,
-  area: s.area,
-  city: s.city,
-  latitude: String(s.latitude),
-  longitude: String(s.longitude),
-  deliveryRadiusMeters: String(s.deliveryRadiusMeters),
-  polygonText: s.polygon ? s.polygon.map((p) => `${p.lat}, ${p.lng}`).join('\n') : '',
-  isActive: s.isActive,
-});
-
 /**
- * Parses the textarea's "lat, lng" per line format. Returns `null` for a
- * blank field (no polygon, radius fallback applies) and throws with a
- * specific line number for anything malformed, since a silently-dropped typo
- * here would just look like the polygon feature doesn't work.
+ * A non-array `polygon` shouldn't be possible given the API's own validation,
+ * but `polygon` is `jsonb` with no DB-level shape constraint — this is the
+ * one place ops-facing UI touches store data straight from a fetch, so it's
+ * worth not trusting the shape blindly and blanking the whole page over it.
  */
-const parsePolygonText = (text: string): { lat: number; lng: number }[] | null => {
-  const lines = text
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
-  if (lines.length === 0) return null;
+const asPolygon = (polygon: unknown): StorePolygonPoint[] | null =>
+  Array.isArray(polygon) ? (polygon as StorePolygonPoint[]) : null;
 
-  const points = lines.map((line, i) => {
-    const parts = line.split(',').map((p) => Number(p.trim()));
-    const [lat, lng] = parts;
-    if (parts.length !== 2 || !Number.isFinite(lat) || !Number.isFinite(lng)) {
-      throw new Error(`Line ${i + 1} isn't a valid "lat, lng" pair: "${line}"`);
-    }
-    if (lat! < -90 || lat! > 90 || lng! < -180 || lng! > 180) {
-      throw new Error(`Line ${i + 1} is out of range: "${line}"`);
-    }
-    return { lat: lat!, lng: lng! };
-  });
-
-  if (points.length < 3) {
-    throw new Error(`A boundary needs at least 3 points (found ${points.length}) — leave it blank to use the radius instead.`);
-  }
-  return points;
+const toForm = (s: OpsStoreView): FormState => {
+  const polygon = asPolygon(s.polygon);
+  return {
+    name: s.name,
+    code: s.code,
+    addressLine: s.addressLine,
+    area: s.area,
+    city: s.city,
+    latitude: String(s.latitude),
+    longitude: String(s.longitude),
+    deliveryRadiusMeters: String(s.deliveryRadiusMeters),
+    polygonText: polygon ? polygon.map((p) => `${p.lat}, ${p.lng}`).join('\n') : '',
+    isActive: s.isActive,
+  };
 };
 
 export default function StoresPage() {
@@ -111,7 +92,7 @@ export default function StoresPage() {
   const onError = (e: unknown) =>
     setError(e instanceof ApiError ? e.message : 'Could not save the store');
 
-  const payload = (polygon: { lat: number; lng: number }[] | null) => ({
+  const payload = (polygon: StorePolygonPoint[] | null) => ({
     name: form.name.trim(),
     addressLine: form.addressLine.trim(),
     area: form.area.trim(),
@@ -124,7 +105,7 @@ export default function StoresPage() {
   });
 
   const create = useMutation({
-    mutationFn: (polygon: { lat: number; lng: number }[] | null) =>
+    mutationFn: (polygon: StorePolygonPoint[] | null) =>
       api.post<OpsStoreView>('/ops/stores', { ...payload(polygon), code: form.code.trim() }),
     onSuccess: onSaved,
     onError,
@@ -132,7 +113,7 @@ export default function StoresPage() {
 
   const update = useMutation({
     // `code` is intentionally absent — the API rejects it as unknown.
-    mutationFn: (polygon: { lat: number; lng: number }[] | null) =>
+    mutationFn: (polygon: StorePolygonPoint[] | null) =>
       api.patch<OpsStoreView>(`/ops/stores/${editing!.id}`, payload(polygon)),
     onSuccess: onSaved,
     onError,
@@ -148,7 +129,7 @@ export default function StoresPage() {
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    let polygon: { lat: number; lng: number }[] | null;
+    let polygon: StorePolygonPoint[] | null;
     try {
       polygon = parsePolygonText(form.polygonText);
     } catch (err) {
@@ -281,7 +262,9 @@ export default function StoresPage() {
               id="polygon"
               value={form.polygonText}
               rows={4}
-              placeholder={'One "lat, lng" per line, e.g.\n34.0520, 71.4180\n34.0610, 71.4450\n34.0390, 71.4610'}
+              placeholder={
+                'One "lat, lng" per line, e.g.\n34.0520, 71.4180\n34.0610, 71.4450\n34.0390, 71.4610'
+              }
               onChange={(e) => setForm({ ...form, polygonText: e.target.value })}
               style={{ fontFamily: 'monospace', fontSize: 13, resize: 'vertical' }}
             />
@@ -343,57 +326,63 @@ export default function StoresPage() {
                   </td>
                 </tr>
               ) : (
-                rows.map((s) => (
-                  <tr key={s.id}>
-                    <td>
-                      <div style={{ fontWeight: 600 }}>{s.name}</div>
-                      <div className="muted">{s.code}</div>
-                    </td>
-                    <td>
-                      <div>
-                        {s.area}, {s.city}
-                      </div>
-                      <div className="muted" style={{ fontSize: 12 }}>
-                        {s.latitude.toFixed(4)}, {s.longitude.toFixed(4)}
-                      </div>
-                    </td>
-                    <td className="num">
-                      {s.polygon ? (
-                        <span title={`${s.polygon.length}-point boundary (overrides radius)`}>
-                          Boundary drawn
+                rows.map((s) => {
+                  const polygon = asPolygon(s.polygon);
+                  return (
+                    <tr key={s.id}>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{s.name}</div>
+                        <div className="muted">{s.code}</div>
+                      </td>
+                      <td>
+                        <div>
+                          {s.area}, {s.city}
+                        </div>
+                        <div className="muted" style={{ fontSize: 12 }}>
+                          {s.latitude.toFixed(4)}, {s.longitude.toFixed(4)}
+                        </div>
+                      </td>
+                      <td className="num">
+                        <div>{(s.deliveryRadiusMeters / 1000).toFixed(1)} km</div>
+                        {polygon ? (
+                          <div
+                            className="muted"
+                            style={{ fontSize: 12 }}
+                            title="Overrides the radius above while it's set"
+                          >
+                            boundary drawn ({polygon.length} pts)
+                          </div>
+                        ) : null}
+                      </td>
+                      <td>
+                        <span className={`badge ${s.isActive ? 'good' : 'neutral'}`}>
+                          {s.isActive ? 'Active' : 'Paused'}
                         </span>
-                      ) : (
-                        `${(s.deliveryRadiusMeters / 1000).toFixed(1)} km`
-                      )}
-                    </td>
-                    <td>
-                      <span className={`badge ${s.isActive ? 'good' : 'neutral'}`}>
-                        {s.isActive ? 'Active' : 'Paused'}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button
-                          className="btn ghost sm"
-                          onClick={() => {
-                            setEditing(s);
-                            setForm(toForm(s));
-                            setError(null);
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="btn ghost sm"
-                          disabled={toggleActive.isPending}
-                          onClick={() => toggleActive.mutate(s)}
-                        >
-                          {s.isActive ? 'Pause' : 'Resume'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button
+                            className="btn ghost sm"
+                            onClick={() => {
+                              setEditing(s);
+                              setForm(toForm(s));
+                              setError(null);
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="btn ghost sm"
+                            disabled={toggleActive.isPending}
+                            onClick={() => toggleActive.mutate(s)}
+                          >
+                            {s.isActive ? 'Pause' : 'Resume'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

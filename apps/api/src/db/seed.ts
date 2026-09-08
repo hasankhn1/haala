@@ -3,8 +3,19 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { BrandStatus, BusinessTypeKey, businessTypeSpecs, rupees } from '@haala/shared';
 import { logger } from '../common/logger';
 import { closeDb, db } from './client';
-import { authProviders, brands, businessTypes, categories, inventory, productVariants,
-  products, promotions, riders, stores, users } from './schema';
+import {
+  authProviders,
+  brands,
+  businessTypes,
+  categories,
+  inventory,
+  productVariants,
+  products,
+  promotions,
+  riders,
+  stores,
+  users,
+} from './schema';
 import {
   SEED_CATEGORIES,
   SEED_PASSWORD,
@@ -83,9 +94,12 @@ const seed = async (): Promise<void> => {
 
   // ── Stores ──────────────────────────────────────────────────────────────
   for (const s of SEED_STORES) {
+    // `SEED_STORES` is `as const`, so `s.polygon` (where present) is a
+    // readonly tuple — spread to a mutable array for Drizzle's insert type.
+    const polygon = 'polygon' in s ? [...s.polygon] : null;
     await db
       .insert(stores)
-      .values(s)
+      .values({ ...s, polygon })
       .onConflictDoUpdate({
         target: stores.code,
         set: {
@@ -96,6 +110,7 @@ const seed = async (): Promise<void> => {
           latitude: s.latitude,
           longitude: s.longitude,
           deliveryRadiusMeters: s.deliveryRadiusMeters,
+          polygon,
           isActive: true,
         },
       });

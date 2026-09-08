@@ -1,10 +1,14 @@
-import { boolean, doublePrecision, integer, jsonb, pgTable, text, uniqueIndex } from 'drizzle-orm/pg-core';
+import type { StorePolygonPoint } from '@haala/shared';
+import {
+  boolean,
+  doublePrecision,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 import { pk, timestamps } from './_helpers';
-
-export interface StorePolygonPoint {
-  lat: number;
-  lng: number;
-}
 
 /** Dark stores / fulfilment hubs. */
 export const stores = pgTable(
@@ -22,7 +26,7 @@ export const stores = pgTable(
     /**
      * Precise delivery boundary, when the delivery area's real shape doesn't
      * fit a circle (e.g. DHA Peshawar). Null means "not drawn yet" — falls
-     * back to `deliveryRadiusMeters`. See `isWithinDeliveryRadius`.
+     * back to `deliveryRadiusMeters`. See `isWithinDeliveryArea`.
      */
     polygon: jsonb().$type<StorePolygonPoint[] | null>(),
     isActive: boolean().notNull().default(true),
