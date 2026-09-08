@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, lt, notInArray, sql } from 'drizzle-orm';
 import { BrandStatus, BusinessTypeKey, businessTypeSpecs, rupees } from '@haala/shared';
 import { logger } from '../common/logger';
 import { closeDb, db } from './client';
@@ -194,7 +194,33 @@ const seed = async (): Promise<void> => {
    * be seeded without a second copy of it. Everything inside is unchanged apart
    * from the brand no longer being assumed.
    */
-  async function seedCatalogue(brandId: string, cats: SeedCategory[]): Promise<void> {
+  /**
+   * @param businessTypeKey the brand's type, used to validate product
+   * `attributes`. A boutique's fields are the whole point of business types, so
+   * seeding invalid ones would leave the feature looking implemented and
+   * untested.
+   */
+  async function seedCatalogue(
+    brandId: string,
+    businessTypeKey: BusinessTypeKey,
+    cats: SeedCategory[],
+  ): Promise<void> {
+    const spec = businessTypeSpecs[businessTypeKey];
+
+    /*
+     * Everything this brand is declared to sell. Anything else it currently
+     * sells is taken off sale at the end.
+     *
+     * Without that step the seed only ever adds: renaming a slug leaves the old
+     * row behind and the catalogue shows the same garment twice — which is how
+     * this boutique ended up with both `womens-chiffon-suit` and
+     * `womens-embroidered-chiffon`.
+     *
+     * Deactivated rather than deleted. `order_items` references products and a
+     * receipt should still name what was bought; "off sale" is exactly what
+     * `is_active` means, and it is what the vendor dashboard's own control does.
+     */
+    const declaredSlugs = cats.flatMap((c) => c.products.map((pr) => pr.slug));
   // ── Categories → products → per-store inventory ─────────────────────────
   for (const [index, category] of cats.entries()) {
     await db
@@ -226,6 +252,17 @@ const seed = async (): Promise<void> => {
     for (const item of category.products) {
       const basePrice = rupees(item.price);
 
+      // Fail loudly here rather than shipping a product the dashboard's form
+      // cannot render — the schema and that form come from the same entry.
+      const parsed = spec.schema.safeParse(item.attributes ?? {});
+      if (!parsed.success) {
+        throw new Error(
+          `${item.slug}: attributes do not match the ${businessTypeKey} spec — ` +
+            JSON.stringify(parsed.error.flatten().fieldErrors),
+        );
+      }
+      const attributes = parsed.data as Record<string, unknown>;
+
       await db
         .insert(products)
         .values({
@@ -237,6 +274,7 @@ const seed = async (): Promise<void> => {
           imageUrl: item.imageUrl,
           unit: item.unit,
           basePrice,
+          attributes,
         })
         .onConflictDoUpdate({
           target: [products.brandId, products.slug],
@@ -247,6 +285,7 @@ const seed = async (): Promise<void> => {
             imageUrl: item.imageUrl,
             unit: item.unit,
             basePrice,
+            attributes,
             isActive: true,
           },
         });
@@ -265,56 +304,119 @@ const seed = async (): Promise<void> => {
       productCount += 1;
 
       /**
-       * Every product needs its default variant — `sortOrder: 0`, of which a
+       * Every product needs a default variant — `sortOrder: 0`, of which a
        * partial unique index allows exactly one. Stock hangs off the variant,
        * so without this there is nothing to stock.
+       *
+       * A product with no `variants` gets exactly that one, labelled by its
+       * unit, which is what grocery wants. A product that declares sizes gets
+       * one per size, the first being the default.
+       */
+      const declared = item.variants ?? [{ label: item.unit }];
+      const declaredLabels = declared.map((v) => v.label);
+
+      /*
+       * Park every existing variant out of the way before writing the new set.
+       *
+       * `product_variants_default_uq` allows exactly one variant per product at
+       * `sort_order = 0`. Re-seeding a product whose sizes changed — this
+       * boutique's did, from a single "Medium" to a real size run — inserts the
+       * new default while the old one still holds 0, and the index rejects it.
+       * Moving them aside first makes the seed converge on the declared set
+       * instead of only working against an empty database.
+       *
+       * Surviving labels keep their row and therefore their id, so inventory
+       * and anything holding a variant reference are not churned on every run.
        */
       await db
-        .insert(productVariants)
-        .values({
-          productId: productRow.id,
-          label: item.unit,
-          unit: item.unit,
-          basePrice,
-          sortOrder: 0,
-        })
-        .onConflictDoUpdate({
-          target: [productVariants.productId, productVariants.label],
-          set: { unit: item.unit, basePrice, isActive: true },
-        });
+        .update(productVariants)
+        .set({ sortOrder: sql`${productVariants.sortOrder} + 1000` })
+        .where(
+          and(eq(productVariants.productId, productRow.id), lt(productVariants.sortOrder, 1000)),
+        );
 
-      const [variantRow] = await db
-        .select()
-        .from(productVariants)
-        .where(and(eq(productVariants.productId, productRow.id), eq(productVariants.sortOrder, 0)))
-        .limit(1);
-      if (!variantRow) continue;
-
-      for (const store of storeRows) {
-        const r = hash(`${store.code}:${item.slug}`);
-
-        // A couple of items per store are deliberately out of stock so the
-        // empty/out-of-stock UI states have something to render.
-        const quantityAvailable = r < 0.06 ? 0 : 12 + Math.floor(r * 180);
-
-        // ~18% carry a store-level markdown, which is what surfaces the
-        // discount badge and "you save" line in the app.
-        const price = r > 0.82 ? Math.round((basePrice * 0.85) / 100) * 100 : null;
+      for (const [order, variant] of declared.entries()) {
+        const variantPrice = basePrice + rupees(variant.priceDelta ?? 0);
 
         await db
-          .insert(inventory)
-          .values({ storeId: store.id, variantId: variantRow.id, quantityAvailable, price })
+          .insert(productVariants)
+          .values({
+            productId: productRow.id,
+            label: variant.label,
+            unit: item.unit,
+            basePrice: variantPrice,
+            sortOrder: order,
+          })
           .onConflictDoUpdate({
-            target: [inventory.storeId, inventory.variantId],
-            set: { quantityAvailable, price },
+            target: [productVariants.productId, productVariants.label],
+            set: { unit: item.unit, basePrice: variantPrice, sortOrder: order, isActive: true },
           });
-        stockRows += 1;
+
+        const [variantRow] = await db
+          .select()
+          .from(productVariants)
+          .where(
+            and(
+              eq(productVariants.productId, productRow.id),
+              eq(productVariants.label, variant.label),
+            ),
+          )
+          .limit(1);
+        if (!variantRow) continue;
+
+        for (const store of storeRows) {
+          // Seeded by store **and size**, so sizes sell out independently —
+          // an M gone while the L is on the shelf is the normal boutique case
+          // and the one the size picker has to render.
+          const r = hash(`${store.code}:${item.slug}:${variant.label}`);
+
+          // A few lines per store are deliberately out of stock so the
+          // empty/out-of-stock UI states have something to render.
+          const quantityAvailable = r < 0.12 ? 0 : 6 + Math.floor(r * 90);
+
+          // ~18% carry a store-level markdown, which is what surfaces the
+          // discount badge and "you save" line in the app.
+          const price = r > 0.82 ? Math.round((variantPrice * 0.85) / 100) * 100 : null;
+
+          await db
+            .insert(inventory)
+            .values({ storeId: store.id, variantId: variantRow.id, quantityAvailable, price })
+            .onConflictDoUpdate({
+              target: [inventory.storeId, inventory.variantId],
+              set: { quantityAvailable, price },
+            });
+          stockRows += 1;
+        }
       }
+
+      /*
+       * Anything still parked is a label this product no longer sells. Deleting
+       * it cascades to its inventory, which is what "this size is discontinued"
+       * means. Order history is unaffected — `order_items` keeps `product_id`
+       * and nulls the variant.
+       */
+      await db
+        .delete(productVariants)
+        .where(
+          and(
+            eq(productVariants.productId, productRow.id),
+            notInArray(productVariants.label, declaredLabels),
+          ),
+        );
     }
   }
+
+    const retired = await db
+      .update(products)
+      .set({ isActive: false })
+      .where(and(eq(products.brandId, brandId), notInArray(products.slug, declaredSlugs)))
+      .returning({ slug: products.slug });
+    if (retired.length > 0) {
+      logger.info({ count: retired.length, slugs: retired.map((r) => r.slug) }, 'taken off sale');
+    }
   }
 
-  await seedCatalogue(houseBrand.id, SEED_CATEGORIES);
+  await seedCatalogue(houseBrand.id, BusinessTypeKey.Grocery, SEED_CATEGORIES);
 
   /*
    * A second department, so the marketplace home has more than one live card
@@ -361,7 +463,11 @@ const seed = async (): Promise<void> => {
     .limit(1);
   if (!clothingBrand) throw new Error('Failed to resolve the clothing brand');
 
-  await seedCatalogue(clothingBrand.id, SEED_CLOTHING_BRAND.categories);
+  await seedCatalogue(
+    clothingBrand.id,
+    SEED_CLOTHING_BRAND.businessTypeKey as BusinessTypeKey,
+    SEED_CLOTHING_BRAND.categories,
+  );
 
   // Launch promo codes. Upserted on `code` like everything else, but note the
   // `set` deliberately omits `usedCount` — re-seeding must not wipe redemptions

@@ -24,6 +24,41 @@ export interface SeedProduct {
   price: number;
   description: string;
   imageUrl: string | null;
+  /**
+   * The sellable sizes, when a product has more than one.
+   *
+   * Omit and the loader makes a single default variant labelled by `unit`,
+   * which is what grocery wants — a tin of beans is one thing. Clothing is not:
+   * without sizes the size picker never appears, "two sizes are two basket
+   * lines" is never exercised, and every stock check is against a variant that
+   * does not represent anything a customer chooses.
+   *
+   * The first entry becomes the default (`sortOrder = 0`), of which a partial
+   * unique index allows exactly one. Stock is per variant, so sizes sell out
+   * independently — which is the normal case for a boutique and worth having in
+   * test data.
+   */
+  variants?: SeedVariant[];
+  /**
+   * Business-type attributes — the fields a boutique's product form asks for.
+   *
+   * Validated at seed time against the zod schema in `businessTypeSpecs` for
+   * the brand's type, so a typo here fails the seed rather than shipping a
+   * product the dashboard cannot render.
+   */
+  attributes?: Record<string, unknown>;
+}
+
+export interface SeedVariant {
+  /** What the customer picks: "M", "38", "3 piece". Unique within the product. */
+  label: string;
+  /**
+   * Added to the product's base price, in whole PKR. Usually 0 — a larger size
+   * of the same suit is the same price — but XL fabric genuinely costs more on
+   * some lines, and a seed with one non-zero delta proves the per-variant price
+   * is read rather than assumed.
+   */
+  priceDelta?: number;
 }
 
 export interface SeedCategory {
@@ -974,6 +1009,49 @@ export const SEED_PROMOTIONS = [
  *
  * Prices are whole rupees, converted to paisa by `seed.ts` like everything else.
  */
+/**
+ * Size runs, shared across the boutique's products.
+ *
+ * Declared once because they are the same physical sizes, and because a typo in
+ * one copy of "M" would create a second variant rather than an error — the
+ * uniqueness is on `(productId, label)`, so labels are data, not identifiers.
+ *
+ * XL carries a small uplift on apparel and the longer cut on unstitched: most
+ * sizes cost the same, but not all do, and a seed where every variant is the
+ * same price cannot tell a per-variant price from a per-product one.
+ */
+const APPAREL_SIZES: SeedVariant[] = [
+  { label: 'S' },
+  { label: 'M' },
+  { label: 'L' },
+  { label: 'XL', priceDelta: 200 },
+];
+
+const KIDS_SIZES: SeedVariant[] = [
+  { label: '2-3y' },
+  { label: '4-5y' },
+  { label: '6-7y' },
+  { label: '8-9y' },
+  { label: '10-12y', priceDelta: 150 },
+];
+
+const MENS_SHOE_SIZES: SeedVariant[] = [
+  { label: '39' },
+  { label: '40' },
+  { label: '41' },
+  { label: '42' },
+  { label: '43' },
+];
+
+const WOMENS_SHOE_SIZES: SeedVariant[] = [
+  { label: '36' },
+  { label: '37' },
+  { label: '38' },
+  { label: '39' },
+];
+
+const UNSTITCHED_LENGTHS: SeedVariant[] = [{ label: '2.5 m' }, { label: '3 m', priceDelta: 400 }];
+
 export const SEED_CLOTHING_BRAND: SeedBrand = {
   slug: 'gul-ahmed-corner',
   name: 'Gul Ahmed Corner',
@@ -985,10 +1063,112 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
       name: 'Men',
       imageUrl: null,
       products: [
-        { slug: 'mens-cotton-kameez-shalwar', name: 'Cotton Kameez Shalwar', unit: 'Medium', price: 3500, description: 'Summer-weight cotton, stitched and ready to wear.', imageUrl: null },
-        { slug: 'mens-wash-and-wear-suit', name: 'Wash & Wear Suit', unit: 'Large', price: 4200, description: 'Crease-resistant blend that needs no ironing.', imageUrl: null },
-        { slug: 'mens-waistcoat', name: 'Formal Waistcoat', unit: 'Medium', price: 2800, description: 'Lined waistcoat for weddings and Eid.', imageUrl: null },
-        { slug: 'mens-polo-shirt', name: 'Pique Polo Shirt', unit: 'Large', price: 1450, description: 'Combed cotton pique, three-button placket.', imageUrl: null },
+        {
+          slug: 'mens-cotton-kameez-shalwar',
+          name: 'Cotton Kameez Shalwar',
+          unit: 'Stitched suit',
+          price: 3500,
+          description: 'Summer-weight cotton, stitched and ready to wear.',
+          imageUrl: null,
+          variants: APPAREL_SIZES,
+          attributes: {
+            suitType: 'Stitched',
+            pieces: '2 piece',
+            wearer: 'Men',
+            fabric: 'Cotton',
+            includes: ['Kameez', 'Shalwar'],
+            season: 'Summer',
+            careInstructions: 'Machine wash cold, tumble dry low.',
+          },
+        },
+        {
+          slug: 'mens-wash-and-wear-suit',
+          name: 'Wash & Wear Suit',
+          unit: 'Stitched suit',
+          price: 4200,
+          description: 'Crease-resistant blend that needs no ironing.',
+          imageUrl: null,
+          variants: APPAREL_SIZES,
+          attributes: {
+            suitType: 'Stitched',
+            pieces: '2 piece',
+            wearer: 'Men',
+            fabric: 'Poly-cotton blend',
+            includes: ['Kameez', 'Shalwar'],
+            season: 'All season',
+            careInstructions: 'Machine wash, drip dry. No ironing needed.',
+          },
+        },
+        {
+          slug: 'mens-waistcoat',
+          name: 'Formal Waistcoat',
+          unit: 'Waistcoat',
+          price: 2800,
+          description: 'Lined waistcoat for weddings and Eid.',
+          imageUrl: null,
+          variants: APPAREL_SIZES,
+          attributes: {
+            suitType: 'Ready to wear',
+            pieces: '1 piece',
+            wearer: 'Men',
+            fabric: 'Jacquard',
+            includes: ['Waistcoat'],
+            collection: 'Eid ’26',
+            careInstructions: 'Dry clean only.',
+          },
+        },
+        {
+          slug: 'mens-polo-shirt',
+          name: 'Pique Polo Shirt',
+          unit: 'Shirt',
+          price: 1450,
+          description: 'Combed cotton pique, three-button placket.',
+          imageUrl: null,
+          variants: APPAREL_SIZES,
+          attributes: {
+            suitType: 'Ready to wear',
+            pieces: '1 piece',
+            wearer: 'Men',
+            fabric: 'Combed cotton',
+            includes: ['Polo shirt'],
+            season: 'Summer',
+          },
+        },
+        {
+          slug: 'mens-unstitched-lawn',
+          name: 'Unstitched Lawn (Men)',
+          unit: 'Fabric length',
+          price: 2600,
+          description: 'Two-piece lawn suiting, cut to your own tailor.',
+          imageUrl: null,
+          variants: UNSTITCHED_LENGTHS,
+          attributes: {
+            suitType: 'Unstitched',
+            pieces: '2 piece',
+            wearer: 'Men',
+            fabric: 'Lawn',
+            includes: ['Shirt piece', 'Trouser piece'],
+            season: 'Summer',
+          },
+        },
+        {
+          slug: 'mens-shalwar-kurta-khaddar',
+          name: 'Khaddar Shalwar Kurta',
+          unit: 'Stitched suit',
+          price: 3900,
+          description: 'Winter khaddar, brushed on the inside.',
+          imageUrl: null,
+          variants: APPAREL_SIZES,
+          attributes: {
+            suitType: 'Stitched',
+            pieces: '2 piece',
+            wearer: 'Men',
+            fabric: 'Khaddar',
+            includes: ['Kurta', 'Shalwar'],
+            season: 'Winter',
+            careInstructions: 'Hand wash cold.',
+          },
+        },
       ],
     },
     {
@@ -996,10 +1176,111 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
       name: 'Women',
       imageUrl: null,
       products: [
-        { slug: 'womens-lawn-3-piece', name: 'Unstitched Lawn 3-Piece', unit: '3 piece', price: 4800, description: 'Printed lawn shirt, dyed trouser and dupatta.', imageUrl: null },
-        { slug: 'womens-chiffon-suit', name: 'Embroidered Chiffon Suit', unit: '3 piece', price: 7500, description: 'Hand-finished embroidery on the neckline and sleeves.', imageUrl: null },
-        { slug: 'womens-abaya', name: 'Nida Abaya', unit: 'Free size', price: 5200, description: 'Soft nida fabric with a matching hijab.', imageUrl: null },
-        { slug: 'womens-printed-kurti', name: 'Printed Kurti', unit: 'Medium', price: 1900, description: 'Everyday viscose kurti, side slits.', imageUrl: null },
+        {
+          slug: 'womens-embroidered-chiffon',
+          name: 'Embroidered Chiffon Suit',
+          unit: 'Stitched suit',
+          price: 7500,
+          description: 'Hand-embroidered neckline with a chiffon dupatta.',
+          imageUrl: null,
+          variants: APPAREL_SIZES,
+          attributes: {
+            suitType: 'Stitched',
+            pieces: '3 piece',
+            wearer: 'Women',
+            fabric: 'Chiffon',
+            includes: ['Shirt', 'Trouser', 'Dupatta'],
+            work: 'Hand-embroidered neckline',
+            collection: 'Eid ’26',
+            careInstructions: 'Dry clean only.',
+          },
+        },
+        {
+          slug: 'womens-unstitched-lawn-3pc',
+          name: 'Unstitched Lawn 3-Piece',
+          unit: 'Fabric length',
+          price: 4800,
+          description: 'Printed lawn with a chiffon dupatta and plain trouser.',
+          imageUrl: null,
+          variants: UNSTITCHED_LENGTHS,
+          attributes: {
+            suitType: 'Unstitched',
+            pieces: '3 piece',
+            wearer: 'Women',
+            fabric: 'Lawn',
+            includes: ['Shirt piece', 'Trouser piece', 'Dupatta'],
+            season: 'Summer',
+          },
+        },
+        {
+          slug: 'womens-printed-kurti',
+          name: 'Printed Kurti',
+          unit: 'Kurti',
+          price: 1900,
+          description: 'Everyday viscose kurti with side slits.',
+          imageUrl: null,
+          variants: APPAREL_SIZES,
+          attributes: {
+            suitType: 'Ready to wear',
+            pieces: '1 piece',
+            wearer: 'Women',
+            fabric: 'Viscose',
+            includes: ['Kurti'],
+            season: 'All season',
+          },
+        },
+        {
+          slug: 'womens-nida-abaya',
+          name: 'Nida Abaya',
+          unit: 'Abaya',
+          price: 5200,
+          description: 'Flowing nida abaya with a matching scarf.',
+          imageUrl: null,
+          variants: APPAREL_SIZES,
+          attributes: {
+            suitType: 'Ready to wear',
+            pieces: '2 piece',
+            wearer: 'Women',
+            fabric: 'Nida',
+            includes: ['Abaya', 'Scarf'],
+            careInstructions: 'Hand wash, hang to dry.',
+          },
+        },
+        {
+          slug: 'womens-semi-stitched-velvet',
+          name: 'Semi-Stitched Velvet Suit',
+          unit: 'Semi-stitched suit',
+          price: 9800,
+          description: 'Winter velvet with zari work, finished to your fit.',
+          imageUrl: null,
+          variants: APPAREL_SIZES,
+          attributes: {
+            suitType: 'Semi-stitched',
+            pieces: '3 piece',
+            wearer: 'Women',
+            fabric: 'Velvet',
+            includes: ['Shirt', 'Trouser', 'Shawl'],
+            work: 'Zari on the border',
+            season: 'Winter',
+            careInstructions: 'Dry clean only.',
+          },
+        },
+        {
+          slug: 'womens-cotton-trouser',
+          name: 'Cotton Trouser',
+          unit: 'Trouser',
+          price: 1200,
+          description: 'Plain cotton trouser, cut straight.',
+          imageUrl: null,
+          variants: APPAREL_SIZES,
+          attributes: {
+            suitType: 'Ready to wear',
+            pieces: '1 piece',
+            wearer: 'Women',
+            fabric: 'Cotton',
+            includes: ['Trouser'],
+          },
+        },
       ],
     },
     {
@@ -1007,9 +1288,75 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
       name: 'Kids',
       imageUrl: null,
       products: [
-        { slug: 'kids-boys-kameez-shalwar', name: 'Boys Kameez Shalwar', unit: '6–7 years', price: 1800, description: 'Cotton suit that survives a school week.', imageUrl: null },
-        { slug: 'kids-girls-frock', name: 'Girls Party Frock', unit: '4–5 years', price: 2200, description: 'Net overlay with a cotton lining.', imageUrl: null },
-        { slug: 'kids-hoodie', name: 'Fleece Hoodie', unit: '8–9 years', price: 1600, description: 'Brushed fleece for Peshawar winters.', imageUrl: null },
+        {
+          slug: 'kids-boys-kameez-shalwar',
+          name: 'Boys Kameez Shalwar',
+          unit: 'Stitched suit',
+          price: 1800,
+          description: 'Cotton suit for boys, sizes 2 to 12.',
+          imageUrl: null,
+          variants: KIDS_SIZES,
+          attributes: {
+            suitType: 'Stitched',
+            pieces: '2 piece',
+            wearer: 'Boys',
+            fabric: 'Cotton',
+            includes: ['Kameez', 'Shalwar'],
+            careInstructions: 'Machine wash warm.',
+          },
+        },
+        {
+          slug: 'kids-girls-frock',
+          name: 'Girls Party Frock',
+          unit: 'Frock',
+          price: 2400,
+          description: 'Net frock with a lined bodice.',
+          imageUrl: null,
+          variants: KIDS_SIZES,
+          attributes: {
+            suitType: 'Ready to wear',
+            pieces: '1 piece',
+            wearer: 'Girls',
+            fabric: 'Net',
+            includes: ['Frock'],
+            collection: 'Eid ’26',
+            careInstructions: 'Hand wash cold.',
+          },
+        },
+        {
+          slug: 'kids-fleece-hoodie',
+          name: 'Fleece Hoodie',
+          unit: 'Hoodie',
+          price: 1600,
+          description: 'Brushed fleece with a kangaroo pocket.',
+          imageUrl: null,
+          variants: KIDS_SIZES,
+          attributes: {
+            suitType: 'Ready to wear',
+            pieces: '1 piece',
+            wearer: 'Unisex',
+            fabric: 'Fleece',
+            includes: ['Hoodie'],
+            season: 'Winter',
+          },
+        },
+        {
+          slug: 'kids-school-trouser',
+          name: 'School Trouser',
+          unit: 'Trouser',
+          price: 950,
+          description: 'Grey twill, reinforced knees.',
+          imageUrl: null,
+          variants: KIDS_SIZES,
+          attributes: {
+            suitType: 'Ready to wear',
+            pieces: '1 piece',
+            wearer: 'Unisex',
+            fabric: 'Twill',
+            includes: ['Trouser'],
+            careInstructions: 'Machine wash warm, warm iron.',
+          },
+        },
       ],
     },
     {
@@ -1017,9 +1364,65 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
       name: 'Shoes',
       imageUrl: null,
       products: [
-        { slug: 'shoes-peshawari-chappal', name: 'Leather Peshawari Chappal', unit: 'UK 9', price: 3900, description: 'Hand-stitched Charsadda leather.', imageUrl: null },
-        { slug: 'shoes-mens-sneakers', name: 'Everyday Sneakers', unit: 'UK 9', price: 4500, description: 'Cushioned sole, canvas upper.', imageUrl: null },
-        { slug: 'shoes-womens-khussa', name: 'Embroidered Khussa', unit: 'UK 6', price: 2400, description: 'Traditional khussa with tilla work.', imageUrl: null },
+        {
+          slug: 'shoes-embroidered-khussa',
+          name: 'Embroidered Khussa',
+          unit: 'Pair',
+          price: 2400,
+          description: 'Leather khussa with tilla embroidery.',
+          imageUrl: null,
+          variants: WOMENS_SHOE_SIZES,
+          attributes: {
+            wearer: 'Women',
+            fabric: 'Leather',
+            includes: ['Pair of khussa'],
+            work: 'Tilla embroidery',
+          },
+        },
+        {
+          slug: 'shoes-peshawari-chappal',
+          name: 'Peshawari Chappal',
+          unit: 'Pair',
+          price: 3600,
+          description: 'Double-sole Charsadda chappal in tan leather.',
+          imageUrl: null,
+          variants: MENS_SHOE_SIZES,
+          attributes: {
+            wearer: 'Men',
+            fabric: 'Leather',
+            includes: ['Pair of chappal'],
+            careInstructions: 'Wipe with a dry cloth. Keep out of the rain.',
+          },
+        },
+        {
+          slug: 'shoes-everyday-sneakers',
+          name: 'Everyday Sneakers',
+          unit: 'Pair',
+          price: 4500,
+          description: 'Canvas upper on a cushioned sole.',
+          imageUrl: null,
+          variants: MENS_SHOE_SIZES,
+          attributes: {
+            wearer: 'Unisex',
+            fabric: 'Canvas',
+            includes: ['Pair of sneakers'],
+          },
+        },
+        {
+          slug: 'shoes-kids-sandals',
+          name: 'Kids Sandals',
+          unit: 'Pair',
+          price: 1400,
+          description: 'Washable sandals with a velcro strap.',
+          imageUrl: null,
+          variants: [{ label: '26' }, { label: '28' }, { label: '30' }, { label: '32' }],
+          attributes: {
+            wearer: 'Unisex',
+            fabric: 'EVA',
+            includes: ['Pair of sandals'],
+            careInstructions: 'Rinse under a tap.',
+          },
+        },
       ],
     },
     {
@@ -1027,9 +1430,71 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
       name: 'Sportswear',
       imageUrl: null,
       products: [
-        { slug: 'sports-tracksuit', name: 'Two-Piece Tracksuit', unit: 'Large', price: 3600, description: 'Zip jacket and joggers, brushed inside.', imageUrl: null },
-        { slug: 'sports-tshirt', name: 'Dri-Fit Sports Tee', unit: 'Medium', price: 1250, description: 'Moisture-wicking knit for the nets.', imageUrl: null },
-        { slug: 'sports-shorts', name: 'Athletic Shorts', unit: 'Medium', price: 1100, description: 'Lightweight shorts with zip pockets.', imageUrl: null },
+        {
+          slug: 'sports-dri-fit-tee',
+          name: 'Dri-Fit Sports Tee',
+          unit: 'T-shirt',
+          price: 1250,
+          description: 'Moisture-wicking knit for the gym.',
+          imageUrl: null,
+          variants: APPAREL_SIZES,
+          attributes: {
+            suitType: 'Ready to wear',
+            pieces: '1 piece',
+            wearer: 'Unisex',
+            fabric: 'Polyester knit',
+            includes: ['T-shirt'],
+          },
+        },
+        {
+          slug: 'sports-athletic-shorts',
+          name: 'Athletic Shorts',
+          unit: 'Shorts',
+          price: 1100,
+          description: 'Lightweight shorts with zip pockets.',
+          imageUrl: null,
+          variants: APPAREL_SIZES,
+          attributes: {
+            suitType: 'Ready to wear',
+            pieces: '1 piece',
+            wearer: 'Unisex',
+            fabric: 'Polyester',
+            includes: ['Shorts'],
+          },
+        },
+        {
+          slug: 'sports-track-suit',
+          name: 'Two-Piece Track Suit',
+          unit: 'Track suit',
+          price: 4900,
+          description: 'Zip jacket and joggers in brushed poly.',
+          imageUrl: null,
+          variants: APPAREL_SIZES,
+          attributes: {
+            suitType: 'Ready to wear',
+            pieces: '2 piece',
+            wearer: 'Unisex',
+            fabric: 'Brushed polyester',
+            includes: ['Jacket', 'Joggers'],
+            season: 'Winter',
+          },
+        },
+        {
+          slug: 'sports-training-leggings',
+          name: 'Training Leggings',
+          unit: 'Leggings',
+          price: 1750,
+          description: 'High-waisted, four-way stretch.',
+          imageUrl: null,
+          variants: APPAREL_SIZES,
+          attributes: {
+            suitType: 'Ready to wear',
+            pieces: '1 piece',
+            wearer: 'Women',
+            fabric: 'Nylon-elastane',
+            includes: ['Leggings'],
+          },
+        },
       ],
     },
   ],
