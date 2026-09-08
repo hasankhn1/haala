@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
-import { DepartmentScreen } from '../../src/screens/DepartmentScreen';
+import { DepartmentScreen } from '../../../src/screens/DepartmentScreen';
 
 /**
  * One department's storefront.

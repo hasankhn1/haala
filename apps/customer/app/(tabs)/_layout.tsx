@@ -65,10 +65,37 @@ export default function TabsLayout() {
         name="cart"
         options={{
           title: 'Cart',
+          /*
+           * Out of the bar for now — Hassan's call, on how it looked with five
+           * items. The route stays; only its tab does not. Every screen that
+           * matters reaches the basket another way: the marketplace home and
+           * each department carry a basket button with the count, and the
+           * listing screens have their own bar. Restore it by deleting this
+           * `href` line.
+           */
+          href: null,
           tabBarIcon: tabIcon('cart-outline', 'cart'),
           tabBarBadge: itemCount > 0 ? itemCount : undefined,
+          /*
+           * No tab bar on the basket.
+           *
+           * It is the one tab that is a *task* rather than a place: the screen
+           * ends in a single Checkout button, and a row of tabs underneath
+           * competes with it for the thumb. The basket gets its own header and
+           * back arrow instead, so it reads as a step you are in and can leave,
+           * rather than a place you are parked.
+           */
+          tabBarStyle: { display: 'none' },
         }}
       />
+      {/*
+        A department storefront lives inside the tab navigator so it keeps the
+        tab bar — it is a place you browse, and stranding somebody in a shop
+        with no way back to Home or Search was the complaint. `href: null`
+        keeps it out of the bar itself: departments are data, and a tab per
+        department would grow with the platform.
+      */}
+      <Tabs.Screen name="department/[key]" options={{ href: null }} />
       <Tabs.Screen
         name="account"
         options={{ title: 'Profile', tabBarIcon: tabIcon('person-outline', 'person') }}

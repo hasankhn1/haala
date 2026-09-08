@@ -112,6 +112,26 @@ export default function CartScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      {/*
+        The basket's own header, because it no longer has the tab bar to tell
+        you where you are. Sits outside `StateView` so the way out is present
+        even while the basket is loading, failing, or empty — an empty basket
+        with no back arrow and no tabs is a dead end.
+      */}
+      <View style={styles.header}>
+        <Pressable
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          style={styles.headerBack}
+        >
+          <Icon name="arrow-back" size={20} color={theme.colors.textPrimary} />
+        </Pressable>
+        <Text variant="h3">Basket</Text>
+        {/* Balances the back arrow so the title sits centred. */}
+        <View style={styles.headerBack} />
+      </View>
       <StateView
         loading={cart.isLoading}
         error={cart.error}
@@ -175,7 +195,7 @@ export default function CartScreen() {
           <View style={styles.titleRow}>
             <View>
               <Text variant="h2">
-                {baskets.length > 1 && data ? departmentName(data.departmentKey) : 'Your basket'}
+                {data ? departmentName(data.departmentKey) : 'Your basket'}
               </Text>
               <Text variant="bodySm" color="textSecondary">
                 {data?.itemCount ?? 0} {data?.itemCount === 1 ? 'item' : 'items'} ·{' '}
@@ -380,6 +400,15 @@ const styles = StyleSheet.create({
     paddingBottom: 160,
     gap: theme.spacing.md,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.layout.margin,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.md,
+  },
+  headerBack: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   switcher: { flexDirection: 'row', gap: 8, paddingBottom: 14 },
   switchTab: {
     flexDirection: 'row',

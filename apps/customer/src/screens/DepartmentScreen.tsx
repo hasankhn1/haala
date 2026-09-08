@@ -1,7 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BusinessTypeKey, departmentCopy, formatPKR, type CategoryView, type DepartmentCopy, type ProductView } from '@haala/shared';
 import {
@@ -44,6 +44,62 @@ const SHELF_COUNT = 4;
  * showed the grocery aisles and grocery's products under them. A department is
  * a shop, not a filtered view of everything.
  */
+/** How long the basket bar stays up after a change. */
+const BAR_VISIBLE_MS = 3000;
+
+/**
+ * Show the basket bar briefly whenever the basket changes, then get out of the
+ * way.
+ *
+ * It used to sit there permanently, covering the bottom of every shelf while
+ * somebody was still shopping. It is feedback — "that went in, here is the
+ * running total" — and feedback that never leaves is just furniture.
+ *
+ * Keyed on the count rather than on the add handler so it reacts to a stepper
+ * and a remove as well, and skips the first render: arriving at a department
+ * with a basket already full should not flash a bar nobody asked for.
+ */
+function useTransientBar(itemCount: number, ready: boolean) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const [mounted, setMounted] = useState(false);
+  const previous = useRef<number | null>(null);
+
+  useEffect(() => {
+    // Nothing is a "change" until the basket has actually loaded. Without this
+    // the count goes 0 → N as the query resolves, and every arrival at a
+    // department flashed a bar the customer had not done anything to earn.
+    if (!ready) return;
+
+    if (previous.current === null || previous.current === itemCount) {
+      previous.current = itemCount;
+      return;
+    }
+    previous.current = itemCount;
+    if (itemCount === 0) return;
+
+    setMounted(true);
+    // `useNativeDriver` so the fade runs off the JS thread — this happens while
+    // the customer is scrolling a shelf, which is exactly when the JS thread is
+    // busiest.
+    Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+
+    const timer = setTimeout(() => {
+      Animated.timing(opacity, { toValue: 0, duration: 260, useNativeDriver: true }).start(
+        ({ finished }) => {
+          // Unmounted only once it is actually invisible, and only if the fade
+          // ran to completion — a new add restarts it and must not be
+          // unmounted by the previous timer's callback.
+          if (finished) setMounted(false);
+        },
+      );
+    }, BAR_VISIBLE_MS);
+
+    return () => clearTimeout(timer);
+  }, [itemCount, ready, opacity]);
+
+  return { mounted, opacity };
+}
+
 export function DepartmentScreen({ department }: { department: string }) {
   const router = useRouter();
   const { user } = useAuth();
@@ -80,7 +136,8 @@ export function DepartmentScreen({ department }: { department: string }) {
    * standing in Clothing, on a button that then opens the clothing basket,
    * would be three kinds of wrong at once.
    */
-  const { basket, refetch: refetchBaskets } = useBasket(department);
+  const { basket, refetch: refetchBaskets, isLoading: basketsLoading } = useBasket(department);
+  const bar = useTransientBar(basket.itemCount, !basketsLoading);
 
   const shelfCategories = (categories.data ?? []).slice(0, SHELF_COUNT);
 
@@ -146,6 +203,23 @@ export function DepartmentScreen({ department }: { department: string }) {
         <View style={styles.heroBlock}>
           <SafeAreaView style={[styles.hero, { backgroundColor: tint }]} edges={['top', 'left', 'right']}>
             <View style={styles.heroTop}>
+              {/*
+                Out of the shop and back to the marketplace.
+              
+                The comp's department view opens with exactly this — a round translucent
+                disc holding a back arrow, top left. Without it a department was a
+                one-way door: the tab bar was absent and the only way home was the
+                system back gesture, which is not a control anybody can see.
+              */}
+              <Pressable
+                style={styles.heroBack}
+                onPress={() => router.push('/(tabs)')}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Back to all departments"
+              >
+                <Icon name="arrow-back" size={16} color={theme.colors.onPrimary} />
+              </Pressable>
               <Pressable
                 style={styles.location}
                 onPress={() => router.push('/addresses')}
@@ -163,6 +237,28 @@ export function DepartmentScreen({ department }: { department: string }) {
                       : 'Finding your store…'}
                 </Text>
                 <Icon name="chevron-down" size={13} color={theme.colors.onPrimary} />
+              </Pressable>
+              {/*
+                The basket, in the header.
+              
+                The Cart tab came out of the bar, so a shop needs its own way through to
+                it — and the count belongs where a shopper's eye already goes when they
+                want to know what they have picked up.
+              */}
+              <Pressable
+                style={styles.heroCart}
+                onPress={() => router.push(`/(tabs)/cart?department=${department}`)}
+                accessibilityRole="button"
+                accessibilityLabel={`Basket, ${basket.itemCount} ${basket.itemCount === 1 ? 'item' : 'items'}`}
+              >
+                <Icon name="bag-handle-outline" size={17} color={theme.colors.onPrimary} />
+                {basket.itemCount > 0 ? (
+                  <View style={styles.heroCartBadge}>
+                    <Text variant="caption" style={styles.heroCartBadgeText}>
+                      {basket.itemCount > 9 ? '9+' : basket.itemCount}
+                    </Text>
+                  </View>
+                ) : null}
               </Pressable>
               <Pressable
                 style={styles.avatar}
@@ -350,8 +446,8 @@ export function DepartmentScreen({ department }: { department: string }) {
         })}
       </ScrollView>
 
-      {basket.itemCount > 0 ? (
-        <View style={styles.footer}>
+      {bar.mounted && basket.itemCount > 0 ? (
+        <Animated.View style={[styles.footer, { opacity: bar.opacity }]}>
           <CTABar
             leftTop={`${basket.itemCount} item${basket.itemCount === 1 ? '' : 's'}`}
             leftBottom={formatPKR(basket.subtotal)}
@@ -360,7 +456,7 @@ export function DepartmentScreen({ department }: { department: string }) {
             // bar was describing is the one that appears.
             onPress={() => router.push(`/(tabs)/cart?department=${department}`)}
           />
-        </View>
+        </Animated.View>
       ) : null}
     </View>
   );
@@ -399,6 +495,16 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: theme.radii.xl,
     paddingHorizontal: theme.layout.margin,
     paddingBottom: 46,
+  },
+  /** The comp's 34px disc: translucent white, so it reads on any tint. */
+  heroBack: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 11,
   },
   heroTop: {
     flexDirection: 'row',
@@ -463,6 +569,28 @@ const styles = StyleSheet.create({
   },
   flexShrink: { flexShrink: 1 },
   location: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs },
+  heroActions: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
+  heroCart: {
+    width: 34,
+    height: 34,
+    borderRadius: theme.radii.pill,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroCartBadge: {
+    position: 'absolute',
+    right: -3,
+    top: -3,
+    minWidth: 17,
+    height: 17,
+    borderRadius: 9,
+    backgroundColor: theme.colors.promo,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  heroCartBadgeText: { color: theme.colors.onPromo, fontSize: 9.5, lineHeight: 17 },
   avatar: {
     width: 34,
     height: 34,
