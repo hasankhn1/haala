@@ -83,6 +83,16 @@ pnpm --filter @haala/api db:generate   # commit the generated SQL
 
 ### One-time: seeding
 
+> **The seed now carries demo clothing.** `SEED_CLOTHING_BRAND` in
+> `seed-data.ts` is a fictional shop — Gul Ahmed Corner — with seventeen
+> garments that are stocked and therefore **orderable**. Seeding it into
+> production puts goods on sale that nobody can ship. This has the same shape as
+> the `db:push` warning above: an operation that is routine locally and
+> destructive against a live database.
+>
+> Treat the step below as first-run bootstrap for an empty environment only. On
+> a database with real customers, seed nothing.
+
 Seed **inside** the container, using the compiled script:
 
 ```bash

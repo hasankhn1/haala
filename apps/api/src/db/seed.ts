@@ -7,6 +7,8 @@ import { authProviders, brands, businessTypes, categories, inventory, productVar
   products, promotions, riders, stores, users } from './schema';
 import {
   SEED_CATEGORIES,
+  SEED_CLOTHING_BRAND,
+  type SeedCategory,
   SEED_PASSWORD,
   SEED_PROMOTIONS,
   SEED_STORES,
@@ -169,12 +171,21 @@ const seed = async (): Promise<void> => {
   let productCount = 0;
   let stockRows = 0;
 
+  /**
+   * Load one brand's catalogue: categories → products → variants → per-store
+   * inventory.
+   *
+   * Extracted from the single loop this used to be, so a second department can
+   * be seeded without a second copy of it. Everything inside is unchanged apart
+   * from the brand no longer being assumed.
+   */
+  async function seedCatalogue(brandId: string, cats: SeedCategory[]): Promise<void> {
   // ── Categories → products → per-store inventory ─────────────────────────
-  for (const [index, category] of SEED_CATEGORIES.entries()) {
+  for (const [index, category] of cats.entries()) {
     await db
       .insert(categories)
       .values({
-        brandId: houseBrand.id,
+        brandId,
         name: category.name,
         slug: category.slug,
         imageUrl: category.imageUrl,
@@ -193,7 +204,7 @@ const seed = async (): Promise<void> => {
     const [categoryRow] = await db
       .select()
       .from(categories)
-      .where(and(eq(categories.brandId, houseBrand.id), eq(categories.slug, category.slug)))
+      .where(and(eq(categories.brandId, brandId), eq(categories.slug, category.slug)))
       .limit(1);
     if (!categoryRow) throw new Error(`Failed to resolve category ${category.slug}`);
 
@@ -203,7 +214,7 @@ const seed = async (): Promise<void> => {
       await db
         .insert(products)
         .values({
-          brandId: houseBrand.id,
+          brandId,
           categoryId: categoryRow.id,
           name: item.name,
           slug: item.slug,
@@ -225,10 +236,15 @@ const seed = async (): Promise<void> => {
           },
         });
 
+      /*
+       * Scoped to the brand. The unique index is `(brandId, slug)`, so a bare
+       * slug lookup was only ever correct while one brand existed — with two,
+       * it can resolve another brand's product and then stock it, silently.
+       */
       const [productRow] = await db
         .select()
         .from(products)
-        .where(eq(products.slug, item.slug))
+        .where(and(eq(products.brandId, brandId), eq(products.slug, item.slug)))
         .limit(1);
       if (!productRow) continue;
       productCount += 1;
@@ -281,6 +297,56 @@ const seed = async (): Promise<void> => {
       }
     }
   }
+  }
+
+  await seedCatalogue(houseBrand.id, SEED_CATEGORIES);
+
+  /*
+   * A second department, so the marketplace home has more than one live card
+   * and cross-department behaviour is exercisable at all.
+   *
+   * Deliberately a *separate brand* rather than more categories under the house
+   * brand: a department is a business type, a business type belongs to brands,
+   * and collapsing that here would make the seed disagree with the model the
+   * dashboard and the API enforce.
+   *
+   * Note what is *not* special-cased — `isLive` on `/catalog/departments` needs
+   * no change for clothing to appear. If it did, the rule would be wrong.
+   */
+  const [clothingType] = await db
+    .select()
+    .from(businessTypes)
+    .where(eq(businessTypes.key, SEED_CLOTHING_BRAND.businessTypeKey))
+    .limit(1);
+  if (!clothingType) {
+    throw new Error(
+      `Seed brand "${SEED_CLOTHING_BRAND.slug}" names business type ` +
+        `"${SEED_CLOTHING_BRAND.businessTypeKey}", which does not exist.`,
+    );
+  }
+
+  await db
+    .insert(brands)
+    .values({
+      name: SEED_CLOTHING_BRAND.name,
+      slug: SEED_CLOTHING_BRAND.slug,
+      businessTypeId: clothingType.id,
+      status: BrandStatus.Active,
+      description: SEED_CLOTHING_BRAND.description,
+    })
+    .onConflictDoUpdate({
+      target: brands.slug,
+      set: { businessTypeId: clothingType.id, status: BrandStatus.Active },
+    });
+
+  const [clothingBrand] = await db
+    .select()
+    .from(brands)
+    .where(eq(brands.slug, SEED_CLOTHING_BRAND.slug))
+    .limit(1);
+  if (!clothingBrand) throw new Error('Failed to resolve the clothing brand');
+
+  await seedCatalogue(clothingBrand.id, SEED_CLOTHING_BRAND.categories);
 
   // Launch promo codes. Upserted on `code` like everything else, but note the
   // `set` deliberately omits `usedCount` — re-seeding must not wipe redemptions

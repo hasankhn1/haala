@@ -34,6 +34,26 @@ export interface SeedCategory {
 }
 
 /**
+ * A brand and everything it sells.
+ *
+ * `SEED_CATEGORIES` below predates brands and belongs to Haala's own grocery
+ * shop; this shape is for the others. It exists so a second department can be
+ * seeded without touching the loader — which is the same promise the
+ * marketplace home makes about departments generally.
+ *
+ * `businessTypeKey` is a plain string rather than the `BusinessTypeKey` enum so
+ * this file keeps its only dependency: none. `seed.ts` resolves it and fails
+ * loudly if it names a type that does not exist.
+ */
+export interface SeedBrand {
+  slug: string;
+  name: string;
+  businessTypeKey: string;
+  description: string;
+  categories: SeedCategory[];
+}
+
+/**
  * Demo accounts. All share the password below — dev convenience only, and the
  * reason this file must never be loaded outside development.
  */
@@ -899,3 +919,82 @@ export const SEED_PROMOTIONS = [
     isActive: true,
   },
 ];
+
+/**
+ * A clothing shop, so the Clothing department has something in it.
+ *
+ * **Demo data. Never seed a production database with this** — these are
+ * orderable garments that do not exist, and a real customer could buy one. The
+ * same warning as `db:push`, for the same reason.
+ *
+ * Every `imageUrl` is `null` on purpose: there are no clothing photographs in
+ * `apps/api/public/products`, and inventing paths would render as broken images
+ * rather than as the neutral `Thumb` placeholder the apps already fall back to.
+ *
+ * `unit` carries the size, because that is what a variant's label is for a
+ * garment — the same field grocery uses for "250 g". Sizes and colours as
+ * separate axes are a real change to `product_variants.options`, and a seed file
+ * is the wrong place to pretend they exist.
+ *
+ * Prices are whole rupees, converted to paisa by `seed.ts` like everything else.
+ */
+export const SEED_CLOTHING_BRAND: SeedBrand = {
+  slug: 'gul-ahmed-corner',
+  name: 'Gul Ahmed Corner',
+  businessTypeKey: 'clothing',
+  description: 'Stitched and unstitched wear for the family, from University Road.',
+  categories: [
+    {
+      slug: 'men',
+      name: 'Men',
+      imageUrl: null,
+      products: [
+        { slug: 'mens-cotton-kameez-shalwar', name: 'Cotton Kameez Shalwar', unit: 'Medium', price: 3500, description: 'Summer-weight cotton, stitched and ready to wear.', imageUrl: null },
+        { slug: 'mens-wash-and-wear-suit', name: 'Wash & Wear Suit', unit: 'Large', price: 4200, description: 'Crease-resistant blend that needs no ironing.', imageUrl: null },
+        { slug: 'mens-waistcoat', name: 'Formal Waistcoat', unit: 'Medium', price: 2800, description: 'Lined waistcoat for weddings and Eid.', imageUrl: null },
+        { slug: 'mens-polo-shirt', name: 'Pique Polo Shirt', unit: 'Large', price: 1450, description: 'Combed cotton pique, three-button placket.', imageUrl: null },
+      ],
+    },
+    {
+      slug: 'women',
+      name: 'Women',
+      imageUrl: null,
+      products: [
+        { slug: 'womens-lawn-3-piece', name: 'Unstitched Lawn 3-Piece', unit: '3 piece', price: 4800, description: 'Printed lawn shirt, dyed trouser and dupatta.', imageUrl: null },
+        { slug: 'womens-chiffon-suit', name: 'Embroidered Chiffon Suit', unit: '3 piece', price: 7500, description: 'Hand-finished embroidery on the neckline and sleeves.', imageUrl: null },
+        { slug: 'womens-abaya', name: 'Nida Abaya', unit: 'Free size', price: 5200, description: 'Soft nida fabric with a matching hijab.', imageUrl: null },
+        { slug: 'womens-printed-kurti', name: 'Printed Kurti', unit: 'Medium', price: 1900, description: 'Everyday viscose kurti, side slits.', imageUrl: null },
+      ],
+    },
+    {
+      slug: 'kids',
+      name: 'Kids',
+      imageUrl: null,
+      products: [
+        { slug: 'kids-boys-kameez-shalwar', name: 'Boys Kameez Shalwar', unit: '6–7 years', price: 1800, description: 'Cotton suit that survives a school week.', imageUrl: null },
+        { slug: 'kids-girls-frock', name: 'Girls Party Frock', unit: '4–5 years', price: 2200, description: 'Net overlay with a cotton lining.', imageUrl: null },
+        { slug: 'kids-hoodie', name: 'Fleece Hoodie', unit: '8–9 years', price: 1600, description: 'Brushed fleece for Peshawar winters.', imageUrl: null },
+      ],
+    },
+    {
+      slug: 'shoes',
+      name: 'Shoes',
+      imageUrl: null,
+      products: [
+        { slug: 'shoes-peshawari-chappal', name: 'Leather Peshawari Chappal', unit: 'UK 9', price: 3900, description: 'Hand-stitched Charsadda leather.', imageUrl: null },
+        { slug: 'shoes-mens-sneakers', name: 'Everyday Sneakers', unit: 'UK 9', price: 4500, description: 'Cushioned sole, canvas upper.', imageUrl: null },
+        { slug: 'shoes-womens-khussa', name: 'Embroidered Khussa', unit: 'UK 6', price: 2400, description: 'Traditional khussa with tilla work.', imageUrl: null },
+      ],
+    },
+    {
+      slug: 'sportswear',
+      name: 'Sportswear',
+      imageUrl: null,
+      products: [
+        { slug: 'sports-tracksuit', name: 'Two-Piece Tracksuit', unit: 'Large', price: 3600, description: 'Zip jacket and joggers, brushed inside.', imageUrl: null },
+        { slug: 'sports-tshirt', name: 'Dri-Fit Sports Tee', unit: 'Medium', price: 1250, description: 'Moisture-wicking knit for the nets.', imageUrl: null },
+        { slug: 'sports-shorts', name: 'Athletic Shorts', unit: 'Medium', price: 1100, description: 'Lightweight shorts with zip pockets.', imageUrl: null },
+      ],
+    },
+  ],
+};
