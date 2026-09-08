@@ -24,6 +24,8 @@ interface FormState {
   latitude: string;
   longitude: string;
   deliveryRadiusMeters: string;
+  /** One "lat, lng" pair per line. Blank means no polygon — falls back to the radius. */
+  polygonText: string;
   isActive: boolean;
 }
 
@@ -36,6 +38,7 @@ const EMPTY: FormState = {
   latitude: '',
   longitude: '',
   deliveryRadiusMeters: '5000',
+  polygonText: '',
   isActive: true,
 };
 
@@ -48,8 +51,40 @@ const toForm = (s: OpsStoreView): FormState => ({
   latitude: String(s.latitude),
   longitude: String(s.longitude),
   deliveryRadiusMeters: String(s.deliveryRadiusMeters),
+  polygonText: s.polygon ? s.polygon.map((p) => `${p.lat}, ${p.lng}`).join('\n') : '',
   isActive: s.isActive,
 });
+
+/**
+ * Parses the textarea's "lat, lng" per line format. Returns `null` for a
+ * blank field (no polygon, radius fallback applies) and throws with a
+ * specific line number for anything malformed, since a silently-dropped typo
+ * here would just look like the polygon feature doesn't work.
+ */
+const parsePolygonText = (text: string): { lat: number; lng: number }[] | null => {
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+  if (lines.length === 0) return null;
+
+  const points = lines.map((line, i) => {
+    const parts = line.split(',').map((p) => Number(p.trim()));
+    const [lat, lng] = parts;
+    if (parts.length !== 2 || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+      throw new Error(`Line ${i + 1} isn't a valid "lat, lng" pair: "${line}"`);
+    }
+    if (lat! < -90 || lat! > 90 || lng! < -180 || lng! > 180) {
+      throw new Error(`Line ${i + 1} is out of range: "${line}"`);
+    }
+    return { lat: lat!, lng: lng! };
+  });
+
+  if (points.length < 3) {
+    throw new Error(`A boundary needs at least 3 points (found ${points.length}) — leave it blank to use the radius instead.`);
+  }
+  return points;
+};
 
 export default function StoresPage() {
   const qc = useQueryClient();
@@ -76,7 +111,7 @@ export default function StoresPage() {
   const onError = (e: unknown) =>
     setError(e instanceof ApiError ? e.message : 'Could not save the store');
 
-  const payload = () => ({
+  const payload = (polygon: { lat: number; lng: number }[] | null) => ({
     name: form.name.trim(),
     addressLine: form.addressLine.trim(),
     area: form.area.trim(),
@@ -84,19 +119,21 @@ export default function StoresPage() {
     latitude: Number(form.latitude),
     longitude: Number(form.longitude),
     deliveryRadiusMeters: Number(form.deliveryRadiusMeters),
+    polygon,
     isActive: form.isActive,
   });
 
   const create = useMutation({
-    mutationFn: () =>
-      api.post<OpsStoreView>('/ops/stores', { ...payload(), code: form.code.trim() }),
+    mutationFn: (polygon: { lat: number; lng: number }[] | null) =>
+      api.post<OpsStoreView>('/ops/stores', { ...payload(polygon), code: form.code.trim() }),
     onSuccess: onSaved,
     onError,
   });
 
   const update = useMutation({
     // `code` is intentionally absent — the API rejects it as unknown.
-    mutationFn: () => api.patch<OpsStoreView>(`/ops/stores/${editing!.id}`, payload()),
+    mutationFn: (polygon: { lat: number; lng: number }[] | null) =>
+      api.patch<OpsStoreView>(`/ops/stores/${editing!.id}`, payload(polygon)),
     onSuccess: onSaved,
     onError,
   });
@@ -110,7 +147,15 @@ export default function StoresPage() {
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    (editing ? update : create).mutate();
+    setError(null);
+    let polygon: { lat: number; lng: number }[] | null;
+    try {
+      polygon = parsePolygonText(form.polygonText);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid delivery area boundary');
+      return;
+    }
+    (editing ? update : create).mutate(polygon);
   };
 
   const coordsValid =
@@ -231,6 +276,22 @@ export default function StoresPage() {
             />
           </Field>
 
+          <Field label="Delivery area boundary (optional)" id="polygon">
+            <textarea
+              id="polygon"
+              value={form.polygonText}
+              rows={4}
+              placeholder={'One "lat, lng" per line, e.g.\n34.0520, 71.4180\n34.0610, 71.4450\n34.0390, 71.4610'}
+              onChange={(e) => setForm({ ...form, polygonText: e.target.value })}
+              style={{ fontFamily: 'monospace', fontSize: 13, resize: 'vertical' }}
+            />
+            <span className="muted" style={{ fontSize: 12 }}>
+              Copy points from Google Maps (right-click a spot → click the coordinates). At least 3
+              points, one per line. Leave blank to just use the radius above — this overrides it
+              when set.
+            </span>
+          </Field>
+
           <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <input
               type="checkbox"
@@ -296,7 +357,15 @@ export default function StoresPage() {
                         {s.latitude.toFixed(4)}, {s.longitude.toFixed(4)}
                       </div>
                     </td>
-                    <td className="num">{(s.deliveryRadiusMeters / 1000).toFixed(1)} km</td>
+                    <td className="num">
+                      {s.polygon ? (
+                        <span title={`${s.polygon.length}-point boundary (overrides radius)`}>
+                          Boundary drawn
+                        </span>
+                      ) : (
+                        `${(s.deliveryRadiusMeters / 1000).toFixed(1)} km`
+                      )}
+                    </td>
                     <td>
                       <span className={`badge ${s.isActive ? 'good' : 'neutral'}`}>
                         {s.isActive ? 'Active' : 'Paused'}
