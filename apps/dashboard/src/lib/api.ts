@@ -23,6 +23,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: { 'content-type': 'application/json', ...init?.headers },
   });
+  // A 204 carries no body by definition, so parsing one is not a failure. The
+  // API sends `{ ok: true }` from its deletes today and none return 204, but a
+  // client that reports a successful request as a network error the day someone
+  // adds one is a trap worth closing here rather than rediscovering there.
+  if (res.status === 204) return undefined as T;
+
   const json = (await res.json().catch(() => null)) as ApiResponse<T> | null;
   if (!json) throw new ApiError('NETWORK', 'Unexpected server response', res.status);
   if (!json.ok) throw new ApiError(json.error.code, json.error.message, res.status);

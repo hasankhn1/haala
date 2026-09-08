@@ -23,6 +23,7 @@ const OPS_LINKS: NavLink[] = [
   { href: '/stores', label: 'Stores' },
   { href: '/staff', label: 'Staff' },
   { href: '/business-types', label: 'Business types' },
+  { href: '/homepage', label: 'Homepage' },
 ];
 
 export default async function DashLayout({ children }: { children: ReactNode }) {

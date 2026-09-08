@@ -40,16 +40,36 @@ async function downscale(file: File): Promise<Blob> {
   });
 }
 
+/**
+ * Which namespace the file lands in, and therefore which endpoints sign it.
+ *
+ * `home-banner` is the odd one out: everything else is a brand's asset and goes
+ * through `/uploads/*`, which resolves a tenant from the session. A homepage
+ * banner belongs to the platform and has no tenant, so it is signed by the
+ * super-admin route instead. Same three steps, different door.
+ */
+const ENDPOINTS = {
+  brandScoped: { sign: '/uploads/sign', confirm: '/uploads/confirm' },
+  home: { sign: '/admin/banners/uploads/sign', confirm: '/admin/banners/uploads/confirm' },
+} as const;
+
 export function ImageUploader({
   kind,
   value,
   onChange,
+  onKeyChange,
   label,
   hint,
 }: {
-  kind: 'products' | 'categories' | 'brand';
+  kind: 'products' | 'categories' | 'brand' | 'home-banner';
   value: string;
   onChange: (url: string) => void;
+  /**
+   * The object key, when the caller stores that rather than the URL. Banners
+   * do: a key survives moving buckets or putting a CDN in front, where a
+   * baked-in absolute URL would have to be rewritten across every row.
+   */
+  onKeyChange?: (key: string) => void;
   label: string;
   hint?: string;
 }) {
@@ -63,8 +83,12 @@ export function ImageUploader({
     try {
       const blob = await downscale(file);
 
-      const signed = await api.post<{ key: string; uploadUrl: string }>('/uploads/sign', {
-        kind,
+      const routes = kind === 'home-banner' ? ENDPOINTS.home : ENDPOINTS.brandScoped;
+
+      const signed = await api.post<{ key: string; uploadUrl: string }>(routes.sign, {
+        // The home route has no `kind` — its prefix is fixed — and rejects
+        // unknown keys, so it must not be sent one.
+        ...(kind === 'home-banner' ? {} : { kind }),
         contentType: 'image/jpeg',
       });
 
@@ -77,8 +101,9 @@ export function ImageUploader({
       });
       if (!put.ok) throw new Error(`Upload failed (${put.status})`);
 
-      const done = await api.post<{ url: string }>('/uploads/confirm', { key: signed.key });
+      const done = await api.post<{ url: string }>(routes.confirm, { key: signed.key });
       onChange(done.url);
+      onKeyChange?.(signed.key);
     } catch (e) {
       setError(
         e instanceof ApiError
@@ -136,7 +161,18 @@ export function ImageUploader({
               {busy ? 'Uploading…' : value ? 'Replace photo' : 'Choose a photo'}
             </button>
             {value ? (
-              <button className="btn ghost" type="button" disabled={busy} onClick={() => onChange('')}>
+              <button
+                className="btn ghost"
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  onChange('');
+                  // Clear the key too. Dropping only the preview would leave the
+                  // row pointing at the old object — a "removed" image that comes
+                  // back on the next reload.
+                  onKeyChange?.('');
+                }}
+              >
                 Remove
               </button>
             ) : null}
@@ -157,13 +193,21 @@ export function ImageUploader({
             {hint ?? 'JPG, PNG or WebP. Large photos are shrunk automatically.'}
           </span>
 
-          {/* A pasted link still works — some vendors already host their photos. */}
-          <input
-            value={value}
-            placeholder="…or paste a link"
-            onChange={(e) => onChange(e.target.value)}
-            aria-label={`${label} link`}
-          />
+          {/*
+            A pasted link still works for a vendor's own photos, which are stored
+            as URLs. It is withheld where the caller stores a **key**: there is no
+            key to derive from somebody else's URL, so pasting one would set a
+            preview here, save `imageKey: null`, and show an image in the dashboard
+            that never reaches the app.
+          */}
+          {onKeyChange ? null : (
+            <input
+              value={value}
+              placeholder="…or paste a link"
+              onChange={(e) => onChange(e.target.value)}
+              aria-label={`${label} link`}
+            />
+          )}
         </div>
       </div>
 
