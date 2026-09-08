@@ -8,14 +8,14 @@ import { DepartmentScreen } from '../../src/screens/DepartmentScreen';
  * lists whatever `business_types` holds, and a new one must not need a new
  * screen. `key` is the business-type key — `grocery`, `bakery`, `clothing`.
  *
- * The screen itself is the grocery shell that used to be Home. Only grocery has
- * stock today, so it is the only department the home screen lets you open; the
- * rest say "coming soon" until they have something to sell.
+ * The screen itself is the shell that used to be Home, now scoped to whichever
+ * department the key names. A department with no stock is not reachable from
+ * the home rail; it says "coming soon" in the departments sheet instead.
  */
 export default function DepartmentRoute() {
-  // Read but not yet passed on: the shell is grocery-only until the catalogue
-  // can be filtered by business type. Keeping it in the URL means the link the
-  // home screen builds is already the right one.
-  useLocalSearchParams<{ key?: string }>();
-  return <DepartmentScreen />;
+  const { key } = useLocalSearchParams<{ key?: string }>();
+  // Falling back to grocery rather than rendering an unscoped shop: an absent
+  // key can only come from a malformed link, and the unscoped screen — every
+  // department's products under one heading — is the bug this replaced.
+  return <DepartmentScreen department={key ?? 'grocery'} />;
 }

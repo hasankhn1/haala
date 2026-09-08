@@ -33,8 +33,11 @@ export const catalogController = {
     sendSuccess(res, await catalogService.home(parsed?.success ? parsed.data : null));
   },
 
-  async categories(_req: Request, res: Response): Promise<void> {
-    sendSuccess(res, await catalogService.listCategories());
+  async categories(req: Request, res: Response): Promise<void> {
+    // Unfiltered when absent: the Categories tab is deliberately
+    // cross-department, and a department screen passes its own key.
+    const department = typeof req.query.department === 'string' ? req.query.department : undefined;
+    sendSuccess(res, await catalogService.listCategories(department));
   },
 
   async products(req: Request, res: Response): Promise<void> {

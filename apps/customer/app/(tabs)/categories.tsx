@@ -10,7 +10,7 @@ import { qk } from '../../src/api/queryKeys';
 
 export default function CategoriesScreen() {
   const router = useRouter();
-  const categories = useQuery({ queryKey: qk.categories, queryFn: catalogApi.categories });
+  const categories = useQuery({ queryKey: qk.categories(), queryFn: () => catalogApi.categories() });
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>

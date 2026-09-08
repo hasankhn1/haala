@@ -147,8 +147,8 @@ export const catalogService = {
       .map(toProductView);
   },
 
-  async listCategories(): Promise<CategoryView[]> {
-    const rows = await catalogRepository.listCategories();
+  async listCategories(department?: string): Promise<CategoryView[]> {
+    const rows = await catalogRepository.listCategories(department);
     return rows.map(toCategoryView);
   },
 

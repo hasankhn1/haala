@@ -159,7 +159,7 @@ export const catalogRepository = {
    * applies to the grocery catalogue too; closing it needs a `storeId` here,
    * and so a change in the apps.
    */
-  async listCategories(ex: Executor = db): Promise<Category[]> {
+  async listCategories(department?: string, ex: Executor = db): Promise<Category[]> {
     return ex
       .select({
         id: categories.id,
@@ -174,10 +174,15 @@ export const catalogRepository = {
       })
       .from(categories)
       .innerJoin(brands, eq(brands.id, categories.brandId))
+      // Joined unconditionally so the filter below can be conditional. The
+      // brand's business type is what makes a category belong to a department;
+      // without this the Clothing screen listed the grocery aisles too.
+      .innerJoin(businessTypes, eq(businessTypes.id, brands.businessTypeId))
       .where(
         and(
           eq(categories.isActive, true),
           sellableBrand,
+          ...(department ? [eq(businessTypes.key, department)] : []),
           sql`exists (
             select 1 from products
             join product_variants on product_variants.product_id = products.id
@@ -198,6 +203,7 @@ export const catalogRepository = {
     ex: Executor = db,
   ): Promise<{ items: ProductWithStock[]; total: number }> {
     const conditions = [eq(products.isActive, true), sellableBrand];
+    if (query.department) conditions.push(eq(businessTypes.key, query.department));
     if (query.categoryId) conditions.push(eq(products.categoryId, query.categoryId));
     if (query.q) conditions.push(ilike(products.name, `%${query.q}%`));
     const where = and(...conditions);
@@ -262,6 +268,11 @@ export const catalogRepository = {
       .select({ value: count() })
       .from(products)
       .innerJoin(brands, eq(brands.id, products.brandId))
+      // Shares `where` with the query above, so it must share its joins too:
+      // a department filter referencing an unjoined table is a SQL error, and
+      // omitting the filter here would report a total for the whole catalogue
+      // under a single department's heading.
+      .innerJoin(businessTypes, eq(businessTypes.id, brands.businessTypeId))
       .innerJoin(productVariants, defaultVariantOn)
       .innerJoin(inventory, joinOn)
       .where(where);

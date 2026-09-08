@@ -74,9 +74,16 @@ export const catalogApi = {
     api.get<HomeView>(`/catalog/home${storeId ? qs({ storeId }) : ''}`),
   /** The marketplace home's departments. Public — browsing needs no account. */
   departments: () => api.get<DepartmentView[]>('/catalog/departments'),
-  categories: () => api.get<CategoryView[]>('/catalog/categories'),
-  products: (params: { storeId: string; categoryId?: string; q?: string; page?: number }) =>
-    api.get<Paginated<ProductView>>(`/catalog/products${qs(params)}`),
+  /** Omit `department` for the cross-department Categories tab. */
+  categories: (department?: string) =>
+    api.get<CategoryView[]>(`/catalog/categories${department ? qs({ department }) : ''}`),
+  products: (params: {
+    storeId: string;
+    department?: string;
+    categoryId?: string;
+    q?: string;
+    page?: number;
+  }) => api.get<Paginated<ProductView>>(`/catalog/products${qs(params)}`),
   product: (id: string, storeId: string) =>
     api.get<ProductView>(`/catalog/products/${id}${qs({ storeId })}`),
 };

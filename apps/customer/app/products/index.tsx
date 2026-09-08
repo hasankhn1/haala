@@ -24,7 +24,7 @@ import { useCurrentStore } from '../../src/store/useCurrentStore';
 
 export default function ProductsScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ categoryId?: string }>();
+  const params = useLocalSearchParams<{ categoryId?: string; department?: string }>();
   const { storeId } = useCurrentStore();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 350);
@@ -33,13 +33,24 @@ export default function ProductsScreen() {
   // The route can arrive with a category preselected; the chip rail can then
   // move within categories without leaving the screen.
   const [categoryId, setCategoryId] = useState<string | undefined>(params.categoryId);
+  /*
+   * Fixed for the life of the screen, unlike `categoryId` which the chips
+   * change. Arriving from a department's "see all" keeps you inside that
+   * department — including the chip row, which would otherwise offer aisles
+   * from a shop you are not in.
+   */
+  const department = params.department;
 
-  const categories = useQuery({ queryKey: qk.categories, queryFn: catalogApi.categories });
+  const categories = useQuery({
+    queryKey: qk.categories(department),
+    queryFn: () => catalogApi.categories(department),
+  });
 
   const products = useQuery({
-    queryKey: qk.products(storeId ?? 'none', categoryId, debouncedSearch),
+    queryKey: qk.products(storeId ?? 'none', categoryId, debouncedSearch, department),
     queryFn: () =>
       catalogApi.products({
+        department,
         storeId: storeId as string,
         categoryId,
         q: debouncedSearch || undefined,

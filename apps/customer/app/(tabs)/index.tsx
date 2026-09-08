@@ -356,9 +356,6 @@ export default function HomeScreen() {
                   style={({ pressed }) => [styles.recommendCard, pressed && styles.cardPressed]}
                   onPress={() => router.push(`/product/${p.id}`)}
                   accessibilityRole="button"
-                  // The comp's card carries no product name — a photo, its
-                  // department and a price. Sighted shoppers recognise the
-                  // photo; a screen reader needs the name said out loud.
                   accessibilityLabel={`${p.name}, ${nameByKey.get(p.departmentKey) ?? p.departmentKey}, ${formatPKR(p.price)}`}
                 >
                   <View style={styles.recommendImage}>
@@ -366,6 +363,16 @@ export default function HomeScreen() {
                   </View>
                   <Text variant="labelCaps" color="textTertiary" numberOfLines={1}>
                     {nameByKey.get(p.departmentKey) ?? p.departmentKey}
+                  </Text>
+                  {/*
+                    A deliberate departure from the comp, which draws only a
+                    photo, a department and a price. That card is photo-led and
+                    works when every product has photography; ours often do not,
+                    and two cards then read as an identical "GROCERY, PKR 1,250".
+                    Two lines, so a long name is not truncated into ambiguity.
+                  */}
+                  <Text variant="bodySm" numberOfLines={2}>
+                    {p.name}
                   </Text>
                   <Text variant="bodyStrong" numberOfLines={1}>
                     {formatPKR(p.price)}

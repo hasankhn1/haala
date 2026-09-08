@@ -35,20 +35,24 @@ const SHELF_COUNT = 4;
  * shell with different content", so the shell stays exactly as it was and the
  * marketplace home now sits above it.
  *
- * Rendered by `app/department/[key].tsx`. It takes no department yet, and that
- * is deliberate rather than unfinished: only grocery has stock, so it is the
- * only department the home screen will open, and a prop the screen ignored
- * would suggest a scoping that does not exist. Scoping arrives with the
- * catalogue filter — `productsQuerySchema` has no business-type parameter — and
- * the route already carries the key for when it does.
+ * Rendered by `app/department/[key].tsx`, which passes the business-type key.
+ *
+ * **Everything on this screen is scoped to that key**, and both queries need
+ * telling separately — the categories and the products behind each shelf. While
+ * the shell was grocery-only that scoping did not exist, so opening Clothing
+ * showed the grocery aisles and grocery's products under them. A department is
+ * a shop, not a filtered view of everything.
  */
-export function DepartmentScreen() {
+export function DepartmentScreen({ department }: { department: string }) {
   const router = useRouter();
   const { user } = useAuth();
   const { store, storeId, outOfArea, address } = useCurrentStore();
   const [refreshing, setRefreshing] = useState(false);
 
-  const categories = useQuery({ queryKey: qk.categories, queryFn: catalogApi.categories });
+  const categories = useQuery({
+    queryKey: qk.categories(department),
+    queryFn: () => catalogApi.categories(department),
+  });
   const { cart, qtyByProduct, busyVariantId, addProduct, setQty } = useProductActions(storeId);
 
   const shelfCategories = (categories.data ?? []).slice(0, SHELF_COUNT);
@@ -93,7 +97,8 @@ export function DepartmentScreen() {
       ? 'Delivery is on us 🎉'
       : `${formatPKR(remaining)} away from free delivery`;
 
-  const openCategory = (c: CategoryView) => router.push(`/products?categoryId=${c.id}`);
+  const openCategory = (c: CategoryView) =>
+    router.push(`/products?categoryId=${c.id}&department=${department}`);
 
   return (
     <View style={styles.safe}>
@@ -263,7 +268,7 @@ export function DepartmentScreen() {
             <View key={category.id} style={styles.shelf}>
               <View style={styles.shelfHeader}>
                 <Text variant="h3">{category.name}</Text>
-                <Pressable onPress={() => router.push(`/products?categoryId=${category.id}`)}>
+                <Pressable onPress={() => router.push(`/products?categoryId=${category.id}&department=${department}`)}>
                   <Text variant="label" color="textSecondary">
                     See all
                   </Text>

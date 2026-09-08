@@ -2,6 +2,15 @@ import { z } from 'zod';
 
 export const productsQuerySchema = z.object({
   storeId: z.string().uuid(),
+  /**
+   * Restrict to one department, by business-type key ("grocery", "clothing").
+   *
+   * A department screen is a shop, not a filtered view of everything — opening
+   * Clothing and finding cooking oil in it is the whole problem this solves.
+   * Optional because search and the "all products" listing are deliberately
+   * cross-department.
+   */
+  department: z.string().min(1).max(40).optional(),
   categoryId: z.string().uuid().optional(),
   q: z.string().max(80).optional(),
   page: z.coerce.number().int().min(1).default(1),
