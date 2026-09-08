@@ -345,33 +345,46 @@ export interface DepartmentCopy {
    * empty badge is worse than none.
    */
   flag?: string;
+  /**
+   * What the search field suggests looking for, inside this department.
+   *
+   * The shared default names groceries, which read as a bug on the Clothing
+   * screen — the shell was grocery's before it was every department's.
+   */
+  searchHint: string;
 }
 
 export const departmentCopy: Record<BusinessTypeKey, DepartmentCopy> = {
   [BusinessTypeKey.Grocery]: {
+    searchHint: 'Search for milk, eggs, bread…',
     examples: 'Fresh food · Dairy · Pantry · Household',
     cta: 'Shop Grocery',
     flag: '15 min',
   },
   [BusinessTypeKey.Bakery]: {
+    searchHint: 'Search for cakes, bread, pastries…',
     examples: 'Cakes · Bread · Pastries · Made to order',
     cta: 'Shop Bakery',
     flag: 'Baked today',
   },
   [BusinessTypeKey.Clothing]: {
+    searchHint: 'Search for kurtis, shirts, shoes…',
     examples: 'Women · Men · Kids · Unstitched · Ready to wear',
     cta: 'Shop Clothing',
     flag: 'New season',
   },
   [BusinessTypeKey.FreshProduce]: {
+    searchHint: 'Search for mangoes, tomatoes, herbs…',
     examples: 'Fruit · Vegetables · Herbs · Seasonal',
     cta: 'Shop Fresh',
   },
   [BusinessTypeKey.FrozenFood]: {
+    searchHint: 'Search for peas, nuggets, ice cream…',
     examples: 'Ready meals · Meat · Seafood · Ice cream',
     cta: 'Shop Frozen',
   },
   [BusinessTypeKey.Gifts]: {
+    searchHint: 'Search for hampers, cards, flowers…',
     examples: 'Hampers · Flowers · Occasions · Wrapping',
     cta: 'Shop Gifts',
   },

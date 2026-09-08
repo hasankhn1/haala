@@ -3,7 +3,7 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { formatPKR, type CategoryView, type ProductView } from '@haala/shared';
+import { BusinessTypeKey, departmentCopy, formatPKR, type CategoryView, type DepartmentCopy, type ProductView } from '@haala/shared';
 import {
   COMPACT_CARD_WIDTH,
   CTABar,
@@ -49,10 +49,29 @@ export function DepartmentScreen({ department }: { department: string }) {
   const { store, storeId, outOfArea, address } = useCurrentStore();
   const [refreshing, setRefreshing] = useState(false);
 
+  const copy = departmentCopy[department as BusinessTypeKey] as DepartmentCopy | undefined;
+  const tint = theme.departmentTints[department] ?? theme.colors.primary;
+
   const categories = useQuery({
     queryKey: qk.categories(department),
     queryFn: () => catalogApi.categories(department),
   });
+
+  /*
+   * The promo rail, from the banners ops manages — not the two hardcoded
+   * grocery adverts that used to sit here and appeared, unchanged, on every
+   * department. Same query key the home screen uses, so this is a cache hit
+   * rather than a second request.
+   */
+  const home = useQuery({
+    queryKey: qk.home(storeId),
+    queryFn: () => catalogApi.home(storeId),
+    staleTime: 5 * 60_000,
+  });
+  const banners = (home.data?.banners ?? []).filter(
+    // A banner with no department belongs to the platform and shows everywhere.
+    (b) => b.departmentKey === null || b.departmentKey === department,
+  );
   const { cart, qtyByProduct, busyVariantId, addProduct, setQty } = useProductActions(storeId);
 
   const shelfCategories = (categories.data ?? []).slice(0, SHELF_COUNT);
@@ -117,7 +136,7 @@ export function DepartmentScreen({ department }: { department: string }) {
             sweeps into the canvas on a 26px curve; the search field floats on
             top of it rather than below it. */}
         <View style={styles.heroBlock}>
-          <SafeAreaView style={styles.hero} edges={['top', 'left', 'right']}>
+          <SafeAreaView style={[styles.hero, { backgroundColor: tint }]} edges={['top', 'left', 'right']}>
             <View style={styles.heroTop}>
               <Pressable
                 style={styles.location}
@@ -149,7 +168,11 @@ export function DepartmentScreen({ department }: { department: string }) {
             </View>
 
             <View style={styles.heroSearch}>
-              <SearchBar showVoice onPress={() => router.push('/(tabs)/search')} />
+              <SearchBar
+                  showVoice
+                  placeholder={copy?.searchHint}
+                  onPress={() => router.push('/(tabs)/search')}
+                />
             </View>
 
             <View style={styles.heroMeta}>
@@ -161,7 +184,7 @@ export function DepartmentScreen({ department }: { department: string }) {
               </View>
               {store ? (
                 <Text variant="bodySm" style={styles.heroDim} numberOfLines={1}>
-                  Fresh from {store.area}
+                  From {store.area}
                 </Text>
               ) : null}
             </View>
@@ -191,7 +214,7 @@ export function DepartmentScreen({ department }: { department: string }) {
           <EmptyState
             emoji="📍"
             title="We don’t deliver here yet"
-            subtitle={`${address?.area ?? 'This address'} is outside every store’s delivery radius. Choose a different delivery address to start shopping.`}
+            subtitle={`${address?.area ?? 'This address'} is outside every store’s delivery area. Choose a different delivery address to start shopping.`}
             actionLabel="Change address"
             onAction={() => router.push('/addresses')}
           />
@@ -230,32 +253,39 @@ export function DepartmentScreen({ department }: { department: string }) {
           </View>
         ) : null}
 
-        {/* Twin promo banners. Ember then ink, so the pair reads as one system
-            rather than two unrelated adverts. */}
-        {!outOfArea ? (
+        {/*
+          Promos, from the dashboard. Absent when this department has none —
+          previously two grocery adverts ("Fresh fruit from Swat") appeared on
+          every department, which is what the department screen was before it
+          was a department screen.
+        */}
+        {!outOfArea && banners.length > 0 ? (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.rail}
           >
-            <Pressable style={[styles.banner, styles.bannerEmber]} onPress={() => router.push('/products')}>
-              <Text variant="h3" color="onPrimary" style={styles.bannerTitle}>
-                Fresh fruit{'\n'}from Swat
-              </Text>
-              <View style={styles.bannerTagSun}>
-                <Text variant="labelSm" style={styles.bannerTagSunText}>
-                  Up to 20% off
+            {banners.map((b) => (
+              <Pressable
+                key={b.id}
+                style={[styles.banner, styles.bannerEmber, { backgroundColor: tint }]}
+                onPress={() => (b.linkTo ? router.push(b.linkTo as never) : undefined)}
+                disabled={!b.linkTo}
+                accessibilityRole={b.linkTo ? 'button' : undefined}
+                accessibilityLabel={b.title}
+              >
+                <Text variant="h3" color="onPrimary" style={styles.bannerTitle} numberOfLines={2}>
+                  {b.title}
                 </Text>
-              </View>
-            </Pressable>
-            <Pressable style={[styles.banner, styles.bannerInk]} onPress={() => router.push('/products')}>
-              <Text variant="h3" color="onPrimary" style={styles.bannerTitle}>
-                Free delivery{'\n'}on your first
-              </Text>
-              <View style={styles.bannerTagLight}>
-                <Text variant="labelSm">Use HAALA100</Text>
-              </View>
-            </Pressable>
+                {b.badge ? (
+                  <View style={styles.bannerTagSun}>
+                    <Text variant="labelSm" style={styles.bannerTagSunText}>
+                      {b.badge}
+                    </Text>
+                  </View>
+                ) : null}
+              </Pressable>
+            ))}
           </ScrollView>
         ) : null}
 
@@ -352,6 +382,8 @@ const styles = StyleSheet.create({
     marginHorizontal: -theme.layout.margin,
   },
   hero: {
+    // Overridden per department at the call site; ember is grocery's identity,
+    // and a clothing shop under a grocery-orange header reads as the wrong app.
     backgroundColor: theme.colors.primary,
     borderBottomLeftRadius: theme.radii.xl,
     borderBottomRightRadius: theme.radii.xl,
@@ -377,7 +409,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.xs,
-    backgroundColor: theme.colors.accent,
+    /*
+     * Translucent white rather than `accent`, because the header behind it is
+     * now the department's colour and `accent` *is* clothing's colour — the
+     * pill vanished into its own background. A white wash reads as a chip on
+     * every tint, and is the idiom the comp uses for chips on tinted grounds.
+     */
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderRadius: theme.radii.pill,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: 7,
@@ -386,6 +424,11 @@ const styles = StyleSheet.create({
     marginTop: -32,
     marginHorizontal: theme.layout.margin,
     backgroundColor: theme.colors.accent,
+    // Same problem as the pill, but this card keeps its ink fill — half of it
+    // overhangs the white below, where a translucent wash would look grubby.
+    // A hairline separates it from a dark header instead.
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
     borderRadius: theme.radii.md,
     padding: theme.spacing.md,
     gap: theme.spacing.sm,
@@ -450,7 +493,6 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   bannerEmber: { backgroundColor: theme.colors.primary },
-  bannerInk: { backgroundColor: theme.colors.accent },
   bannerTitle: { maxWidth: 150 },
   bannerTagSun: {
     alignSelf: 'flex-start',
@@ -460,13 +502,6 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
   },
   bannerTagSunText: { color: theme.colors.onPromo },
-  bannerTagLight: {
-    alignSelf: 'flex-start',
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.pill,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 5,
-  },
   shelf: { gap: theme.spacing.md },
   shelfHeader: {
     flexDirection: 'row',
