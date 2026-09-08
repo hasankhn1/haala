@@ -232,6 +232,36 @@ export const colors = {
  * it is the state the customer is actually watching. `delivered` earns green
  * as a completion signal and terminal failures earn red.
  */
+/**
+ * A department's own colour, on the marketplace home.
+ *
+ * These are identity colours, not semantic ones: the department card is a
+ * shopfront and each trade gets its own ground, the way the grocery comps give
+ * ember to Haala's own catalogue. So they live in one map rather than being
+ * named for a role, and a component reads them by business-type key rather than
+ * choosing.
+ *
+ * Grocery is `primary` and clothing is `accent` deliberately — grocery is
+ * Haala's own department and wears the brand, and clothing's near-black is the
+ * same ink the app already uses for contrast surfaces. The rest are new, chosen
+ * to sit at a similar weight so no department shouts louder than another.
+ *
+ * Keys match `BusinessTypeKey` in `@haala/shared`. Kept here rather than there
+ * because `shared` has no dependency on this package, and a hex has no business
+ * in trade data.
+ */
+export const departmentTints: Record<string, string> = {
+  grocery: palette.ember[500],
+  bakery: '#B4552A', // baked crust, warmer and lighter than accessories' leather
+  clothing: palette.clay[900],
+  fresh_produce: '#3F6B3A', // leaf
+  frozen_food: '#2C5C7A', // cold blue, deliberately the coolest of the set
+  gifts: '#8C3A5A', // plum
+};
+
+/** The ground for a department with nothing to sell yet. */
+export const departmentTintMuted = palette.clay[400];
+
 export const statusColors = {
   placed: { fg: palette.clay[700], bg: palette.clay[100] },
   confirmed: { fg: palette.ember[700], bg: palette.ember[50] },

@@ -17,7 +17,12 @@ import CircleCheck from 'lucide-react-native/dist/esm/icons/circle-check.mjs';
 import CircleCheckBig from 'lucide-react-native/dist/esm/icons/circle-check-big.mjs';
 import CircleQuestionMark from 'lucide-react-native/dist/esm/icons/circle-question-mark.mjs';
 import CircleX from 'lucide-react-native/dist/esm/icons/circle-x.mjs';
+import Apple from 'lucide-react-native/dist/esm/icons/apple.mjs';
+import CakeSlice from 'lucide-react-native/dist/esm/icons/cake-slice.mjs';
 import Clock from 'lucide-react-native/dist/esm/icons/clock.mjs';
+import Gift from 'lucide-react-native/dist/esm/icons/gift.mjs';
+import Shirt from 'lucide-react-native/dist/esm/icons/shirt.mjs';
+import Snowflake from 'lucide-react-native/dist/esm/icons/snowflake.mjs';
 import Eye from 'lucide-react-native/dist/esm/icons/eye.mjs';
 import EyeOff from 'lucide-react-native/dist/esm/icons/eye-off.mjs';
 import Mail from 'lucide-react-native/dist/esm/icons/mail.mjs';
@@ -91,6 +96,7 @@ type IconComponent = LucideIcon;
  */
 const ICONS = {
   'add': Plus,
+  'apple-outline': Apple,
   'alert-circle-outline': CircleAlert,
   'arrow-back': ArrowLeft,
   'arrow-forward': ArrowRight,
@@ -105,6 +111,7 @@ const ICONS = {
   'card-outline': CreditCard,
   'cart': ShoppingCart,
   'cart-outline': ShoppingCart,
+  'cake-outline': CakeSlice,
   'cash-outline': Banknote,
   'checkmark': Check,
   'checkmark-circle': CircleCheckBig,
@@ -118,6 +125,7 @@ const ICONS = {
   'eye-off-outline': EyeOff,
   'eye-outline': Eye,
   'flash-outline': Zap,
+  'gift-outline': Gift,
   'grid': LayoutGrid,
   'grid-outline': LayoutGrid,
   'heart': Heart,
@@ -145,6 +153,8 @@ const ICONS = {
   'receipt-outline': Receipt,
   'remove': Minus,
   'search': Search,
+  'shirt-outline': Shirt,
+  'snowflake-outline': Snowflake,
   'search-outline': Search,
   'share-outline': Share2,
   'shield-checkmark-outline': ShieldCheck,

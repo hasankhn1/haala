@@ -321,6 +321,62 @@ export const businessTypeSpecs: Record<BusinessTypeKey, BusinessTypeSpec> = {
 /** Every key, in the order they should be offered. */
 export const businessTypeKeys = Object.keys(businessTypeSpecs) as BusinessTypeKey[];
 
+/**
+ * How a business type presents itself as a **department** on the marketplace
+ * home — the words only. The colour lives in `@haala/design-tokens`, because
+ * this package has no dependency on it and a hex belongs to the design system
+ * rather than to trade data.
+ *
+ * The design's own promise is that "adding Electronics later means adding a row
+ * of data, not a screen". That holds here: a new department is a row in
+ * `business_types` plus an entry below. Whether it is *offered* is not decided
+ * here — the API derives that from whether the department has anything to sell,
+ * so a type with no stock says "coming soon" without anybody remembering to
+ * flip a flag.
+ */
+export interface DepartmentCopy {
+  /** The one-line "what's inside", middle-dot separated in the comp. */
+  examples: string;
+  /** The card's button. Reads as an instruction, not a label. */
+  cta: string;
+  /**
+   * The corner badge, when there is something worth saying. Grocery's promise
+   * is speed; a boutique department's is newness. Most have neither, and an
+   * empty badge is worse than none.
+   */
+  flag?: string;
+}
+
+export const departmentCopy: Record<BusinessTypeKey, DepartmentCopy> = {
+  [BusinessTypeKey.Grocery]: {
+    examples: 'Fresh food · Dairy · Pantry · Household',
+    cta: 'Shop Grocery',
+    flag: '15 min',
+  },
+  [BusinessTypeKey.Bakery]: {
+    examples: 'Cakes · Bread · Pastries · Made to order',
+    cta: 'Shop Bakery',
+    flag: 'Baked today',
+  },
+  [BusinessTypeKey.Clothing]: {
+    examples: 'Women · Men · Kids · Unstitched · Ready to wear',
+    cta: 'Shop Clothing',
+    flag: 'New season',
+  },
+  [BusinessTypeKey.FreshProduce]: {
+    examples: 'Fruit · Vegetables · Herbs · Seasonal',
+    cta: 'Shop Fresh',
+  },
+  [BusinessTypeKey.FrozenFood]: {
+    examples: 'Ready meals · Meat · Seafood · Ice cream',
+    cta: 'Shop Frozen',
+  },
+  [BusinessTypeKey.Gifts]: {
+    examples: 'Hampers · Flowers · Occasions · Wrapping',
+    cta: 'Shop Gifts',
+  },
+};
+
 export const isBusinessTypeKey = (v: string): v is BusinessTypeKey =>
   Object.hasOwn(businessTypeSpecs, v);
 

@@ -3,7 +3,7 @@ export * from './spacing';
 export * from './typography';
 export * from './elevation';
 
-import { colors, palette, statusColors } from './colors';
+import { colors, departmentTintMuted, departmentTints, palette, statusColors } from './colors';
 import { spacing, radii, space, layout, touchTarget, controlHeight } from './spacing';
 import {
   fontFamily,
@@ -30,6 +30,9 @@ export const theme = {
   controlHeight,
   typography: { fontFamily, fontWeight, fontSize, textStyles, REQUIRED_FONT_FAMILIES },
   elevation,
+  /** Department identity colours, by business-type key. See `colors.ts`. */
+  departmentTints,
+  departmentTintMuted,
 } as const;
 
 export type Theme = typeof theme;
