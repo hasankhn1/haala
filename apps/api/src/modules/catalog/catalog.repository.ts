@@ -1,4 +1,4 @@
-import { and, asc, count, eq, ilike, sql } from 'drizzle-orm';
+import { and, asc, count, eq, ilike, inArray, sql } from 'drizzle-orm';
 import type { ProductsQuery } from '@haala/shared';
 import { db, type Executor } from '../../db/client';
 import {
@@ -267,6 +267,60 @@ export const catalogRepository = {
       .where(where);
 
     return { items: rows, total: Number(totalRows[0]?.value ?? 0) };
+  },
+
+  /**
+   * Price a known set of products for one store.
+   *
+   * Same shape as `listProducts` and deliberately so — it is the *selection*
+   * that differs, not the pricing. "Buy it again" is the caller that needs
+   * this: it knows which products from the shopper's own order history, but
+   * knowing that says nothing about what they cost or whether they are in stock
+   * here today. Re-pricing rather than reusing what was paid is the whole
+   * point; a card showing last month's price and leading to a page showing
+   * this month's is a small lie the shopper discovers at checkout.
+   *
+   * Rows come back in whatever order Postgres likes; the caller re-sorts.
+   */
+  async listProductsByIds(
+    ids: string[],
+    storeId: string,
+    ex: Executor = db,
+  ): Promise<ProductWithStock[]> {
+    if (ids.length === 0) return [];
+
+    const joinOn = and(eq(inventory.variantId, productVariants.id), eq(inventory.storeId, storeId));
+    const defaultVariantOn = and(
+      eq(productVariants.productId, products.id),
+      eq(productVariants.sortOrder, 0),
+    );
+
+    return ex
+      .select({
+        id: products.id,
+        brandName: brands.name,
+        brandSlug: brands.slug,
+        departmentKey: businessTypes.key,
+        name: products.name,
+        slug: products.slug,
+        unit: products.unit,
+        description: products.description,
+        imageUrl: products.imageUrl,
+        categoryId: products.categoryId,
+        basePrice: products.basePrice,
+        defaultVariantId: productVariants.id,
+        price: priceExpr,
+        availableQty: availableExpr,
+      })
+      .from(products)
+      .innerJoin(brands, eq(brands.id, products.brandId))
+      .innerJoin(businessTypes, eq(businessTypes.id, brands.businessTypeId))
+      .innerJoin(productVariants, defaultVariantOn)
+      .innerJoin(inventory, joinOn)
+      // Inner joins and the same two filters as the listing: a product the
+      // shopper once bought from a brand since suspended, or that this store no
+      // longer carries, drops out rather than appearing untappable.
+      .where(and(inArray(products.id, ids), eq(products.isActive, true), sellableBrand));
   },
 
   async findProductForStore(

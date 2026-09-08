@@ -21,7 +21,12 @@ const toCategoryView = (c: Category): CategoryView => ({
   sortOrder: c.sortOrder,
 });
 
-const toProductView = (p: ProductWithStock): ProductView => ({
+/**
+ * Exported because "buy it again" prices products through the same catalogue
+ * query and must present them identically. Two mappers would drift, and the
+ * one that drifted would be the one nobody was looking at.
+ */
+export const toProductView = (p: ProductWithStock): ProductView => ({
   id: p.id,
   brandName: p.brandName,
   brandSlug: p.brandSlug,

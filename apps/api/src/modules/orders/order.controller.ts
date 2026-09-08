@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { AppError } from '../../common/errors';
 import { sendSuccess } from '../../common/http';
 import { orderService } from './order.service';
 
@@ -11,6 +12,20 @@ export const orderController = {
 
   async list(req: Request, res: Response): Promise<void> {
     sendSuccess(res, await orderService.listMine(req.auth!.userId));
+  },
+
+  /**
+   * Requires `storeId`, unlike the home payload which tolerates its absence.
+   * The difference is that this endpoint has nothing to say without one: every
+   * field on the card — price, stock, whether the product is carried at all —
+   * is a per-store answer.
+   */
+  async recentlyOrdered(req: Request, res: Response): Promise<void> {
+    const storeId = req.query.storeId;
+    if (typeof storeId !== 'string' || !storeId) {
+      throw AppError.badRequest('storeId query parameter is required');
+    }
+    sendSuccess(res, await orderService.recentlyOrdered(req.auth!.userId, storeId));
   },
 
   async getOne(req: Request, res: Response): Promise<void> {

@@ -18,6 +18,7 @@ import type {
   OrderSummaryView,
   OrderView,
   Paginated,
+  RecentlyOrderedView,
   PaymentStatus,
   PlaceOrderInput,
   PlaceOrderResult,
@@ -138,4 +139,11 @@ export const ordersApi = {
   place: (input: PlaceOrderInput, idempotencyKey: string) =>
     api.post<PlaceOrderResult>('/orders', input, { 'Idempotency-Key': idempotencyKey }),
   cancel: (id: string) => api.post<OrderView>(`/orders/${id}/cancel`),
+  /**
+   * "Buy it again". Needs a store because everything on the card — price,
+   * stock, whether it is carried at all — is a per-store answer, and needs an
+   * account because it is order history.
+   */
+  recentlyOrdered: (storeId: string) =>
+    api.get<RecentlyOrderedView>(`/orders/recently-ordered${qs({ storeId })}`),
 };

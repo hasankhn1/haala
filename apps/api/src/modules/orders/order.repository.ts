@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { OrderStatus } from '@haala/shared';
 import { db, type Executor } from '../../db/client';
 import {
@@ -54,6 +54,42 @@ export const orderRepository = {
       .from(orders)
       .where(eq(orders.userId, userId))
       .orderBy(desc(orders.createdAt));
+  },
+
+  /**
+   * Distinct products this customer has ordered, most recently first.
+   *
+   * Grouped by product rather than by line, because somebody who buys milk
+   * every week should see milk once. `max(created_at)` is what the ordering
+   * then sorts on — the most recent time they bought it, not the first.
+   *
+   * Cancelled orders are excluded: an order the customer changed their mind
+   * about is evidence of the opposite of intent to buy again.
+   *
+   * Ids only. What those products cost and whether this store has them is a
+   * catalogue question, answered against the store by `listProductsByIds` —
+   * not by reusing the price they paid, which may be months stale.
+   */
+  async recentProductIds(userId: string, limit: number, ex: Executor = db): Promise<string[]> {
+    const rows = await ex
+      .select({ productId: orderItems.productId })
+      .from(orderItems)
+      .innerJoin(orders, eq(orders.id, orderItems.orderId))
+      .where(and(eq(orders.userId, userId), ne(orders.status, 'cancelled')))
+      .groupBy(orderItems.productId)
+      .orderBy(desc(sql`max(${orders.createdAt})`))
+      .limit(limit);
+
+    return rows.map((r) => r.productId);
+  },
+
+  /** Orders this customer has placed and not cancelled — for the row's subtitle. */
+  async countForUser(userId: string, ex: Executor = db): Promise<number> {
+    const [row] = await ex
+      .select({ n: sql<number>`count(*)::int` })
+      .from(orders)
+      .where(and(eq(orders.userId, userId), ne(orders.status, 'cancelled')));
+    return row?.n ?? 0;
   },
 
   /** All orders across customers — ops/dashboard only. */

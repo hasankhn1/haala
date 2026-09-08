@@ -6,6 +6,12 @@ export const qk = {
   departments: ['departments'] as const,
   /** Keyed by store: prices and stock differ, so the caches must not be shared. */
   home: (storeId?: string | null) => ['home', storeId ?? null] as const,
+  /**
+   * Per store *and* implicitly per customer — the query is only enabled when
+   * signed in, and sign-out clears the whole cache, so the customer need not
+   * be in the key.
+   */
+  recentlyOrdered: (storeId?: string | null) => ['recently-ordered', storeId ?? null] as const,
   products: (storeId: string, categoryId?: string, q?: string) =>
     ['products', storeId, categoryId ?? null, q ?? null] as const,
   product: (id: string, storeId: string) => ['product', id, storeId] as const,

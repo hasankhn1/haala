@@ -10,6 +10,7 @@ import {
   type OrderView,
   type OrderSummaryView,
   type PlaceOrderInput,
+  type RecentlyOrderedView,
   type PlaceOrderResult,
   type UpdateOrderStatusInput,
 } from '@haala/shared';
@@ -19,6 +20,8 @@ import { db } from '../../db/client';
 import type { Order } from '../../db/schema';
 import { addressRepository } from '../addresses/address.repository';
 import { cartRepository } from '../cart/cart.repository';
+import { catalogRepository } from '../catalog/catalog.repository';
+import { toProductView } from '../catalog/catalog.service';
 import { deliveryRepository } from '../delivery/delivery.repository';
 import { riderService } from '../riders/rider.service';
 import { isWithinDeliveryRadius } from '../../common/geo';
@@ -61,6 +64,45 @@ const emitStatus = (order: Pick<Order, 'id' | 'userId' | 'status' | 'orderNumber
 };
 
 export const orderService = {
+  /**
+   * "Buy it again" — the products this customer has ordered before, priced for
+   * the store they are standing in now.
+   *
+   * **Deliberately not part of `GET /catalog/home`.** That payload is cached
+   * per store and shared by everyone near it; putting one customer's order
+   * history in it would serve their shopping to the next person to open the
+   * app. Per-customer data needs a per-customer request, and this is it.
+   *
+   * More ids are fetched than are returned, because pricing is a filter: a
+   * product whose brand has since been suspended, or that this store does not
+   * carry, drops out. Asking for exactly `limit` ids would quietly return
+   * fewer.
+   */
+  async recentlyOrdered(
+    userId: string,
+    storeId: string,
+    limit = 3,
+  ): Promise<RecentlyOrderedView> {
+    const [ids, orderCount] = await Promise.all([
+      orderRepository.recentProductIds(userId, limit * 4),
+      orderRepository.countForUser(userId),
+    ]);
+    if (ids.length === 0) return { items: [], orderCount };
+
+    const rows = await catalogRepository.listProductsByIds(ids, storeId);
+
+    // Restore "most recently bought first" — the pricing query does not
+    // preserve the order the ids arrived in, and that order is the whole
+    // ranking.
+    const rank = new Map(ids.map((id, i) => [id, i]));
+    const items = rows
+      .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
+      .slice(0, limit)
+      .map(toProductView);
+
+    return { items, orderCount };
+  },
+
   /**
    * Place an order from the user's cart. Everything that must be consistent —
    * stock reservation, order + items, status history, pending payment, cart

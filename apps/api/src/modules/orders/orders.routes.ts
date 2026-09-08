@@ -12,6 +12,9 @@ router.use(authenticate);
 
 router.post('/', validate({ body: placeOrderSchema }), asyncHandler(orderController.place));
 router.get('/', asyncHandler(orderController.list));
+// Before `/:id`, or Express reads "recently-ordered" as an order id and the
+// route answers 404 for a path that exists.
+router.get('/recently-ordered', asyncHandler(orderController.recentlyOrdered));
 router.get('/:id', asyncHandler(orderController.getOne));
 router.post('/:id/cancel', asyncHandler(orderController.cancel));
 

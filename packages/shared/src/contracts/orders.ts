@@ -7,6 +7,7 @@ import {
 } from '../enums';
 import { promoCodeSchema } from './promotions';
 import type { RiderPublicView } from './riders';
+import type { ProductView } from './catalog';
 
 export const placeOrderSchema = z.object({
   addressId: z.string().uuid(),
@@ -108,6 +109,22 @@ export interface OrderSummaryView {
 export interface PlaceOrderResult {
   order: OrderView;
   checkout: { url?: string; token?: string } | null;
+}
+
+/**
+ * "Buy it again" — the home screen's Recommended row.
+ *
+ * The count comes back with the products because the row's own subtitle quotes
+ * it ("From your last 4 orders across Haala"). Deriving it client-side would
+ * mean fetching the whole order list to print one number.
+ *
+ * `items` is priced for the store in the request, not for the receipt. See
+ * `orderService.recentlyOrdered`.
+ */
+export interface RecentlyOrderedView {
+  items: ProductView[];
+  /** Orders this customer has placed and not cancelled. */
+  orderCount: number;
 }
 
 // Re-exported for client convenience.

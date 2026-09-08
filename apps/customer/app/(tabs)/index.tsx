@@ -3,9 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BusinessTypeKey, type BannerView, type ProductView } from '@haala/shared';
-import { Icon, ProductCard, Text, theme } from '@haala/ui';
-import { catalogApi } from '../../src/api/endpoints';
+import { BusinessTypeKey, formatPKR, type BannerView, type ProductView } from '@haala/shared';
+import { Icon, ProductCard, Text, Thumb, theme } from '@haala/ui';
+import { catalogApi, ordersApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
 import { useAuth } from '../../src/auth/AuthContext';
 import { DepartmentsSheet } from '../../src/components/DepartmentsSheet';
@@ -65,6 +65,21 @@ export default function HomeScreen() {
   });
 
   const { cart, qtyByProduct, busyVariantId, addProduct } = useProductActions(storeId);
+
+  /*
+   * "Buy it again", on its own request rather than inside the home payload.
+   *
+   * That payload is cached per store and shared by everyone near it; order
+   * history in it would serve one customer's shopping to the next person to
+   * open the app. Signed out, or before a store resolves, the query does not
+   * run and the row is simply absent.
+   */
+  const recommended = useQuery({
+    queryKey: qk.recentlyOrdered(storeId),
+    queryFn: () => ordersApi.recentlyOrdered(storeId as string),
+    enabled: Boolean(user && storeId),
+    staleTime: 5 * 60_000,
+  });
 
   const departments: Department[] = useMemo(
     () => (home.data?.departments ?? []).map(toDepartment),
@@ -313,6 +328,53 @@ export default function HomeScreen() {
             </View>
           </View>
         ) : null}
+        {/* ── Recommended ─────────────────────────────────────────────────── */}
+        {(recommended.data?.items.length ?? 0) > 0 ? (
+          <View style={styles.recommend}>
+            <View style={styles.recommendHead}>
+              <View style={styles.recommendTile}>
+                <Icon
+                  name="cube-outline"
+                  size={19}
+                  color={theme.colors.onPromo}
+                  strokeWidth={2.2}
+                />
+              </View>
+              <View style={styles.flex}>
+                <Text variant="h3">Recommended for you</Text>
+                <Text variant="bodySm" color="textSecondary" style={styles.recommendSub}>
+                  From your last {recommended.data?.orderCount}{' '}
+                  {recommended.data?.orderCount === 1 ? 'order' : 'orders'} across Haala
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.recommendRow}>
+              {recommended.data?.items.map((p) => (
+                <Pressable
+                  key={p.id}
+                  style={({ pressed }) => [styles.recommendCard, pressed && styles.cardPressed]}
+                  onPress={() => router.push(`/product/${p.id}`)}
+                  accessibilityRole="button"
+                  // The comp's card carries no product name — a photo, its
+                  // department and a price. Sighted shoppers recognise the
+                  // photo; a screen reader needs the name said out loud.
+                  accessibilityLabel={`${p.name}, ${nameByKey.get(p.departmentKey) ?? p.departmentKey}, ${formatPKR(p.price)}`}
+                >
+                  <View style={styles.recommendImage}>
+                    <Thumb imageUrl={p.imageUrl} name={p.name} fill radius={theme.radii.xs} />
+                  </View>
+                  <Text variant="labelCaps" color="textTertiary" numberOfLines={1}>
+                    {nameByKey.get(p.departmentKey) ?? p.departmentKey}
+                  </Text>
+                  <Text variant="bodyStrong" numberOfLines={1}>
+                    {formatPKR(p.price)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
       </ScrollView>
 
       <DepartmentsSheet
@@ -441,6 +503,7 @@ function PromoCard({
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.background },
+  flex: { flex: 1 },
   content: { paddingBottom: theme.spacing['2xl'] },
   gutter: { marginHorizontal: theme.layout.margin },
 
@@ -633,6 +696,38 @@ const styles = StyleSheet.create({
   },
   promoBadgeText: { color: theme.colors.onPromo },
   promoImage: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 120 },
+
+  recommend: {
+    marginTop: 24,
+    marginHorizontal: theme.layout.margin,
+    backgroundColor: theme.colors.infoSoft,
+    borderRadius: theme.radii.lg,
+    padding: 16,
+  },
+  recommendHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  recommendTile: {
+    width: 38,
+    height: 38,
+    borderRadius: theme.radii.sm - 2,
+    backgroundColor: theme.colors.promo,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recommendSub: { marginTop: 3 },
+  recommendRow: { flexDirection: 'row', gap: 10, marginTop: 13 },
+  recommendCard: {
+    flex: 1,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.sm,
+    padding: 8,
+    gap: 6,
+  },
+  recommendImage: {
+    height: 66,
+    borderRadius: theme.radii.xs,
+    backgroundColor: theme.colors.surfaceMuted,
+    overflow: 'hidden',
+  },
 
   grid: {
     flexDirection: 'row',
