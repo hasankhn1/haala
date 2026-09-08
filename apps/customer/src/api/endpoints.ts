@@ -7,7 +7,9 @@ import type {
   CartView,
   CategoryView,
   CreateAddressInput,
+  DepartmentView,
   EmailAuthInput,
+  HomeView,
   EmailAuthResult,
   LinkedProvider,
   LoginInput,
@@ -60,6 +62,17 @@ export const storesApi = {
 };
 
 export const catalogApi = {
+  /**
+   * Everything the marketplace home draws, in one request.
+   *
+   * The screen used to make three, serially, and settled in three separate
+   * jerks. `storeId` is optional because the tab mounts before location
+   * resolves — without one the answer omits priced products and keeps the rest.
+   */
+  home: (storeId?: string | null) =>
+    api.get<HomeView>(`/catalog/home${storeId ? qs({ storeId }) : ''}`),
+  /** The marketplace home's departments. Public — browsing needs no account. */
+  departments: () => api.get<DepartmentView[]>('/catalog/departments'),
   categories: () => api.get<CategoryView[]>('/catalog/categories'),
   products: (params: { storeId: string; categoryId?: string; q?: string; page?: number }) =>
     api.get<Paginated<ProductView>>(`/catalog/products${qs(params)}`),

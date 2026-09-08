@@ -1,206 +1,253 @@
-import { useCallback, useState } from 'react';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useCallback, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { formatPKR, type CategoryView, type ProductView } from '@haala/shared';
-import {
-  COMPACT_CARD_WIDTH,
-  CTABar,
-  EmptyState,
-  Icon,
-  ProductCard,
-  SearchBar,
-  Skeleton,
-  Text,
-  Thumb,
-  theme,
-} from '@haala/ui';
+import { BusinessTypeKey, type BannerView, type ProductView } from '@haala/shared';
+import { Icon, ProductCard, Text, theme } from '@haala/ui';
 import { catalogApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
-import { useProductActions } from '../../src/hooks/useProductActions';
 import { useAuth } from '../../src/auth/AuthContext';
+import { DepartmentsSheet } from '../../src/components/DepartmentsSheet';
+import { useProductActions } from '../../src/hooks/useProductActions';
+import { toDepartment, type Department } from '../../src/lib/departments';
 import { useCurrentStore } from '../../src/store/useCurrentStore';
-import { ETA_MINUTES, FREE_DELIVERY_THRESHOLD } from '../../src/config';
 
-/** How many category rails Home renders before the user has to tap through. */
-const SHELF_COUNT = 4;
+/**
+ * The marketplace home, from `Haala Home.dc.html`.
+ *
+ * The design states the idea in one line: **"Haala is the brand. Grocery is a
+ * department."** So this screen is a directory of departments rather than a
+ * grocery catalogue — the catalogue moved, unchanged, to
+ * `src/screens/DepartmentScreen.tsx`.
+ *
+ * The order below is the comp's, and each section is real data or absent:
+ *
+ *   1. a **horizontal rail** of 210px department cards, live departments only
+ *   2. **All N** → every department including the unavailable ones, in a sheet
+ *   3. **Popular categories** — chips, tinted by the department they belong to
+ *   4. **Promos** — the banners ops manages on the dashboard's Homepage page
+ *   5. **Popular right now** — a two-column grid across every live department
+ *
+ * One request feeds all five (`GET /catalog/home`), so the screen settles once
+ * rather than in five separate jerks, and the payload is cached per store.
+ *
+ * **Corrections to an earlier version of this file, worth naming because they
+ * were mine.** It stacked the department cards full-width instead of the comp's
+ * rail; it replaced "All 3" with a plain count; and it invented a "Coming soon"
+ * section on the home itself, which is information architecture the design does
+ * not have — the sheet is where the full range belongs.
+ *
+ * **Localised, not copied.** The comp is written for Dubai in AED; this is
+ * Peshawar in PKR through `formatPKR`. Same call as `+971` → `+92` in the auth
+ * comps.
+ */
+
+/**
+ * The comp draws grocery's product photos at 150px and everything else at
+ * 180px. That is not decoration: a garment photographed on a person needs the
+ * vertical room a tin of beans does not, and cropping it square is what made
+ * the clothing rows look wrong.
+ */
+const IMAGE_HEIGHT = { grocery: 150, other: 180 } as const;
 
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { store, storeId, outOfArea, address } = useCurrentStore();
+  const { address, outOfArea, storeId } = useCurrentStore();
   const [refreshing, setRefreshing] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
-  const categories = useQuery({ queryKey: qk.categories, queryFn: catalogApi.categories });
-  const { cart, qtyByProduct, busyVariantId, addProduct, setQty } = useProductActions(storeId);
-
-  const shelfCategories = (categories.data ?? []).slice(0, SHELF_COUNT);
-
-  // One query per rail. They run in parallel and cache independently, so
-  // pulling to refresh or adding to cart never re-fetches the whole page.
-  const shelves = useQueries({
-    queries: shelfCategories.map((c) => ({
-      queryKey: qk.products(storeId ?? 'none', c.id),
-      queryFn: () => catalogApi.products({ storeId: storeId as string, categoryId: c.id }),
-      enabled: !!storeId,
-    })),
+  const home = useQuery({
+    queryKey: qk.home(storeId),
+    queryFn: () => catalogApi.home(storeId),
+    staleTime: 5 * 60_000,
   });
+
+  const { cart, qtyByProduct, busyVariantId, addProduct } = useProductActions(storeId);
+
+  const departments: Department[] = useMemo(
+    () => (home.data?.departments ?? []).map(toDepartment),
+    [home.data],
+  );
+  const live = departments.filter((d) => d.isLive);
+  const nameByKey = useMemo(
+    () => new Map(departments.map((d) => [d.key, d.name])),
+    [departments],
+  );
+  const tintFor = (key: string) =>
+    departments.find((d) => d.key === key)?.tint ?? theme.departmentTintMuted;
+
+  const banners = home.data?.banners ?? [];
+  const chips = home.data?.popularCategories ?? [];
+  const popular = home.data?.popularProducts ?? [];
+  const itemCount = cart.data?.itemCount ?? 0;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.allSettled([
-      categories.refetch(),
-      cart.refetch(),
-      ...shelves.map((s) => s.refetch()),
-    ]);
+    await home.refetch();
     setRefreshing(false);
-    // `shelves` is a fresh array each render; depending on it would loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categories, cart]);
+  }, [home]);
 
-  const initials = (user?.name ?? 'H')
-    .split(' ')
-    .map((p) => p[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
-
-  // Progress toward free delivery, straight off the shared pricing rule so the
-  // bar can never promise a threshold the server doesn't honour.
-  const subtotal = cart.data?.subtotal ?? 0;
-  const remaining = Math.max(FREE_DELIVERY_THRESHOLD - subtotal, 0);
-  const freeDeliveryPct = Math.min(subtotal / FREE_DELIVERY_THRESHOLD, 1);
-  const freeDeliveryCopy =
-    remaining === 0
-      ? 'Delivery is on us 🎉'
-      : `${formatPKR(remaining)} away from free delivery`;
-
-  const openCategory = (c: CategoryView) => router.push(`/products?categoryId=${c.id}`);
+  const city = address?.area ?? 'DHA Peshawar';
 
   return (
-    <View style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={theme.colors.primary}
-          />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Ember hero. Everything above the fold sits on the brand colour and
-            sweeps into the canvas on a 26px curve; the search field floats on
-            top of it rather than below it. */}
-        <View style={styles.heroBlock}>
-          <SafeAreaView style={styles.hero} edges={['top', 'left', 'right']}>
-            <View style={styles.heroTop}>
-              <Pressable
-                style={styles.location}
-                onPress={() => router.push('/addresses')}
-                accessibilityRole="button"
-              >
-                <Icon name="location-outline" size={15} color={theme.colors.onPrimary} />
-                <Text variant="bodySm" style={styles.heroDim} numberOfLines={1}>
-                  Deliver to
-                </Text>
-                <Text variant="bodyStrong" color="onPrimary" numberOfLines={1}>
-                  {store
-                    ? (address?.area ?? store.area)
-                    : outOfArea
-                      ? 'Outside our area'
-                      : 'Finding your store…'}
-                </Text>
-                <Icon name="chevron-down" size={13} color={theme.colors.onPrimary} />
-              </Pressable>
-              <Pressable
-                style={styles.avatar}
-                onPress={() => router.push('/(tabs)/account')}
-                accessibilityLabel="Your account"
-              >
-                <Text variant="labelSm" color="onPrimary">
-                  {initials}
-                </Text>
-              </Pressable>
+        <View style={styles.header}>
+          <View style={styles.brand}>
+            <View style={styles.mark}>
+              <Text variant="bodyStrong" color="onPrimary">
+                H
+              </Text>
             </View>
+            <Text variant="h2" style={styles.wordmark}>
+              HAALA
+            </Text>
+          </View>
 
-            <View style={styles.heroSearch}>
-              <SearchBar showVoice onPress={() => router.push('/(tabs)/search')} />
-            </View>
-
-            <View style={styles.heroMeta}>
-              <View style={styles.etaPill}>
-                <Icon name="time-outline" size={13} color={theme.colors.onPrimary} />
-                <Text variant="labelSm" color="onPrimary">
-                  {ETA_MINUTES} min delivery
-                </Text>
-              </View>
-              {store ? (
-                <Text variant="bodySm" style={styles.heroDim} numberOfLines={1}>
-                  Fresh from {store.area}
-                </Text>
+          <View style={styles.headerActions}>
+            <Pressable
+              style={styles.circle}
+              onPress={() => router.push('/notifications')}
+              accessibilityRole="button"
+              accessibilityLabel="Notifications"
+            >
+              <Icon name="notifications-outline" size={16} color={theme.colors.textPrimary} />
+            </Pressable>
+            <Pressable
+              style={styles.circle}
+              onPress={() => router.push('/(tabs)/cart')}
+              accessibilityRole="button"
+              accessibilityLabel={`Basket, ${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
+            >
+              <Icon name="bag-handle-outline" size={16} color={theme.colors.textPrimary} />
+              {itemCount > 0 ? (
+                <View style={styles.badge}>
+                  <Text variant="caption" color="onPrimary" style={styles.badgeText}>
+                    {itemCount > 9 ? '9+' : itemCount}
+                  </Text>
+                </View>
               ) : null}
-            </View>
-          </SafeAreaView>
-
-          {/* Free-delivery progress, overlapping the hero. Driven by the same
-              `FREE_DELIVERY_THRESHOLD` the server prices against, so the bar
-              cannot promise a threshold checkout won't honour. */}
-          <View style={styles.progressCard}>
-            <View style={styles.progressTop}>
-              <Text variant="labelSm" color="onPrimary" numberOfLines={1} style={styles.flexShrink}>
-                {freeDeliveryCopy}
-              </Text>
-              <Text variant="labelSm" color="onPrimary">
-                Free delivery
-              </Text>
-            </View>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${freeDeliveryPct * 100}%` }]} />
-            </View>
+            </Pressable>
           </View>
         </View>
 
-        {/* Outside every store's radius is a real answer, not an empty shop —
-            show it instead of a promo and category rails that lead nowhere. */}
+        {/* Where it is going, which is the first thing that decides whether any
+            of this is even orderable. */}
+        <Pressable
+          style={styles.deliverTo}
+          onPress={() => router.push(user ? '/addresses' : '/login')}
+          accessibilityRole="button"
+        >
+          <Icon name="location-outline" size={15} color={theme.colors.primary} />
+          <Text variant="bodySm" color="textSecondary">
+            Delivering to
+          </Text>
+          <Text variant="bodyStrong" numberOfLines={1} style={styles.deliverToWhere}>
+            {address?.area ?? (user ? 'Add an address' : 'DHA Peshawar')}
+          </Text>
+          <Icon name="chevron-down" size={13} color={theme.colors.textPrimary} />
+        </Pressable>
+
+        <Pressable
+          style={styles.search}
+          onPress={() => router.push('/(tabs)/search')}
+          accessibilityRole="search"
+          accessibilityLabel="Search products or shops"
+        >
+          <Icon name="search-outline" size={17} color={theme.colors.textSecondary} />
+          <Text variant="body" color="textTertiary">
+            Search products or shops
+          </Text>
+        </Pressable>
+
         {outOfArea ? (
-          <EmptyState
-            emoji="📍"
-            title="We don’t deliver here yet"
-            subtitle={`${address?.area ?? 'This address'} is outside every store’s delivery radius. Choose a different delivery address to start shopping.`}
-            actionLabel="Change address"
-            onAction={() => router.push('/addresses')}
-          />
+          <View style={styles.notice}>
+            <Icon name="alert-circle-outline" size={17} color={theme.colors.textAlert} />
+            <Text variant="bodySm" style={styles.noticeText}>
+              We don’t deliver to your saved address yet. You can still browse everything below.
+            </Text>
+          </View>
         ) : null}
 
-        {/* Promo panel. Solid ink rather than photography — the Onyx canvas
-            stays quiet, so a single dark surface carries the whole banner. */}
-        {/* Shop by category — tiles, not chips. The rail is the primary way
-            into the catalogue, so it gets image weight rather than text. */}
-        {categories.data && categories.data.length > 0 && !outOfArea ? (
-          <View style={styles.section}>
-            <View style={styles.sectionHead}>
-              <Text variant="h3">Shop by category</Text>
-              <Pressable onPress={() => router.push('/(tabs)/categories')}>
-                <Text variant="label" style={styles.seeAll}>
-                  See all
+        {/* ── Departments ─────────────────────────────────────────────────── */}
+        <View style={styles.deptSection}>
+          <View style={styles.sectionHead}>
+            <Text variant="h2">What are you shopping for?</Text>
+            {departments.length > 0 ? (
+              <Pressable
+                onPress={() => setSheetOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`See all ${departments.length} departments`}
+              >
+                <Text variant="labelSm" style={styles.allLink}>
+                  All {departments.length}
                 </Text>
               </Pressable>
-            </View>
+            ) : null}
+          </View>
+
+          {home.isLoading ? (
+            <Text variant="bodySm" color="textTertiary" style={styles.gutter}>
+              Loading departments…
+            </Text>
+          ) : null}
+
+          {/*
+            Live departments only. A card in the rail is a door; a department
+            with nothing in it is a promise, and the two do not belong in the
+            same row. The promises are in the sheet behind "All N".
+          */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.rail}
+          >
+            {live.map((d) => (
+              <DepartmentCard
+                key={d.key}
+                dept={d}
+                onPress={() => router.push(`/department/${d.key}`)}
+              />
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* ── Popular categories ──────────────────────────────────────────── */}
+        {chips.length > 0 ? (
+          <View style={styles.section}>
+            <Text variant="h3" style={styles.sectionTitle}>
+              Popular categories
+            </Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.rail}
+              contentContainerStyle={styles.chipRow}
             >
-              {categories.data.map((c) => (
-                <Pressable key={c.id} style={styles.catTile} onPress={() => openCategory(c)}>
-                  <View style={styles.catTileImage}>
-                    <Thumb imageUrl={c.imageUrl} name={c.name} fill radius={theme.radii.md} />
+              {chips.map((c) => (
+                <Pressable
+                  key={c.id}
+                  style={styles.chip}
+                  onPress={() => router.push(`/department/${c.departmentKey}?categoryId=${c.id}`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${c.name} in ${nameByKey.get(c.departmentKey) ?? c.departmentKey}`}
+                >
+                  <View style={[styles.chipTile, { backgroundColor: tintFor(c.departmentKey) }]}>
+                    <Icon
+                      name="pricetag-outline"
+                      size={13}
+                      color={theme.colors.textInverse}
+                      strokeWidth={2}
+                    />
                   </View>
-                  <Text variant="labelSm" align="center" numberOfLines={2}>
+                  {/* Bold, per the comp: the chip is a control, and its label
+                      carries the same weight as the button text it behaves like. */}
+                  <Text variant="bodyStrong" numberOfLines={1}>
                     {c.name}
                   </Text>
                 </Pressable>
@@ -209,272 +256,390 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
-        {/* Twin promo banners. Ember then ink, so the pair reads as one system
-            rather than two unrelated adverts. */}
-        {!outOfArea ? (
+        {/* ── Promos ──────────────────────────────────────────────────────── */}
+        {/* Fed by the banners ops manages on the dashboard. No banners means no
+            row — a placeholder promo is an advertisement for nothing. */}
+        {banners.length > 0 ? (
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.rail}
+            contentContainerStyle={styles.promoRow}
           >
-            <Pressable style={[styles.banner, styles.bannerEmber]} onPress={() => router.push('/products')}>
-              <Text variant="h3" color="onPrimary" style={styles.bannerTitle}>
-                Fresh fruit{'\n'}from Swat
-              </Text>
-              <View style={styles.bannerTagSun}>
-                <Text variant="labelSm" style={styles.bannerTagSunText}>
-                  Up to 20% off
-                </Text>
-              </View>
-            </Pressable>
-            <Pressable style={[styles.banner, styles.bannerInk]} onPress={() => router.push('/products')}>
-              <Text variant="h3" color="onPrimary" style={styles.bannerTitle}>
-                Free delivery{'\n'}on your first
-              </Text>
-              <View style={styles.bannerTagLight}>
-                <Text variant="labelSm">Use HAALA100</Text>
-              </View>
-            </Pressable>
+            {banners.map((b) => (
+              <PromoCard
+                key={b.id}
+                banner={b}
+                tint={b.departmentKey ? tintFor(b.departmentKey) : theme.colors.primary}
+                departmentName={b.departmentKey ? nameByKey.get(b.departmentKey) : undefined}
+                onPress={b.linkTo ? () => router.push(b.linkTo as never) : undefined}
+              />
+            ))}
           </ScrollView>
         ) : null}
 
-        {/* One rail per category */}
-        {(outOfArea ? [] : shelfCategories).map((category, i) => {
-          const shelf = shelves[i];
-          const items = shelf?.data?.items ?? [];
-          if (!shelf?.isLoading && items.length === 0) return null;
-          return (
-            <View key={category.id} style={styles.shelf}>
-              <View style={styles.shelfHeader}>
-                <Text variant="h3">{category.name}</Text>
-                <Pressable onPress={() => router.push(`/products?categoryId=${category.id}`)}>
-                  <Text variant="label" color="textSecondary">
-                    See all
-                  </Text>
-                </Pressable>
-              </View>
-
-              {shelf?.isLoading ? (
-                <ShelfSkeleton />
-              ) : (
-                <FlatList
-                  horizontal
-                  data={items}
-                  keyExtractor={(p) => p.id}
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.shelfRow}
-                  renderItem={({ item }: { item: ProductView }) => (
-                    <ProductCard
-                      variant="compact"
-                      name={item.name}
-                      unit={item.unit}
-                      price={item.price}
-                    original={item.basePrice}
-                      imageUrl={item.imageUrl}
-                      inStock={item.inStock}
-                      quantity={qtyByProduct.get(item.defaultVariantId ?? "") ?? 0}
-                      busy={busyVariantId === item.defaultVariantId}
-                      onPress={() => router.push(`/product/${item.id}`)}
-                      onAdd={() => addProduct(item)}
-                      onIncrement={() =>
-                        setQty(item.defaultVariantId ?? "", (qtyByProduct.get(item.defaultVariantId ?? "") ?? 0) + 1)
-                      }
-                      onDecrement={() =>
-                        setQty(item.defaultVariantId ?? "", (qtyByProduct.get(item.defaultVariantId ?? "") ?? 0) - 1)
-                      }
-                    />
-                  )}
-                />
-              )}
+        {/* ── Popular right now ───────────────────────────────────────────── */}
+        {popular.length > 0 ? (
+          <View style={styles.section}>
+            <View style={styles.sectionHead}>
+              <Text variant="h3">Popular right now</Text>
+              <Text variant="labelSm" color="textSecondary">
+                across {live.length} {live.length === 1 ? 'department' : 'departments'}
+              </Text>
             </View>
-          );
-        })}
+            <View style={styles.grid}>
+              {popular.map((p) => (
+                <View key={p.id} style={styles.gridCell}>
+                  <ProductCard
+                    name={p.name}
+                    // The comp puts the department where the unit usually goes.
+                    unit=""
+                    eyebrow={nameByKey.get(p.departmentKey) ?? p.departmentKey}
+                    imageHeight={
+                      p.departmentKey === BusinessTypeKey.Grocery
+                        ? IMAGE_HEIGHT.grocery
+                        : IMAGE_HEIGHT.other
+                    }
+                    price={p.price}
+                    original={p.basePrice > p.price ? p.basePrice : undefined}
+                    imageUrl={p.imageUrl}
+                    inStock={p.inStock}
+                    quantity={qtyByProduct.get(p.defaultVariantId ?? '') ?? 0}
+                    busy={busyVariantId === p.defaultVariantId}
+                    onPress={() => router.push(`/product/${p.id}`)}
+                    onAdd={() => addProduct(p as ProductView)}
+                  />
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
       </ScrollView>
 
-      {cart.data && cart.data.itemCount > 0 ? (
-        <View style={styles.footer}>
-          <CTABar
-            leftTop={`${cart.data.itemCount} items`}
-            leftBottom={formatPKR(cart.data.subtotal)}
-            buttonLabel="View Cart  →"
-            onPress={() => router.push('/(tabs)/cart')}
-          />
-        </View>
-      ) : null}
-    </View>
+      <DepartmentsSheet
+        visible={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        departments={departments}
+        city={city}
+        onOpen={(key) => {
+          setSheetOpen(false);
+          router.push(`/department/${key}`);
+        }}
+      />
+    </SafeAreaView>
   );
 }
 
-function ShelfSkeleton() {
+/**
+ * One department, as a shopfront.
+ *
+ * Full-bleed colour in the department's own tint, 210px wide in a horizontal
+ * rail — the card *is* the department's identity, which is why the tint comes
+ * from the token map rather than from a semantic role.
+ */
+function DepartmentCard({ dept, onPress }: { dept: Department; onPress: () => void }) {
   return (
-    <View style={styles.shelfRow}>
-      {[0, 1, 2].map((i) => (
-        <View key={i} style={styles.skelCard}>
-          <Skeleton height={COMPACT_CARD_WIDTH - 32} radius={theme.radii.xs} />
-          <Skeleton width="85%" height={12} />
-          <Skeleton width="55%" height={10} />
-          <Skeleton width="70%" height={16} />
+    <Pressable
+      style={({ pressed }) => [
+        styles.card,
+        { backgroundColor: dept.tint },
+        pressed && styles.cardPressed,
+      ]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${dept.name}. ${dept.examples}`}
+    >
+      {/* The comp's soft disc, catching the light in the top corner. */}
+      <View style={styles.disc} pointerEvents="none" />
+
+      <View style={styles.cardIcon}>
+        <Icon name={dept.icon} size={22} color={theme.colors.textInverse} strokeWidth={1.9} />
+      </View>
+
+      <Text variant="h2" color="textInverse" style={styles.cardName}>
+        {dept.name}
+      </Text>
+      <Text variant="bodySm" style={styles.cardExamples} numberOfLines={2}>
+        {dept.examples}
+      </Text>
+
+      <View style={styles.cardFoot}>
+        <View style={styles.cardCta}>
+          <Text variant="labelSm" style={{ color: dept.tint }}>
+            {dept.cta}
+          </Text>
         </View>
-      ))}
-    </View>
+        <Icon name="chevron-forward" size={15} color="rgba(255,255,255,0.85)" />
+      </View>
+
+      {dept.flag ? (
+        <View style={styles.flag}>
+          {/* `labelSm` for the weight, then overridden down to the comp's 9.5px.
+              `caption` is the right size but regular, and the flag is the one
+              thing on the card that has to read at a glance. */}
+          <Text variant="labelSm" style={styles.flagText}>
+            {dept.flag}
+          </Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+/** A promo card, 290×104, its artwork bleeding off the right edge. */
+function PromoCard({
+  banner,
+  tint,
+  departmentName,
+  onPress,
+}: {
+  banner: BannerView;
+  tint: string;
+  departmentName?: string;
+  onPress?: () => void;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.promo,
+        { backgroundColor: tint },
+        pressed && onPress ? styles.cardPressed : null,
+      ]}
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={banner.title}
+    >
+      <Text variant="labelCaps" style={styles.promoDept}>
+        {departmentName ?? 'Haala'}
+      </Text>
+      {/* The comp caps the caption at 150px because artwork occupies the right
+          120px of the card. With no artwork there is nothing to make room for,
+          so the caption gets the card — otherwise a perfectly short line like
+          "Free delivery on your first order" truncates against empty space. */}
+      <Text
+        variant="h3"
+        color="textInverse"
+        style={[styles.promoTitle, banner.imageUrl ? styles.promoTitleNarrow : null]}
+        numberOfLines={2}
+      >
+        {banner.title}
+      </Text>
+      {banner.badge ? (
+        <View style={styles.promoBadge}>
+          <Text variant="labelSm" style={styles.promoBadgeText}>
+            {banner.badge}
+          </Text>
+        </View>
+      ) : null}
+
+      {banner.imageUrl ? (
+        <Image source={{ uri: banner.imageUrl }} style={styles.promoImage} resizeMode="cover" />
+      ) : null}
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.background },
-  /**
-   * Hero and progress card share a wrapper so the content gap doesn't land
-   * between them — the card is meant to overlap the hero, not follow it.
-   */
-  heroBlock: {
-    // Break out of the ScrollView's 16px inset so the ember runs edge to edge.
-    marginHorizontal: -theme.layout.margin,
-  },
-  hero: {
-    backgroundColor: theme.colors.primary,
-    borderBottomLeftRadius: theme.radii.xl,
-    borderBottomRightRadius: theme.radii.xl,
+  content: { paddingBottom: theme.spacing['2xl'] },
+  gutter: { marginHorizontal: theme.layout.margin },
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: theme.layout.margin,
-    paddingBottom: 46,
+    paddingTop: theme.spacing.sm,
   },
-  heroTop: {
-    flexDirection: 'row',
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  mark: {
+    width: 28,
+    height: 28,
+    borderRadius: theme.radii.sm - 4,
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
+    justifyContent: 'center',
   },
-  heroDim: { color: 'rgba(255,255,255,0.85)' },
-  heroSearch: { marginTop: theme.spacing.xs },
-  heroMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.md,
-    marginTop: theme.spacing.md,
-  },
-  etaPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.xs,
-    backgroundColor: theme.colors.accent,
-    borderRadius: theme.radii.pill,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 7,
-  },
-  progressCard: {
-    marginTop: -32,
-    marginHorizontal: theme.layout.margin,
-    backgroundColor: theme.colors.accent,
-    borderRadius: theme.radii.md,
-    padding: theme.spacing.md,
-    gap: theme.spacing.sm,
-    ...theme.elevation.raised,
-  },
-  progressTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: theme.spacing.sm,
-  },
-  progressTrack: {
-    height: 6,
-    borderRadius: theme.radii.pill,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: theme.radii.pill,
-    backgroundColor: theme.colors.promo,
-  },
-  flexShrink: { flexShrink: 1 },
-  location: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs },
-  avatar: {
+  wordmark: { letterSpacing: 1.2 },
+  headerActions: { flexDirection: 'row', gap: 8 },
+  circle: {
     width: 34,
     height: 34,
     borderRadius: theme.radii.pill,
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderWidth: 1,
+    borderColor: theme.colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  content: {
-    paddingHorizontal: theme.layout.margin,
-    paddingBottom: 140,
-    gap: theme.layout.sectionGap,
+  badge: {
+    position: 'absolute',
+    right: -3,
+    top: -3,
+    minWidth: 17,
+    height: 17,
+    borderRadius: 9,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
   },
-  section: { gap: theme.spacing.md },
-  sectionHead: {
+  badgeText: { fontSize: 9.5, lineHeight: 17 },
+
+  deliverTo: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 7,
+    marginHorizontal: theme.layout.margin,
+    marginTop: 14,
   },
-  seeAll: { color: theme.colors.primaryPressed },
-  // Rails bleed to the right screen edge; the section header stays on the grid.
-  rail: { gap: theme.spacing.md, paddingRight: theme.layout.margin },
-  catTile: { width: 64, alignItems: 'center', gap: theme.spacing.sm },
-  catTileImage: {
-    width: 64,
-    height: 64,
+  deliverToWhere: { flexShrink: 1 },
+
+  search: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    marginHorizontal: theme.layout.margin,
+    marginTop: 13,
+    backgroundColor: theme.colors.surfaceSunken,
+    borderRadius: theme.radii.sm,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+
+  notice: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'flex-start',
+    marginHorizontal: theme.layout.margin,
+    marginTop: 14,
+    padding: 12,
+    borderRadius: theme.radii.sm,
+    backgroundColor: theme.colors.surfaceAlert,
+    borderWidth: 1,
+    borderColor: theme.colors.borderAlert,
+  },
+  noticeText: { flex: 1, color: theme.colors.textAlert, lineHeight: 17 },
+
+  deptSection: { paddingTop: 22 },
+  section: { paddingTop: 24 },
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingHorizontal: theme.layout.margin,
+    paddingBottom: 12,
+  },
+  sectionTitle: { paddingHorizontal: theme.layout.margin, paddingBottom: 12 },
+  allLink: { color: theme.colors.info },
+
+  rail: { flexDirection: 'row', gap: 12, paddingHorizontal: theme.layout.margin, paddingBottom: 4 },
+  card: {
+    width: 210,
     borderRadius: theme.radii.lg,
-    backgroundColor: theme.colors.infoSoft,
-    padding: 7,
+    padding: 15,
     overflow: 'hidden',
   },
-  banner: {
+  cardPressed: { opacity: 0.92 },
+  disc: {
+    position: 'absolute',
+    right: -26,
+    top: -30,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+  cardIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: theme.radii.sm,
+    backgroundColor: 'rgba(255,255,255,0.20)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardName: { marginTop: 14 },
+  cardExamples: {
+    marginTop: 7,
+    minHeight: 32,
+    lineHeight: 16,
+    color: 'rgba(255,255,255,0.82)',
+  },
+  cardFoot: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 13 },
+  cardCta: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.pill,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+  },
+  flag: {
+    position: 'absolute',
+    right: 13,
+    top: 13,
+    backgroundColor: theme.colors.promo,
+    borderRadius: theme.radii.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  flagText: { color: theme.colors.onPromo, fontSize: 9.5, lineHeight: 13, letterSpacing: 0.2 },
+
+  chipRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: theme.layout.margin,
+    paddingBottom: 4,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radii.pill,
+    paddingLeft: 9,
+    paddingRight: 13,
+    paddingVertical: 8,
+  },
+  chipTile: {
+    width: 24,
+    height: 24,
+    borderRadius: theme.radii.xs - 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  promoRow: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: theme.layout.margin,
+    paddingTop: 22,
+  },
+  promo: {
     width: 290,
     height: 104,
     borderRadius: theme.radii.md,
-    padding: theme.spacing.lg,
-    justifyContent: 'center',
-    gap: theme.spacing.sm,
+    padding: 14,
+    overflow: 'hidden',
   },
-  bannerEmber: { backgroundColor: theme.colors.primary },
-  bannerInk: { backgroundColor: theme.colors.accent },
-  bannerTitle: { maxWidth: 150 },
-  bannerTagSun: {
+  promoDept: { color: 'rgba(255,255,255,0.78)' },
+  promoTitle: { marginTop: 8 },
+  promoTitleNarrow: { maxWidth: 150 },
+  promoBadge: {
+    marginTop: 9,
     alignSelf: 'flex-start',
     backgroundColor: theme.colors.promo,
     borderRadius: theme.radii.pill,
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: 10,
     paddingVertical: 5,
   },
-  bannerTagSunText: { color: theme.colors.onPromo },
-  bannerTagLight: {
-    alignSelf: 'flex-start',
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.pill,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 5,
-  },
-  shelf: { gap: theme.spacing.md },
-  shelfHeader: {
+  promoBadgeText: { color: theme.colors.onPromo },
+  promoImage: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 120 },
+
+  grid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  // Negative margin lets cards bleed to the screen edge while the section
-  // header stays aligned to the 16px margin.
-  shelfRow: {
-    gap: theme.spacing.md,
-    paddingRight: theme.layout.margin,
-    paddingVertical: theme.spacing.xs,
-  },
-  skelCard: {
-    width: COMPACT_CARD_WIDTH,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.sm,
-    padding: theme.spacing.sm,
-    gap: theme.spacing.sm,
-    ...theme.elevation.card,
-  },
-  footer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
+    flexWrap: 'wrap',
+    gap: 14,
     paddingHorizontal: theme.layout.margin,
-    paddingVertical: theme.spacing.md,
-    backgroundColor: theme.colors.surface,
-    ...theme.elevation.raised,
   },
+  /** Two per row, accounting for the 14px gap between the columns. */
+  gridCell: { width: '47%', flexGrow: 1 },
 });

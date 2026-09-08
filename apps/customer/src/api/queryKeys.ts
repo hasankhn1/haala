@@ -3,6 +3,9 @@ export const qk = {
   myProviders: ['me', 'providers'] as const,
   stores: (lat: number, lng: number) => ['stores', lat, lng] as const,
   categories: ['categories'] as const,
+  departments: ['departments'] as const,
+  /** Keyed by store: prices and stock differ, so the caches must not be shared. */
+  home: (storeId?: string | null) => ['home', storeId ?? null] as const,
   products: (storeId: string, categoryId?: string, q?: string) =>
     ['products', storeId, categoryId ?? null, q ?? null] as const,
   product: (id: string, storeId: string) => ['product', id, storeId] as const,

@@ -25,6 +25,19 @@ export interface ProductCardProps {
   onPress?: () => void;
   busy?: boolean;
   /**
+   * A small label above the name — the marketplace home puts the department
+   * there, so a shopper scanning one grid of mixed trades can tell a shirt from
+   * a bag of rice before reading either name.
+   */
+  eyebrow?: string;
+  /**
+   * Image block height, `grid` variant only. The comp draws 150px for grocery
+   * and 180px elsewhere: a garment photographed on a person needs vertical room
+   * that a tin does not, and cropping it to a square is what made the clothing
+   * rows look wrong.
+   */
+  imageHeight?: number;
+  /**
    * The comps use four distinct tile sizes and they are not interchangeable:
    *
    * - `grid` (default) — 2-column listing, 150px image block.
@@ -71,6 +84,8 @@ function GridCard({
   busy = false,
   favorite,
   onToggleFavorite,
+  eyebrow,
+  imageHeight,
 }: ProductCardProps) {
   const off = discountPercent(price, original);
   return (
@@ -78,7 +93,7 @@ function GridCard({
       onPress={onPress}
       style={({ pressed }) => [styles.grid, pressed && onPress ? { opacity: 0.92 } : null]}
     >
-      <View style={styles.imageWrap}>
+      <View style={[styles.imageWrap, imageHeight ? { height: imageHeight } : null]}>
         <Thumb imageUrl={imageUrl} name={name} fill radius={theme.radii.md} />
         {off > 0 ? (
           <View style={styles.badgeTL}>
@@ -130,12 +145,22 @@ function GridCard({
         ) : null}
       </View>
 
+      {eyebrow ? (
+        <Text variant="labelCaps" color="textSecondary" numberOfLines={1}>
+          {eyebrow}
+        </Text>
+      ) : null}
       <Text variant="bodySm" numberOfLines={2}>
         {name}
       </Text>
-      <Text variant="caption" color="textSecondary" numberOfLines={1}>
-        {unit}
-      </Text>
+      {/* Suppressed when the caller has nothing to say. The home grid passes an
+          empty unit because the comp puts the department there instead, and an
+          empty Text still occupies a line. */}
+      {unit ? (
+        <Text variant="caption" color="textSecondary" numberOfLines={1}>
+          {unit}
+        </Text>
+      ) : null}
       <PriceText amount={price} original={original} variant="price" />
     </Pressable>
   );
