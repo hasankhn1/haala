@@ -1,6 +1,6 @@
 import type { StoreView } from '@haala/shared';
 import { AppError } from '../../common/errors';
-import { haversineMeters, isWithinDeliveryRadius } from '../../common/geo';
+import { haversineMeters, isWithinDeliveryArea } from '../../common/geo';
 import type { Store } from '../../db/schema';
 import { storeRepository } from './store.repository';
 
@@ -20,7 +20,7 @@ const toView = (s: Store, from?: { lat: number; lng: number }): StoreView => ({
   ...(from
     ? {
         distanceMeters: haversineMeters(from.lat, from.lng, s.latitude, s.longitude),
-        isServiceable: isWithinDeliveryRadius(s, from.lat, from.lng),
+        isServiceable: isWithinDeliveryArea(s, from.lat, from.lng),
       }
     : {}),
 });
@@ -28,8 +28,8 @@ const toView = (s: Store, from?: { lat: number; lng: number }): StoreView => ({
 export const storeService = {
   /**
    * Return active stores ordered by distance from the point, each flagged with
-   * whether the point is inside its delivery radius. The nearest serviceable
-   * store is the head of the serviceable list.
+   * whether the point is inside its delivery area (radius or polygon). The
+   * nearest serviceable store is the head of the serviceable list.
    */
   async findNearby(lat: number, lng: number): Promise<StoreView[]> {
     const stores = await storeRepository.listActive();

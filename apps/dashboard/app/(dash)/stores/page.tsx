@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
-import type { OpsStoreView } from '@haala/shared';
+import { parsePolygonText, type OpsStoreView, type StorePolygonPoint } from '@haala/shared';
 import { ApiError, api } from '@/lib/api';
 
 /**
@@ -24,6 +24,8 @@ interface FormState {
   latitude: string;
   longitude: string;
   deliveryRadiusMeters: string;
+  /** One "lat, lng" pair per line. Blank means no polygon — falls back to the radius. */
+  polygonText: string;
   isActive: boolean;
 }
 
@@ -36,20 +38,34 @@ const EMPTY: FormState = {
   latitude: '',
   longitude: '',
   deliveryRadiusMeters: '5000',
+  polygonText: '',
   isActive: true,
 };
 
-const toForm = (s: OpsStoreView): FormState => ({
-  name: s.name,
-  code: s.code,
-  addressLine: s.addressLine,
-  area: s.area,
-  city: s.city,
-  latitude: String(s.latitude),
-  longitude: String(s.longitude),
-  deliveryRadiusMeters: String(s.deliveryRadiusMeters),
-  isActive: s.isActive,
-});
+/**
+ * A non-array `polygon` shouldn't be possible given the API's own validation,
+ * but `polygon` is `jsonb` with no DB-level shape constraint — this is the
+ * one place ops-facing UI touches store data straight from a fetch, so it's
+ * worth not trusting the shape blindly and blanking the whole page over it.
+ */
+const asPolygon = (polygon: unknown): StorePolygonPoint[] | null =>
+  Array.isArray(polygon) ? (polygon as StorePolygonPoint[]) : null;
+
+const toForm = (s: OpsStoreView): FormState => {
+  const polygon = asPolygon(s.polygon);
+  return {
+    name: s.name,
+    code: s.code,
+    addressLine: s.addressLine,
+    area: s.area,
+    city: s.city,
+    latitude: String(s.latitude),
+    longitude: String(s.longitude),
+    deliveryRadiusMeters: String(s.deliveryRadiusMeters),
+    polygonText: polygon ? polygon.map((p) => `${p.lat}, ${p.lng}`).join('\n') : '',
+    isActive: s.isActive,
+  };
+};
 
 export default function StoresPage() {
   const qc = useQueryClient();
@@ -76,7 +92,7 @@ export default function StoresPage() {
   const onError = (e: unknown) =>
     setError(e instanceof ApiError ? e.message : 'Could not save the store');
 
-  const payload = () => ({
+  const payload = (polygon: StorePolygonPoint[] | null) => ({
     name: form.name.trim(),
     addressLine: form.addressLine.trim(),
     area: form.area.trim(),
@@ -84,19 +100,21 @@ export default function StoresPage() {
     latitude: Number(form.latitude),
     longitude: Number(form.longitude),
     deliveryRadiusMeters: Number(form.deliveryRadiusMeters),
+    polygon,
     isActive: form.isActive,
   });
 
   const create = useMutation({
-    mutationFn: () =>
-      api.post<OpsStoreView>('/ops/stores', { ...payload(), code: form.code.trim() }),
+    mutationFn: (polygon: StorePolygonPoint[] | null) =>
+      api.post<OpsStoreView>('/ops/stores', { ...payload(polygon), code: form.code.trim() }),
     onSuccess: onSaved,
     onError,
   });
 
   const update = useMutation({
     // `code` is intentionally absent — the API rejects it as unknown.
-    mutationFn: () => api.patch<OpsStoreView>(`/ops/stores/${editing!.id}`, payload()),
+    mutationFn: (polygon: StorePolygonPoint[] | null) =>
+      api.patch<OpsStoreView>(`/ops/stores/${editing!.id}`, payload(polygon)),
     onSuccess: onSaved,
     onError,
   });
@@ -110,7 +128,15 @@ export default function StoresPage() {
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    (editing ? update : create).mutate();
+    setError(null);
+    let polygon: StorePolygonPoint[] | null;
+    try {
+      polygon = parsePolygonText(form.polygonText);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid delivery area boundary');
+      return;
+    }
+    (editing ? update : create).mutate(polygon);
   };
 
   const coordsValid =
@@ -231,6 +257,24 @@ export default function StoresPage() {
             />
           </Field>
 
+          <Field label="Delivery area boundary (optional)" id="polygon">
+            <textarea
+              id="polygon"
+              value={form.polygonText}
+              rows={4}
+              placeholder={
+                'One "lat, lng" per line, e.g.\n34.0520, 71.4180\n34.0610, 71.4450\n34.0390, 71.4610'
+              }
+              onChange={(e) => setForm({ ...form, polygonText: e.target.value })}
+              style={{ fontFamily: 'monospace', fontSize: 13, resize: 'vertical' }}
+            />
+            <span className="muted" style={{ fontSize: 12 }}>
+              Copy points from Google Maps (right-click a spot → click the coordinates). At least 3
+              points, one per line. Leave blank to just use the radius above — this overrides it
+              when set.
+            </span>
+          </Field>
+
           <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <input
               type="checkbox"
@@ -282,49 +326,63 @@ export default function StoresPage() {
                   </td>
                 </tr>
               ) : (
-                rows.map((s) => (
-                  <tr key={s.id}>
-                    <td>
-                      <div style={{ fontWeight: 600 }}>{s.name}</div>
-                      <div className="muted">{s.code}</div>
-                    </td>
-                    <td>
-                      <div>
-                        {s.area}, {s.city}
-                      </div>
-                      <div className="muted" style={{ fontSize: 12 }}>
-                        {s.latitude.toFixed(4)}, {s.longitude.toFixed(4)}
-                      </div>
-                    </td>
-                    <td className="num">{(s.deliveryRadiusMeters / 1000).toFixed(1)} km</td>
-                    <td>
-                      <span className={`badge ${s.isActive ? 'good' : 'neutral'}`}>
-                        {s.isActive ? 'Active' : 'Paused'}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button
-                          className="btn ghost sm"
-                          onClick={() => {
-                            setEditing(s);
-                            setForm(toForm(s));
-                            setError(null);
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="btn ghost sm"
-                          disabled={toggleActive.isPending}
-                          onClick={() => toggleActive.mutate(s)}
-                        >
-                          {s.isActive ? 'Pause' : 'Resume'}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                rows.map((s) => {
+                  const polygon = asPolygon(s.polygon);
+                  return (
+                    <tr key={s.id}>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{s.name}</div>
+                        <div className="muted">{s.code}</div>
+                      </td>
+                      <td>
+                        <div>
+                          {s.area}, {s.city}
+                        </div>
+                        <div className="muted" style={{ fontSize: 12 }}>
+                          {s.latitude.toFixed(4)}, {s.longitude.toFixed(4)}
+                        </div>
+                      </td>
+                      <td className="num">
+                        <div>{(s.deliveryRadiusMeters / 1000).toFixed(1)} km</div>
+                        {polygon ? (
+                          <div
+                            className="muted"
+                            style={{ fontSize: 12 }}
+                            title="Overrides the radius above while it's set"
+                          >
+                            boundary drawn ({polygon.length} pts)
+                          </div>
+                        ) : null}
+                      </td>
+                      <td>
+                        <span className={`badge ${s.isActive ? 'good' : 'neutral'}`}>
+                          {s.isActive ? 'Active' : 'Paused'}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button
+                            className="btn ghost sm"
+                            onClick={() => {
+                              setEditing(s);
+                              setForm(toForm(s));
+                              setError(null);
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="btn ghost sm"
+                            disabled={toggleActive.isPending}
+                            onClick={() => toggleActive.mutate(s)}
+                          >
+                            {s.isActive ? 'Pause' : 'Resume'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

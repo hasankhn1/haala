@@ -194,7 +194,7 @@ export default function CheckoutScreen() {
    * itself beforehand.
    *
    * `storesApi.nearby` returns `isServiceable` per store, computed server-side
-   * by the same `isWithinDeliveryRadius` the order uses, so this cannot drift
+   * by the same `isWithinDeliveryArea` the order uses, so this cannot drift
    * from the decision it is predicting. Undefined while unknown — a failed
    * lookup must not block an order the server would have accepted.
    */

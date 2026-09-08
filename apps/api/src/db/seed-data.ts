@@ -82,7 +82,12 @@ export const SEED_USERS = [
     role: 'rider' as const,
     homeStoreCode: 'PEW-HYT',
   },
-  { name: 'Ops Admin', phone: '+923009990000', email: 'admin@haala.test', role: 'super_admin' as const },
+  {
+    name: 'Ops Admin',
+    phone: '+923009990000',
+    email: 'admin@haala.test',
+    role: 'super_admin' as const,
+  },
 ] as const;
 
 /**
@@ -102,6 +107,37 @@ export const SEED_STORES = [
     latitude: 33.9793,
     longitude: 71.6903,
     deliveryRadiusMeters: 6000,
+    /**
+     * Real DHA Peshawar boundary, traced from Google Maps — this exists so
+     * the polygon feature ships with real data on day one instead of only
+     * working once someone remembers to draw one by hand later (see
+     * `isWithinDeliveryArea` in `common/geo.ts` for why a radius can't cover
+     * DHA's actual lopsided extent).
+     */
+    polygon: [
+      { lat: 34.050334, lng: 71.415975 },
+      { lat: 34.074131, lng: 71.45745 },
+      { lat: 34.072619, lng: 71.456982 },
+      { lat: 34.070073, lng: 71.455932 },
+      { lat: 34.069196, lng: 71.454607 },
+      { lat: 34.067081, lng: 71.450664 },
+      { lat: 34.065612, lng: 71.450115 },
+      { lat: 34.063019, lng: 71.451484 },
+      { lat: 34.060349, lng: 71.451226 },
+      { lat: 34.048529, lng: 71.440008 },
+      { lat: 34.046213, lng: 71.440759 },
+      { lat: 34.045602, lng: 71.438285 },
+      { lat: 34.044577, lng: 71.437339 },
+      { lat: 34.043438, lng: 71.43862 },
+      { lat: 34.042531, lng: 71.438563 },
+      { lat: 34.041838, lng: 71.437188 },
+      { lat: 34.041361, lng: 71.435253 },
+      { lat: 34.040421, lng: 71.434147 },
+      { lat: 34.039068, lng: 71.4336 },
+      { lat: 34.044531, lng: 71.426302 },
+      { lat: 34.047382, lng: 71.422486 },
+      { lat: 34.048402, lng: 71.42117 },
+    ],
   },
   {
     name: 'Haala — Hayatabad',
