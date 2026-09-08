@@ -99,6 +99,13 @@
       "when": 1788874254379,
       "tag": "0013_home_banners",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788875564930,
+      "tag": "0014_cart_per_department",
+      "breakpoints": true
     }
   ]
 }

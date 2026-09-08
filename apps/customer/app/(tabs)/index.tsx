@@ -96,7 +96,7 @@ export default function HomeScreen() {
   const banners = home.data?.banners ?? [];
   const chips = home.data?.popularCategories ?? [];
   const popular = home.data?.popularProducts ?? [];
-  const itemCount = cart.data?.itemCount ?? 0;
+  const itemCount = (cart.data?.baskets ?? []).reduce((n, b) => n + b.itemCount, 0);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

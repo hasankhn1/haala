@@ -10,6 +10,12 @@ import type { RiderPublicView } from './riders';
 import type { ProductView } from './catalog';
 
 export const placeOrderSchema = z.object({
+  /**
+   * Which basket to place. Baskets are per department and so are orders — one
+   * order is picked and dispatched from one shop, so "place my cart" is no
+   * longer a complete instruction once a customer holds more than one.
+   */
+  department: z.string().min(1).max(40),
   addressId: z.string().uuid(),
   paymentMethod: z.enum([PaymentMethod.Cod, PaymentMethod.Online]),
   notes: z.string().max(240).optional(),

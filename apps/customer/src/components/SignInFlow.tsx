@@ -92,7 +92,7 @@ export function SignInFlow({
   const { emailAuth } = useAuth();
   const mergeGuestCart = useMergeGuestCart();
   const cart = useCart();
-  const basketCount = cart.data?.itemCount ?? 0;
+  const basketCount = (cart.data?.baskets ?? []).reduce((n, b) => n + b.itemCount, 0);
   const passwordRef = useRef<TextInput>(null);
 
   const [step, setStep] = useState<Step>('landing');

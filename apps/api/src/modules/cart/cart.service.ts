@@ -1,7 +1,9 @@
 import {
+  CART_TTL_DAYS,
   deliveryFeeFor,
   type AddCartItemInput,
   type CartMergeResult,
+  type CartsView,
   type CartView,
   type MergeCartInput,
 } from '@haala/shared';
@@ -10,9 +12,40 @@ import { availableToSell, inventoryRepository } from '../inventory/inventory.rep
 import { catalogRepository } from '../catalog/catalog.repository';
 import { cartRepository } from './cart.repository';
 
+const staleCutoff = () => new Date(Date.now() - CART_TTL_DAYS * 24 * 60 * 60 * 1000);
+
 export const cartService = {
-  async getCart(userId: string): Promise<CartView> {
-    const cart = await cartRepository.getOrCreate(userId);
+  /**
+   * Every basket the customer holds, with expired ones swept first.
+   *
+   * The sweep lives on the read path rather than in a scheduled job: there is
+   * no scheduler in this deployment, and a basket only matters at the moment
+   * somebody looks at it. The cost is one indexed query per cart read.
+   */
+  async getBaskets(userId: string): Promise<CartsView> {
+    const expired = new Set(await cartRepository.clearStale(userId, staleCutoff()));
+    const carts = await cartRepository.listByUser(userId);
+
+    const baskets = await Promise.all(
+      carts.map(async (c) => {
+        const view = await this.viewOf(c);
+        return expired.has(c.id) ? { ...view, expired: true } : view;
+      }),
+    );
+
+    // Empty baskets are dropped from the switcher — a department the customer
+    // once looked at should not sit there forever as a tab with nothing in it.
+    // The one exception is a basket that just expired, which has something to
+    // say before it goes.
+    return { baskets: baskets.filter((b) => b.items.length > 0 || b.expired) };
+  },
+
+  async getCart(userId: string, department: string): Promise<CartView> {
+    const cart = await cartRepository.getOrCreate(userId, department);
+    return this.viewOf(cart);
+  },
+
+  async viewOf(cart: { id: string; departmentKey: string; storeId: string | null }): Promise<CartView> {
     const items = await cartRepository.items(cart.id);
 
     // Availability at the cart's store, to flag lines that can't be checked out.
@@ -27,6 +60,9 @@ export const cartService = {
 
     const viewItems = items.map((i) => ({
       variantId: i.variantId,
+      // The basket already knows; the line carries it so a *guest* basket, which
+      // is a flat list with no baskets to belong to, can group the same way.
+      departmentKey: cart.departmentKey,
       productId: i.product.id,
       name: i.product.name,
       // The size, not the product's catalogue unit — a 1kg line must not
@@ -45,6 +81,7 @@ export const cartService = {
 
     return {
       id: cart.id,
+      departmentKey: cart.departmentKey,
       storeId: cart.storeId,
       items: viewItems,
       itemCount: viewItems.reduce((n, i) => n + i.quantity, 0),
@@ -57,8 +94,11 @@ export const cartService = {
    * this rather than a client-supplied subtotal — otherwise a crafted request
    * could quote a percentage discount against an invented total.
    */
-  async totals(userId: string): Promise<{ subtotal: number; deliveryFee: number }> {
-    const cart = await this.getCart(userId);
+  async totals(userId: string, department: string): Promise<{ subtotal: number; deliveryFee: number }> {
+    // One basket, because a promo applies to the order it is placed against and
+    // an order draws from one department. Quoting a code against the combined
+    // total would discount an order that was never placed.
+    const cart = await this.getCart(userId, department);
     return { subtotal: cart.subtotal, deliveryFee: deliveryFeeFor(cart.subtotal) };
   },
 
@@ -66,7 +106,13 @@ export const cartService = {
     const variant = await catalogRepository.findVariantForStore(input.variantId, input.storeId);
     if (!variant) throw AppError.notFound('This size is not available at this store');
 
-    const cart = await cartRepository.getOrCreate(userId);
+    // Which basket this belongs in is a fact about the product, read from the
+    // database — never a field on the request. Accepting one would let a caller
+    // drop a shirt into the grocery basket and break the split at its root.
+    const department = await cartRepository.departmentForVariant(input.variantId);
+    if (!department) throw AppError.notFound('This size is not available at this store');
+
+    const cart = await cartRepository.getOrCreate(userId, department);
 
     // A cart holds items from a single store. Switching stores resets it.
     if (cart.storeId && cart.storeId !== input.storeId) {
@@ -83,7 +129,8 @@ export const cartService = {
     }
 
     await cartRepository.upsertItem(cart.id, input.variantId, desiredQty, Number(variant.price));
-    return this.getCart(userId);
+    await cartRepository.touch(cart.id);
+    return this.getCart(userId, department);
   },
 
   /**
@@ -104,16 +151,33 @@ export const cartService = {
    * two bags of rice on their phone and one in their account wants three.
    */
   async merge(userId: string, input: MergeCartInput): Promise<CartMergeResult> {
-    const cart = await cartRepository.getOrCreate(userId);
-
-    // An order cannot span two stores. The basket they were just filling is
-    // the one they meant, so it wins — but the caller is told it happened.
-    const replacedOtherStore = Boolean(cart.storeId && cart.storeId !== input.storeId);
-    if (replacedOtherStore) await cartRepository.clear(cart.id);
-    if (cart.storeId !== input.storeId) await cartRepository.setStore(cart.id, input.storeId);
-
     const skipped: CartMergeResult['skipped'] = [];
     const adjusted: CartMergeResult['adjusted'] = [];
+    /*
+     * A guest basket can hold several departments, so this fans out across
+     * baskets rather than filling one. Each is resolved lazily and remembered,
+     * so a device holding six grocery lines still creates one basket.
+     */
+    const touched = new Map<string, { id: string; storeId: string | null }>();
+    let replacedOtherStore = false;
+
+    const basketFor = async (department: string) => {
+      const known = touched.get(department);
+      if (known) return known;
+
+      const cart = await cartRepository.getOrCreate(userId, department);
+      // An order cannot span two stores. The basket they were just filling is
+      // the one they meant, so it wins — but the caller is told it happened.
+      if (cart.storeId && cart.storeId !== input.storeId) {
+        replacedOtherStore = true;
+        await cartRepository.clear(cart.id);
+      }
+      if (cart.storeId !== input.storeId) await cartRepository.setStore(cart.id, input.storeId);
+
+      const entry = { id: cart.id, storeId: input.storeId };
+      touched.set(department, entry);
+      return entry;
+    };
 
     for (const line of input.items) {
       const variant = await catalogRepository.findVariantForStore(line.variantId, input.storeId);
@@ -128,6 +192,13 @@ export const cartService = {
         continue;
       }
 
+      const department = await cartRepository.departmentForVariant(line.variantId);
+      if (!department) {
+        skipped.push({ variantId: line.variantId, reason: 'No longer available at this store' });
+        continue;
+      }
+      const cart = await basketFor(department);
+
       const existing = await cartRepository.findItem(cart.id, line.variantId);
       const wanted = (existing?.quantity ?? 0) + line.quantity;
       const quantity = Math.min(wanted, available);
@@ -138,18 +209,33 @@ export const cartService = {
       await cartRepository.upsertItem(cart.id, line.variantId, quantity, Number(variant.price));
     }
 
-    return { cart: await this.getCart(userId), skipped, adjusted, replacedOtherStore };
+    for (const { id } of touched.values()) await cartRepository.touch(id);
+
+    return { baskets: (await this.getBaskets(userId)).baskets, skipped, adjusted, replacedOtherStore };
+  },
+
+  /**
+   * The department is looked up rather than required from the caller.
+   *
+   * A quantity stepper knows a variant, not a department, and asking the client
+   * to supply one it would have to derive is an invitation to derive it wrong.
+   */
+  async basketHolding(userId: string, variantId: string) {
+    for (const cart of await cartRepository.listByUser(userId)) {
+      const item = await cartRepository.findItem(cart.id, variantId);
+      if (item) return { cart, item };
+    }
+    throw AppError.notFound('Item not in cart');
   },
 
   async updateItem(userId: string, variantId: string, quantity: number): Promise<CartView> {
-    const cart = await cartRepository.getOrCreate(userId);
-    const existing = await cartRepository.findItem(cart.id, variantId);
-    if (!existing) throw AppError.notFound('Item not in cart');
+    const { cart, item: existing } = await this.basketHolding(userId, variantId);
 
     if (quantity === 0) {
       await cartRepository.removeItem(cart.id, variantId);
+      await cartRepository.touch(cart.id);
       await this.resetStoreIfEmpty(cart.id);
-      return this.getCart(userId);
+      return this.getCart(userId, cart.departmentKey);
     }
 
     if (cart.storeId) {
@@ -159,21 +245,25 @@ export const cartService = {
       }
     }
     await cartRepository.upsertItem(cart.id, variantId, quantity, existing.unitPrice);
-    return this.getCart(userId);
+    await cartRepository.touch(cart.id);
+    return this.getCart(userId, cart.departmentKey);
   },
 
   async removeItem(userId: string, variantId: string): Promise<CartView> {
-    const cart = await cartRepository.getOrCreate(userId);
+    const { cart } = await this.basketHolding(userId, variantId);
     await cartRepository.removeItem(cart.id, variantId);
+    await cartRepository.touch(cart.id);
     await this.resetStoreIfEmpty(cart.id);
-    return this.getCart(userId);
+    return this.getCart(userId, cart.departmentKey);
   },
 
-  async clear(userId: string): Promise<CartView> {
-    const cart = await cartRepository.getOrCreate(userId);
+  /** Empties one department's basket. The others are untouched. */
+  async clear(userId: string, department: string): Promise<CartView> {
+    const cart = await cartRepository.getOrCreate(userId, department);
     await cartRepository.clear(cart.id);
     await cartRepository.setStore(cart.id, null);
-    return this.getCart(userId);
+    await cartRepository.touch(cart.id);
+    return this.getCart(userId, department);
   },
 
   async resetStoreIfEmpty(cartId: string): Promise<void> {

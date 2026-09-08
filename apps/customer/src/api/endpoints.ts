@@ -4,6 +4,7 @@ import type {
   AuthResult,
   AuthUser,
   CartMergeResult,
+  CartsView,
   CartView,
   CategoryView,
   CreateAddressInput,
@@ -89,12 +90,14 @@ export const catalogApi = {
 };
 
 export const cartApi = {
-  get: () => api.get<CartView>('/cart'),
+  /** Every basket the customer holds — one per department. */
+  get: () => api.get<CartsView>('/cart'),
   addItem: (input: AddCartItemInput) => api.post<CartView>('/cart/items', input),
   updateItem: (variantId: string, quantity: number) =>
     api.patch<CartView>(`/cart/items/${variantId}`, { quantity }),
   removeItem: (variantId: string) => api.del<CartView>(`/cart/items/${variantId}`),
-  clear: () => api.del<CartView>('/cart'),
+  /** Empties one department's basket. The others are untouched. */
+  clear: (department: string) => api.del<CartView>(`/cart${qs({ department })}`),
   /**
    * Hand a guest basket over after signing in. Only ids and quantities go —
    * the server re-reads prices, so a snapshot on the phone cannot become a

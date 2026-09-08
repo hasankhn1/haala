@@ -64,7 +64,7 @@ export default function ProductDetailScreen() {
   const selected = variants.find((v) => v.id === variantId) ?? variants[0] ?? null;
   const qty = selected ? (qtyByProduct.get(selected.id) ?? 0) : 0;
 
-  const cartCount = cart.data?.itemCount ?? 0;
+  const cartCount = (cart.data?.baskets ?? []).reduce((n, b) => n + b.itemCount, 0);
 
   /** Quantity chosen on this screen before the item exists in the cart. */
   const [pending, setPending] = useState(1);

@@ -1,10 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AddCartItemInput, CartItemView, CartMergeResult, CartView } from '@haala/shared';
+import type {
+  AddCartItemInput,
+  CartItemView,
+  CartMergeResult,
+  CartsView,
+  CartView,
+} from '@haala/shared';
 import { useToast } from '@haala/ui';
 import { cartApi } from '../api/endpoints';
 import { qk } from '../api/queryKeys';
 import { useAuth } from '../auth/AuthContext';
 import { track } from '../lib/analytics';
+import { useCurrentStore } from '../store/useCurrentStore';
 import { useGuestCart } from '../store/useGuestCart';
 
 /**
@@ -17,8 +24,16 @@ import { useGuestCart } from '../store/useGuestCart';
  * add: the cart was already entirely encapsulated here, and only this file and
  * `endpoints.ts` ever touched `cartApi`.
  */
-const EMPTY: CartView = { id: 'guest', storeId: null, items: [], itemCount: 0, subtotal: 0 };
+const NO_BASKETS: CartsView = { baskets: [] };
 
+/**
+ * Every basket the customer holds — one per department.
+ *
+ * The shape changed from a single `CartView` when baskets were split by
+ * department: the Cart tab's switcher needs each basket's count to draw itself,
+ * and the tab-bar badge needs the total. Screens that want one basket use
+ * `useBasket(department)`.
+ */
 export function useCart() {
   const { status } = useAuth();
   const authed = status === 'authenticated';
@@ -40,20 +55,51 @@ export function useCart() {
   // `.isLoading` and the rest without a branch of their own. `isLoading` is
   // true until AsyncStorage has been read, so a restored basket does not flash
   // as empty first.
-  const data: CartView = {
-    ...EMPTY,
-    storeId: guestStore,
-    items: guestLines,
-    itemCount: guestLines.reduce((n, l) => n + l.quantity, 0),
-    subtotal: guestLines.reduce((s, l) => s + l.unitPrice * l.quantity, 0),
-  };
+  const data: CartsView = hydrated ? { baskets: useGuestCart.getState().asBaskets() } : NO_BASKETS;
   return {
     data,
     isLoading: !hydrated,
     isError: false as const,
     error: null,
     refetch: async () => undefined,
-  } as unknown as ReturnType<typeof useQuery<CartView>>;
+  } as unknown as ReturnType<typeof useQuery<CartsView>>;
+}
+
+/** An empty basket for a department nobody has added to yet. */
+const emptyBasket = (departmentKey: string, storeId: string | null): CartView => ({
+  id: `empty:${departmentKey}`,
+  departmentKey,
+  storeId,
+  items: [],
+  itemCount: 0,
+  subtotal: 0,
+});
+
+/**
+ * One department's basket.
+ *
+ * Always returns a basket, empty if there is nothing in it, so a screen never
+ * has to branch on "no basket yet" separately from "basket with no lines".
+ */
+export function useBasket(department: string) {
+  const cart = useCart();
+  const storeId = useCurrentStore().storeId;
+  const basket =
+    cart.data?.baskets.find((b) => b.departmentKey === department) ??
+    emptyBasket(department, storeId);
+  return { ...cart, basket };
+}
+
+/**
+ * Everything in every basket, for the tab-bar badge.
+ *
+ * The badge counts across departments deliberately: it answers "have I got
+ * anything on the go", and a customer with a shirt in one basket and nothing in
+ * the one they happen to be looking at should not see a zero.
+ */
+export function useCartCount(): number {
+  const cart = useCart();
+  return (cart.data?.baskets ?? []).reduce((n, b) => n + b.itemCount, 0);
 }
 
 /** Recompute cart totals after an optimistic line edit. */
@@ -80,15 +126,32 @@ export function useCartMutations() {
   const authed = status === 'authenticated';
   const guest = useGuestCart();
 
-  const onSuccess = (data: CartView) => qc.setQueryData(qk.cart, data);
+  /**
+   * A mutation answers with the one basket it changed; the cache holds them
+   * all. Splice rather than replace, or editing the clothing basket would wipe
+   * the grocery one from the switcher until the next refetch.
+   */
+  const applyBasket = (data: CartView) =>
+    qc.setQueryData<CartsView>(qk.cart, (prev) => {
+      const others = (prev?.baskets ?? []).filter((b) => b.departmentKey !== data.departmentKey);
+      return { baskets: data.items.length > 0 ? [...others, data] : others };
+    });
 
-  const optimistic = async (mutate: (cart: CartView) => CartView) => {
+  const optimistic = async (mutate: (cart: CartView) => CartView, variantId: string) => {
     await qc.cancelQueries({ queryKey: qk.cart });
-    const previous = qc.getQueryData<CartView>(qk.cart);
-    if (previous) qc.setQueryData(qk.cart, recompute(mutate(previous)));
+    const previous = qc.getQueryData<CartsView>(qk.cart);
+    if (previous) {
+      // Which basket holds the line is looked up, not passed in — a stepper
+      // knows a variant, not a department.
+      qc.setQueryData<CartsView>(qk.cart, {
+        baskets: previous.baskets.map((b) =>
+          b.items.some((i) => i.variantId === variantId) ? recompute(mutate(b)) : b,
+        ),
+      });
+    }
     return { previous };
   };
-  const rollback = (_e: unknown, _v: unknown, ctx?: { previous?: CartView }) => {
+  const rollback = (_e: unknown, _v: unknown, ctx?: { previous?: CartsView }) => {
     if (ctx?.previous) qc.setQueryData(qk.cart, ctx.previous);
   };
   /**
@@ -112,10 +175,12 @@ export function useCartMutations() {
         throw new Error('A guest basket needs the line’s display fields');
       }
       guest.add(input.storeId, { ...input.line, quantity: input.quantity ?? 1 });
-      return useGuestCart.getState().asCartView();
+      return { baskets: useGuestCart.getState().asBaskets() };
     },
     onSuccess: (data) => {
-      if (authed) onSuccess(data);
+      // Guest edits are local state and answer with the whole set, which
+      // nothing reads; only the server's single-basket reply seeds the cache.
+      if (authed) applyBasket(data as CartView);
     },
   });
 
@@ -124,20 +189,25 @@ export function useCartMutations() {
     mutationFn: async (vars: { variantId: string; quantity: number }) => {
       if (authed) return cartApi.updateItem(vars.variantId, vars.quantity);
       guest.setQuantity(vars.variantId, vars.quantity);
-      return useGuestCart.getState().asCartView();
+      return { baskets: useGuestCart.getState().asBaskets() };
     },
     onMutate: (vars) =>
       authed
-        ? optimistic((cart) => ({
-            ...cart,
-            items: cart.items.map((i) =>
-              i.variantId === vars.variantId ? { ...i, quantity: vars.quantity } : i,
-            ),
-          }))
+        ? optimistic(
+              (cart) => ({
+                ...cart,
+                items: cart.items.map((i) =>
+                  i.variantId === vars.variantId ? { ...i, quantity: vars.quantity } : i,
+                ),
+              }),
+              vars.variantId,
+            )
         : nothingToRollBack(),
     onError: rollback,
     onSuccess: (data) => {
-      if (authed) onSuccess(data);
+      // Guest edits are local state and answer with the whole set, which
+      // nothing reads; only the server's single-basket reply seeds the cache.
+      if (authed) applyBasket(data as CartView);
     },
   });
 
@@ -145,29 +215,37 @@ export function useCartMutations() {
     mutationFn: async (variantId: string) => {
       if (authed) return cartApi.removeItem(variantId);
       guest.remove(variantId);
-      return useGuestCart.getState().asCartView();
+      return { baskets: useGuestCart.getState().asBaskets() };
     },
     onMutate: (variantId) =>
       authed
-        ? optimistic((cart) => ({
-            ...cart,
-            items: cart.items.filter((i) => i.variantId !== variantId),
-          }))
+        ? optimistic(
+              (cart) => ({
+                ...cart,
+                items: cart.items.filter((i) => i.variantId !== variantId),
+              }),
+              variantId,
+            )
         : nothingToRollBack(),
     onError: rollback,
     onSuccess: (data) => {
-      if (authed) onSuccess(data);
+      // Guest edits are local state and answer with the whole set, which
+      // nothing reads; only the server's single-basket reply seeds the cache.
+      if (authed) applyBasket(data as CartView);
     },
   });
 
   const clear = useMutation({
-    mutationFn: async () => {
-      if (authed) return cartApi.clear();
+    // Empties one department's basket; the others are untouched.
+    mutationFn: async (department: string) => {
+      if (authed) return cartApi.clear(department);
       guest.clear();
-      return useGuestCart.getState().asCartView();
+      return { baskets: useGuestCart.getState().asBaskets() };
     },
     onSuccess: (data) => {
-      if (authed) onSuccess(data);
+      // Guest edits are local state and answer with the whole set, which
+      // nothing reads; only the server's single-basket reply seeds the cache.
+      if (authed) applyBasket(data as CartView);
     },
   });
 
@@ -215,11 +293,15 @@ export function useMergeGuestCart() {
     // Only cleared once the server has confirmed, so a failed merge leaves the
     // basket on the device to try again rather than dropping it.
     useGuestCart.getState().clear();
-    qc.setQueryData(qk.cart, result.cart);
+    qc.setQueryData<CartsView>(qk.cart, { baskets: result.baskets });
+
+    // Counted across baskets: a device basket can span departments, so "how
+    // many lines arrived" is the total rather than one basket's worth.
+    const merged = result.baskets.reduce((n, b) => n + b.items.length, 0);
 
     track({
       name: 'guest_cart_merged',
-      lines: result.cart.items.length,
+      lines: merged,
       skipped: result.skipped.length,
     });
 
@@ -232,7 +314,7 @@ export function useMergeGuestCart() {
       toast.show('Some quantities were reduced to what is in stock', 'error');
     } else if (result.replacedOtherStore) {
       toast.show('Your basket from another store was replaced');
-    } else if (result.cart.items.length > 0) {
+    } else if (merged > 0) {
       toast.show('Welcome back — your basket is here');
     }
 

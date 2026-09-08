@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   Pressable,
   ScrollView,
@@ -8,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { formatPKR } from '@haala/shared';
+import { BusinessTypeKey, departmentCopy, formatPKR } from '@haala/shared';
 import {
   Button,
   EmptyState,
@@ -35,15 +36,40 @@ import { useCurrentStore } from '../../src/store/useCurrentStore';
  * address, payment method, tip, voucher and the auth gate — and this bar is
  * what leads there.
  */
+/**
+ * A department's name for the switcher.
+ *
+ * Falls back to the key rather than hiding the tab: a department the app has
+ * not been taught yet still holds real items, and an unnamed tab is far better
+ * than a basket the customer cannot reach.
+ */
+const departmentName = (key: string): string =>
+  departmentCopy[key as BusinessTypeKey]?.cta?.replace(/^Shop /, '') ?? key;
+
 export default function CartScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ department?: string }>();
 
   const cart = useCart();
   const { add, update, remove } = useCartMutations();
   /** Written here, submitted from checkout. */
   const { notes, setNotes } = useCheckoutDraft();
 
-  const data = cart.data;
+  const baskets = cart.data?.baskets ?? [];
+
+  /*
+   * Which basket is on screen.
+   *
+   * Held here rather than derived, because the customer picks it — but it has
+   * to survive the basket they were looking at emptying, and it has to accept
+   * an opening department from whoever navigated here. So the state is a
+   * *preference* and the basket shown is whatever that preference still
+   * matches, falling back to the first one that exists.
+   */
+  const [picked, setPicked] = useState<string | null>(params.department ?? null);
+  const active =
+    baskets.find((b) => b.departmentKey === picked) ?? baskets[0] ?? null;
+  const data = active;
 
   /**
    * "Forgot something?" — the comp's upsell rail. Suggestions come from the
@@ -52,8 +78,11 @@ export default function CartScreen() {
    */
   const { storeId } = useCurrentStore();
   const suggestions = useQuery({
-    queryKey: ['cart-suggestions', storeId, data?.items.length ?? 0],
-    queryFn: () => catalogApi.products({ storeId: storeId as string }),
+    queryKey: ['cart-suggestions', storeId, data?.departmentKey ?? null, data?.items.length ?? 0],
+    // Suggestions come from the same department as the basket they sit under —
+    // offering cooking oil beneath a basket of shirts is not a suggestion.
+    queryFn: () =>
+      catalogApi.products({ storeId: storeId as string, department: data?.departmentKey }),
     enabled: !!storeId && !!data && data.items.length > 0,
     staleTime: 5 * 60_000,
   });
@@ -62,7 +91,9 @@ export default function CartScreen() {
     .filter((p) => p.inStock && !inBasket.has(p.id))
     .slice(0, 8);
   const subtotal = data?.subtotal ?? 0;
-  const isEmpty = !!data && data.items.length === 0;
+  // Empty means *no baskets at all*, not an empty active one — with the
+  // switcher, an empty active basket cannot happen (it drops out of the list).
+  const isEmpty = !cart.isLoading && baskets.length === 0;
 
   /**
    * What the catalogue would have charged, minus what they actually pay.
@@ -97,10 +128,55 @@ export default function CartScreen() {
         }
       >
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {/*
+            One tab per basket, drawn only when there is more than one. A
+            switcher with a single option is a control that cannot do anything,
+            and a customer who only ever buys groceries would see it forever.
+          */}
+          {baskets.length > 1 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.switcher}
+            >
+              {baskets.map((b) => {
+                const on = b.departmentKey === data?.departmentKey;
+                return (
+                  <Pressable
+                    key={b.departmentKey}
+                    onPress={() => setPicked(b.departmentKey)}
+                    style={[styles.switchTab, on && styles.switchTabOn]}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: on }}
+                    /*
+                     * The selected state is in the label as well as in
+                     * `accessibilityState`, which is belt and braces on purpose:
+                     * this React Native Web version drops `accessibilityState`
+                     * entirely — the rendered tab carries `role` and
+                     * `aria-label` and no `aria-selected` — so on web the label
+                     * is the only thing that says which basket is on screen.
+                     */
+                    accessibilityLabel={`${departmentName(b.departmentKey)} basket, ${b.itemCount} ${b.itemCount === 1 ? 'item' : 'items'}${on ? ', showing' : ''}`}
+                  >
+                    <Text variant="label" color={on ? 'onPrimary' : 'textSecondary'}>
+                      {departmentName(b.departmentKey)}
+                    </Text>
+                    <View style={[styles.switchCount, on && styles.switchCountOn]}>
+                      <Text variant="caption" color={on ? 'onPrimary' : 'textSecondary'}>
+                        {b.itemCount}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          ) : null}
           {/* Items */}
           <View style={styles.titleRow}>
             <View>
-              <Text variant="h2">Your basket</Text>
+              <Text variant="h2">
+                {baskets.length > 1 && data ? departmentName(data.departmentKey) : 'Your basket'}
+              </Text>
               <Text variant="bodySm" color="textSecondary">
                 {data?.itemCount ?? 0} {data?.itemCount === 1 ? 'item' : 'items'} ·{' '}
                 {ETA_MINUTES} min
@@ -186,6 +262,7 @@ export default function CartScreen() {
                         line: {
                           variantId: u.defaultVariantId as string,
                           productId: u.id,
+                          departmentKey: u.departmentKey,
                           name: u.name,
                           unit: u.unit,
                           imageUrl: u.imageUrl,
@@ -261,7 +338,7 @@ export default function CartScreen() {
           <Button
             label={`Checkout · ${formatPKR(total)}`}
             style={styles.cta}
-            onPress={() => router.push('/checkout')}
+            onPress={() => router.push(`/checkout?department=${data?.departmentKey ?? ''}`)}
             trailingIcon={<Icon name="arrow-forward" size={17} color={theme.colors.onPrimary} />}
           />
         </View>
@@ -303,6 +380,27 @@ const styles = StyleSheet.create({
     paddingBottom: 160,
     gap: theme.spacing.md,
   },
+  switcher: { flexDirection: 'row', gap: 8, paddingBottom: 14 },
+  switchTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: theme.radii.pill,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+  },
+  switchTabOn: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  switchCount: {
+    minWidth: 20,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: theme.radii.pill,
+    backgroundColor: theme.colors.surfaceMuted,
+    alignItems: 'center',
+  },
+  switchCountOn: { backgroundColor: 'rgba(255,255,255,0.24)' },
   titleRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
 
   items: {},

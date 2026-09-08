@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -25,7 +25,7 @@ import { qk } from '../src/api/queryKeys';
 import { DeliveryMap } from '../src/components/DeliveryMap';
 import { ETA_MINUTES, estimateDeliveryFee } from '../src/config';
 import { useAuth } from '../src/auth/AuthContext';
-import { useCart, useMergeGuestCart } from '../src/hooks/useCart';
+import { useBasket, useMergeGuestCart } from '../src/hooks/useCart';
 import { haptics } from '../src/lib/haptics';
 import { runOnlineCheckout } from '../src/lib/onlineCheckout';
 import { MobileNumberDrawer } from '../src/components/MobileNumberDrawer';
@@ -47,11 +47,20 @@ const TIPS = [0, 3_000, 5_000, 10_000];
  */
 export default function CheckoutScreen() {
   const router = useRouter();
+  /**
+   * Which basket is being placed.
+   *
+   * Baskets are per department and so are orders — one order is picked and
+   * dispatched from one shop — so "check out my cart" stopped being a complete
+   * instruction the day a customer could hold two. The basket screen passes it;
+   * grocery is the fallback for a link written before this existed.
+   */
+  const { department = 'grocery' } = useLocalSearchParams<{ department?: string }>();
   const qc = useQueryClient();
   const toast = useToast();
   const { user, status } = useAuth();
   const { store } = useCurrentStore();
-  const cart = useCart();
+  const { basket, ...baskets } = useBasket(department);
   const mergeGuestCart = useMergeGuestCart();
   const { notes, reset: resetDraft } = useCheckoutDraft();
   const signedIn = status === 'authenticated' && user !== null;
@@ -98,7 +107,7 @@ export default function CheckoutScreen() {
         // is not the only caller and used to be the only reporter; see the note
         // on that hook.
         const result = await mergeGuestCart();
-        setRestored(result !== null && result.cart.items.length > 0);
+        setRestored(result !== null && result.baskets.some((b) => b.items.length > 0));
       } catch {
         // The basket is still on the device; it merges on the next attempt.
         // Nothing is lost, so nothing needs saying.
@@ -182,7 +191,7 @@ export default function CheckoutScreen() {
     if (added.length === 1) setAddressId(added[0]);
   }, [addresses.data, addressId]);
 
-  const data = cart.data;
+  const data = basket;
   const selected = addresses.data?.find((a) => a.id === addressId) ?? null;
 
   /**
@@ -255,6 +264,7 @@ export default function CheckoutScreen() {
     mutationFn: () =>
       ordersApi.place(
         {
+          department,
           addressId: addressId as string,
           paymentMethod: method,
           ...(notes.trim() ? { notes: notes.trim() } : {}),
@@ -350,7 +360,7 @@ export default function CheckoutScreen() {
         ) : null}
       </View>
 
-      <StateView loading={cart.isLoading} error={cart.error} onRetry={() => cart.refetch()}>
+      <StateView loading={baskets.isLoading} error={baskets.error} onRetry={() => baskets.refetch()}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           {/* Address, with the delivery point shown rather than described. */}
           <View style={styles.outlined}>

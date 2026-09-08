@@ -39,8 +39,16 @@ interface GuestCartState {
   clear: () => void;
   /** The lines in the shape `POST /cart/merge` accepts. */
   mergePayload: () => { storeId: string; items: { variantId: string; quantity: number }[] } | null;
-  /** A `CartView`, so callers cannot tell a guest basket from a real one. */
-  asCartView: () => CartView;
+  /**
+   * The lines as **baskets**, grouped by department, so callers cannot tell a
+   * guest basket from a real one.
+   *
+   * The device stores one flat list because that is what a device has — no
+   * account, no basket rows. Grouping happens here so the split a signed-in
+   * customer sees is the same split a guest sees, and signing in changes
+   * nothing about the shape.
+   */
+  asBaskets: () => CartView[];
 }
 
 const withTotal = (line: Omit<CartItemView, 'lineTotal'>): CartItemView => ({
@@ -102,17 +110,25 @@ export const useGuestCart = create<GuestCartState>()(
         };
       },
 
-      asCartView: () => {
+      asBaskets: () => {
         const { lines, storeId } = get();
-        return {
+        const byDepartment = new Map<string, CartItemView[]>();
+        for (const line of lines) {
+          const bucket = byDepartment.get(line.departmentKey);
+          if (bucket) bucket.push(line);
+          else byDepartment.set(line.departmentKey, [line]);
+        }
+
+        return [...byDepartment.entries()].map(([departmentKey, items]) => ({
           // A sentinel rather than a uuid: nothing may treat this as a server
           // cart id, and a recognisable value makes that obvious in a log.
-          id: 'guest',
+          id: `guest:${departmentKey}`,
+          departmentKey,
           storeId,
-          items: lines,
-          itemCount: lines.reduce((n, l) => n + l.quantity, 0),
-          subtotal: lines.reduce((s, l) => s + l.unitPrice * l.quantity, 0),
-        };
+          items,
+          itemCount: items.reduce((n, l) => n + l.quantity, 0),
+          subtotal: items.reduce((s, l) => s + l.unitPrice * l.quantity, 0),
+        }));
       },
     }),
     {

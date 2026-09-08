@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
 import { Icon, type IconName, theme } from '@haala/ui';
-import { useCart } from '../../src/hooks/useCart';
+import { useCartCount } from '../../src/hooks/useCart';
 
 
 /**
@@ -35,8 +35,7 @@ const tabIcon =
  * shape, so the badge below needs no branch of its own.
  */
 export default function TabsLayout() {
-  const cart = useCart();
-  const itemCount = cart.data?.itemCount ?? 0;
+  const itemCount = useCartCount();
 
   return (
     <Tabs

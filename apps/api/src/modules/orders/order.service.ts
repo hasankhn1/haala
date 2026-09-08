@@ -122,7 +122,7 @@ export const orderService = {
       }
     }
 
-    const cart = await cartRepository.getByUser(userId);
+    const cart = await cartRepository.getByUser(userId, input.department);
     if (!cart?.storeId) throw AppError.badRequest('Your cart is empty');
     const lines = await cartRepository.items(cart.id);
     if (lines.length === 0) throw AppError.badRequest('Your cart is empty');

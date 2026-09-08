@@ -37,6 +37,7 @@ let inStock: { variantId: string; qty: number }[] = [];
  * with one of `inStock` only worked here by luck, and started returning
  * `OUT_OF_STOCK` as soon as the seeded quantities moved.
  */
+let crossDepartment: string | null = null;
 let otherStoreVariant: string | null = null;
 const madeUsers: string[] = [];
 
@@ -101,11 +102,27 @@ before(async () => {
     await call('GET', `/api/v1/catalog/products?storeId=${storeId}&pageSize=40`, { token }),
     'catalogue',
   );
-  inStock = (page.items as Json[])
-    .filter((p) => p.inStock && p.defaultVariantId)
+  /*
+   * Both from the **same department**, deliberately.
+   *
+   * Baskets are per department, so an unfiltered "first two stocked products"
+   * started spanning grocery and clothing the day clothing went live — and
+   * every assertion here about "the basket" then checked whichever of two came
+   * back first. The split across departments is worth testing and is tested
+   * below; these fixtures exist to test everything else.
+   */
+  const groceryProducts = (page.items as Json[]).filter(
+    (p) => p.inStock && p.defaultVariantId && p.departmentKey === 'grocery',
+  );
+  inStock = groceryProducts
     .slice(0, 2)
     .map((p) => ({ variantId: p.defaultVariantId as string, qty: Number(p.availableQty) }));
-  assert.equal(inStock.length, 2, 'the seeded catalogue needs two stocked products');
+  assert.equal(inStock.length, 2, 'the seeded catalogue needs two stocked grocery products');
+
+  crossDepartment =
+    ((page.items as Json[]).find(
+      (p) => p.inStock && p.defaultVariantId && p.departmentKey !== 'grocery',
+    )?.defaultVariantId as string) ?? null;
 
   if (otherStoreId !== storeId) {
     const otherPage = expectOk(
@@ -137,6 +154,21 @@ after(async () => {
   await closeRedis();
 });
 
+/**
+ * The one basket a merge produced.
+ *
+ * `merge` now returns *every* basket, because a device-held basket can span
+ * departments. Every fixture in this suite is grocery, so exactly one comes
+ * back — asserted here rather than assumed, so a future fixture that
+ * accidentally crosses departments fails loudly instead of silently checking
+ * the wrong basket.
+ */
+function onlyBasket(result: Json): Json {
+  const baskets = result.baskets as Json[];
+  assert.equal(baskets.length, 1, `expected one basket, got ${baskets.map((b) => b.departmentKey).join(', ')}`);
+  return baskets[0] as Json;
+}
+
 describe('a guest basket survives signing in', () => {
   it('arrives intact', async () => {
     const t = await signUp('intact');
@@ -151,9 +183,9 @@ describe('a guest basket survives signing in', () => {
       'merge',
     );
 
-    assert.equal(result.cart.items.length, 2, 'both lines made it');
-    assert.equal(result.cart.itemCount, 2);
-    assert.equal(result.cart.storeId, storeId);
+    assert.equal(onlyBasket(result).items.length, 2, 'both lines made it');
+    assert.equal(onlyBasket(result).itemCount, 2);
+    assert.equal(onlyBasket(result).storeId, storeId);
     assert.deepEqual(result.skipped, []);
     assert.deepEqual(result.adjusted, []);
   });
@@ -170,7 +202,7 @@ describe('a guest basket survives signing in', () => {
       }),
       'merge',
     );
-    const line = (result.cart.items as Json[])[0];
+    const line = (onlyBasket(result).items as Json[])[0];
     assert.ok(Number(line.unitPrice) > 0, 'a real price was resolved');
     assert.equal(Number(line.lineTotal), Number(line.unitPrice) * 2);
   });
@@ -192,8 +224,51 @@ describe('a guest basket survives signing in', () => {
       }),
       'merge',
     );
-    const line = (result.cart.items as Json[]).find((i) => i.variantId === inStock[0].variantId);
+    const line = (onlyBasket(result).items as Json[]).find((i) => i.variantId === inStock[0].variantId);
     assert.equal(Number(line?.quantity), 2, 'one on the phone plus one in the account is two');
+  });
+});
+
+describe('a device basket that spans departments', () => {
+  it('splits into one basket per department rather than one mixed basket', async () => {
+    /*
+     * The property the whole per-department split rests on. A phone holds one
+     * list of lines with no notion of department; the server decides where each
+     * belongs from the product's brand, so a guest who added rice and a shirt
+     * must arrive with two baskets — not one basket that cannot be dispatched.
+     */
+    if (!crossDepartment) {
+      assert.fail('the seed needs a stocked product outside grocery for this test to mean anything');
+    }
+
+    const token = await signUp('cross-department');
+    const result = expectOk(
+      await call('POST', '/api/v1/cart/merge', {
+        token,
+        body: {
+          storeId,
+          items: [
+            { variantId: inStock[0]!.variantId, quantity: 1 },
+            { variantId: crossDepartment, quantity: 1 },
+          ],
+        },
+      }),
+      'merge',
+    );
+
+    const baskets = result.baskets as Json[];
+    assert.equal(baskets.length, 2, 'two departments, two baskets');
+    assert.deepEqual(
+      [...new Set(baskets.map((b) => b.departmentKey))].sort(),
+      ['clothing', 'grocery'],
+      'and they are the departments the lines came from',
+    );
+
+    for (const b of baskets) {
+      assert.equal((b.items as Json[]).length, 1, `${b.departmentKey} holds only its own line`);
+      assert.equal(b.storeId, storeId);
+    }
+    assert.deepEqual(result.skipped, [], 'nothing was dropped in the process');
   });
 });
 
@@ -215,7 +290,7 @@ describe('what cannot be merged is reported, never dropped', () => {
       'merge with one bad line',
     );
 
-    assert.equal(result.cart.items.length, 1, 'the good line survived');
+    assert.equal(onlyBasket(result).items.length, 1, 'the good line survived');
     assert.equal(result.skipped.length, 1, 'and the bad one was reported');
     assert.equal((result.skipped as Json[])[0].variantId, ghost);
     assert.ok((result.skipped as Json[])[0].reason, 'with a reason worth showing');
@@ -234,7 +309,7 @@ describe('what cannot be merged is reported, never dropped', () => {
       'merge more than exists',
     );
 
-    const line = (result.cart.items as Json[])[0];
+    const line = (onlyBasket(result).items as Json[])[0];
     assert.ok(
       Number(line.quantity) <= target.qty,
       `merged ${line.quantity} but only ${target.qty} exist`,
@@ -263,8 +338,8 @@ describe('what cannot be merged is reported, never dropped', () => {
     );
 
     assert.equal(result.replacedOtherStore, true, 'the caller must be told');
-    assert.equal(result.cart.storeId, storeId, 'the basket they were just filling wins');
-    assert.equal(result.cart.items.length, 1, 'and the other store’s lines are gone');
+    assert.equal(onlyBasket(result).storeId, storeId, 'the basket they were just filling wins');
+    assert.equal(onlyBasket(result).items.length, 1, 'and the other store’s lines are gone');
   });
 
   it('refuses an unauthenticated merge', async () => {

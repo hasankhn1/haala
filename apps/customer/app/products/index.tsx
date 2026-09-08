@@ -61,6 +61,17 @@ export default function ProductsScreen() {
 
   const { qtyByProduct, busyVariantId, addProduct, setQty, cart } = useProductActions(storeId);
 
+  /*
+   * The foot bar describes whichever basket this screen represents: one
+   * department's when opened from a shop, everything when opened from search.
+   * A bar totalling groceries above a button that opens the clothing basket is
+   * the kind of small lie that makes a checkout feel untrustworthy.
+   */
+  const baskets = cart.data?.baskets ?? [];
+  const shown = department ? baskets.filter((b) => b.departmentKey === department) : baskets;
+  const barCount = shown.reduce((n, b) => n + b.itemCount, 0);
+  const barTotal = shown.reduce((n, b) => n + b.subtotal, 0);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await products.refetch();
@@ -189,11 +200,11 @@ export default function ProductsScreen() {
         </StateView>
       )}
 
-      {cart.data && cart.data.itemCount > 0 ? (
+      {barCount > 0 ? (
         <View style={styles.footer}>
           <CTABar
-            leftTop={`${cart.data.itemCount} items`}
-            leftBottom={formatPKR(cart.data.subtotal)}
+            leftTop={`${barCount} item${barCount === 1 ? '' : 's'}`}
+            leftBottom={formatPKR(barTotal)}
             buttonLabel="View Cart  →"
             onPress={() => router.push('/(tabs)/cart')}
           />

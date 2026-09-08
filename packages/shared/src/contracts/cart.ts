@@ -40,7 +40,14 @@ export type MergeCartInput = z.infer<typeof mergeCartSchema>;
  * reported and the client can say so.
  */
 export interface CartMergeResult {
-  cart: CartView;
+  /**
+   * Every basket afterwards, not one.
+   *
+   * A device-held basket can hold several departments, so a merge fans out
+   * across baskets — returning only the last one touched would leave the app
+   * showing a switcher missing the tabs it just created.
+   */
+  baskets: CartView[];
   /** Could not be added at all. */
   skipped: { variantId: string; reason: string }[];
   /** Added, but fewer than asked for, because that is what is in stock. */
@@ -62,6 +69,14 @@ export type UpdateCartItemInput = z.infer<typeof updateCartItemSchema>;
 export interface CartItemView {
   /** The variant is what the line holds and what quantity edits address. */
   variantId: string;
+  /**
+   * Which basket the line belongs in.
+   *
+   * On the server this is a property of the basket, not the line — but a guest
+   * basket is a flat list on a device with no baskets to belong to, so the line
+   * has to carry it for the device to group them the same way.
+   */
+  departmentKey: string;
   /** Kept so a line can still link back to its product page. */
   productId: string;
   name: string;
@@ -77,8 +92,42 @@ export interface CartItemView {
 
 export interface CartView {
   id: string;
+  /**
+   * Which department's basket this is. A customer buying rice and a shirt holds
+   * two, and they check out separately — an order is picked and dispatched from
+   * one shop, so a single order spanning a dark store and a boutique is not a
+   * thing that exists.
+   */
+  departmentKey: string;
   storeId: string | null;
   items: CartItemView[];
   itemCount: number;
   subtotal: number; // paisa
+  /**
+   * True only on the response that emptied it. A basket untouched for
+   * `CART_TTL_DAYS` is cleared on the next read, and the app gets one chance to
+   * say so — restoring an eight-day-old basket at checkout, priced and stocked
+   * as it was, is a worse surprise than an empty one.
+   */
+  expired?: boolean;
 }
+
+/**
+ * Every basket a customer holds.
+ *
+ * One response rather than one request per department: the Cart tab's switcher
+ * needs each basket's count to draw itself, and fetching them separately would
+ * let the tabs disagree with the basket under them.
+ */
+export interface CartsView {
+  baskets: CartView[];
+}
+
+/**
+ * How long a basket survives without being touched.
+ *
+ * Shared because the app says it out loud ("baskets are kept for 7 days"), and
+ * a number quoted in copy that disagrees with the one enforced by the server is
+ * how you get a support ticket.
+ */
+export const CART_TTL_DAYS = 7;

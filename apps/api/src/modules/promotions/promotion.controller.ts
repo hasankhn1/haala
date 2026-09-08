@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { AppError } from '../../common/errors';
 import { sendSuccess } from '../../common/http';
 import { cartService } from '../cart/cart.service';
 import { promotionService } from './promotion.service';
@@ -11,7 +12,12 @@ export const promotionController = {
    */
   async validate(req: Request, res: Response): Promise<void> {
     const userId = req.auth!.userId;
-    const { subtotal, deliveryFee } = await cartService.totals(userId);
+    // A promo is quoted against the basket it will be placed against — baskets
+    // are per department and so are orders, so a code cannot be validated
+    // against the combined total of an order nobody is placing.
+    const department = req.body.department as string | undefined;
+    if (!department) throw AppError.badRequest('department is required');
+    const { subtotal, deliveryFee } = await cartService.totals(userId, department);
     const quote = await promotionService.quote(userId, req.body.code, subtotal, deliveryFee);
     const { promotionId: _ignored, ...view } = quote;
     sendSuccess(res, view);

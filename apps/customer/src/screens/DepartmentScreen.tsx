@@ -18,6 +18,7 @@ import {
 } from '@haala/ui';
 import { catalogApi } from '../api/endpoints';
 import { qk } from '../api/queryKeys';
+import { useBasket } from '../hooks/useCart';
 import { useProductActions } from '../hooks/useProductActions';
 import { useAuth } from '../auth/AuthContext';
 import { useCurrentStore } from '../store/useCurrentStore';
@@ -72,7 +73,14 @@ export function DepartmentScreen({ department }: { department: string }) {
     // A banner with no department belongs to the platform and shows everywhere.
     (b) => b.departmentKey === null || b.departmentKey === department,
   );
-  const { cart, qtyByProduct, busyVariantId, addProduct, setQty } = useProductActions(storeId);
+  const { qtyByProduct, busyVariantId, addProduct, setQty } = useProductActions(storeId);
+  /*
+   * This department's basket, not every basket. The bar at the foot of a shop
+   * should count what is in *that* shop — showing a grocery total while
+   * standing in Clothing, on a button that then opens the clothing basket,
+   * would be three kinds of wrong at once.
+   */
+  const { basket, refetch: refetchBaskets } = useBasket(department);
 
   const shelfCategories = (categories.data ?? []).slice(0, SHELF_COUNT);
 
@@ -90,13 +98,13 @@ export function DepartmentScreen({ department }: { department: string }) {
     setRefreshing(true);
     await Promise.allSettled([
       categories.refetch(),
-      cart.refetch(),
+      refetchBaskets(),
       ...shelves.map((s) => s.refetch()),
     ]);
     setRefreshing(false);
     // `shelves` is a fresh array each render; depending on it would loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categories, cart]);
+  }, [categories, refetchBaskets]);
 
   const initials = (user?.name ?? 'H')
     .split(' ')
@@ -108,7 +116,7 @@ export function DepartmentScreen({ department }: { department: string }) {
 
   // Progress toward free delivery, straight off the shared pricing rule so the
   // bar can never promise a threshold the server doesn't honour.
-  const subtotal = cart.data?.subtotal ?? 0;
+  const subtotal = basket.subtotal;
   const remaining = Math.max(FREE_DELIVERY_THRESHOLD - subtotal, 0);
   const freeDeliveryPct = Math.min(subtotal / FREE_DELIVERY_THRESHOLD, 1);
   const freeDeliveryCopy =
@@ -342,13 +350,15 @@ export function DepartmentScreen({ department }: { department: string }) {
         })}
       </ScrollView>
 
-      {cart.data && cart.data.itemCount > 0 ? (
+      {basket.itemCount > 0 ? (
         <View style={styles.footer}>
           <CTABar
-            leftTop={`${cart.data.itemCount} items`}
-            leftBottom={formatPKR(cart.data.subtotal)}
+            leftTop={`${basket.itemCount} item${basket.itemCount === 1 ? '' : 's'}`}
+            leftBottom={formatPKR(basket.subtotal)}
             buttonLabel="View Cart  →"
-            onPress={() => router.push('/(tabs)/cart')}
+            // Opens the switcher already on this department, so the basket the
+            // bar was describing is the one that appears.
+            onPress={() => router.push(`/(tabs)/cart?department=${department}`)}
           />
         </View>
       ) : null}

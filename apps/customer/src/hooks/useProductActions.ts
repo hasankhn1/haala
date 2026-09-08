@@ -19,6 +19,7 @@ type LineSnapshot = Omit<CartItemView, 'lineTotal' | 'quantity'>;
 const lineFromProduct = (p: ProductView): LineSnapshot => ({
   variantId: p.defaultVariantId as string,
   productId: p.id,
+  departmentKey: p.departmentKey,
   name: p.name,
   unit: p.unit,
   imageUrl: p.imageUrl,
@@ -31,6 +32,8 @@ const lineFromProduct = (p: ProductView): LineSnapshot => ({
 const lineFromVariant = (p: ProductView, v: ProductVariantView): LineSnapshot => ({
   variantId: v.id,
   productId: p.id,
+  // The variant's department is its product's; a size does not change shops.
+  departmentKey: p.departmentKey,
   name: p.name,
   unit: v.label,
   imageUrl: p.imageUrl,
@@ -51,7 +54,10 @@ export function useProductActions(storeId: string | null) {
    */
   const qtyByProduct = useMemo(() => {
     const map = new Map<string, number>();
-    cart.data?.items.forEach((i) => map.set(i.variantId, i.quantity));
+    // Across every basket: a product card on the home screen sits outside any
+    // one department, and its stepper must show the quantity wherever the line
+    // happens to live.
+    cart.data?.baskets.forEach((b) => b.items.forEach((i) => map.set(i.variantId, i.quantity)));
     return map;
   }, [cart.data]);
 

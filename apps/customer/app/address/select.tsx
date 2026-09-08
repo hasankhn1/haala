@@ -77,7 +77,9 @@ export default function SelectAddressScreen() {
    * is refused for a basket from the other. That refusal landed on the pay
    * button, which is the one place the design says never to fail.
    */
-  const cartStoreId = useCart().data?.storeId ?? null;
+  // Every basket is attached to the same store — a basket is filled from where
+  // the customer is standing — so the first one answers for all of them.
+  const cartStoreId = useCart().data?.baskets[0]?.storeId ?? null;
   const [blockingStore, setBlockingStore] = useState<string | null>(null);
   const [locating, setLocating] = useState(true);
 
