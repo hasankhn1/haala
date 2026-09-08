@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  isDegeneratePolygon,
+  isSelfIntersectingPolygon,
+  storePolygonPointSchema,
+  type StorePolygonPoint,
+} from '../store-polygon';
 
 /**
  * Ops/dashboard contracts. These are the write surfaces an operator needs that
@@ -71,11 +77,6 @@ export interface OpsCatalogRow {
  * ops when talking about a site, so it's required on create and immutable
  * after — renaming a store is fine, re-keying it silently is not.
  */
-const storePolygonPointSchema = z.object({
-  lat: z.number().min(-90).max(90),
-  lng: z.number().min(-180).max(180),
-});
-
 export const createStoreSchema = z.object({
   name: z.string().min(2).max(120),
   code: z
@@ -94,9 +95,37 @@ export const createStoreSchema = z.object({
    * Precise delivery boundary. Optional — a real, irregular area (e.g. DHA
    * Peshawar) can't be represented by a circle, but most stores don't need
    * one and just use `deliveryRadiusMeters`. Null/omitted means "not drawn
-   * yet"; when provided, must be a real shape (≥3 points).
+   * yet"; when provided, must be a real, simple shape: 3-200 points (capped
+   * so a huge pasted list can't sit on `GET /stores`, called on every
+   * customer app load), not all collinear, and not self-intersecting — a
+   * degenerate ring would silently make the store unserviceable to everyone.
    */
-  polygon: z.array(storePolygonPointSchema).min(3).nullable().optional(),
+  polygon: z
+    .array(storePolygonPointSchema)
+    .min(3)
+    .max(200)
+    .nullable()
+    .optional()
+    .superRefine((points, ctx) => {
+      if (!points) return;
+      // Order matters: a self-intersecting ring's "signed area" can cancel
+      // out to ~zero (its crossing lobes wind in opposite directions), which
+      // reads as collinear even though the points aren't. Collinearity is
+      // only a meaningful question once the shape is confirmed simple.
+      if (isSelfIntersectingPolygon(points)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Boundary edges cross each other — that is not a simple shape',
+        });
+        return;
+      }
+      if (isDegeneratePolygon(points)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Boundary points are collinear — that traces a line, not an area',
+        });
+      }
+    }),
   isActive: z.boolean().default(true),
 });
 export type CreateStoreInput = z.infer<typeof createStoreSchema>;
@@ -114,6 +143,6 @@ export interface OpsStoreView {
   latitude: number;
   longitude: number;
   deliveryRadiusMeters: number;
-  polygon: { lat: number; lng: number }[] | null;
+  polygon: StorePolygonPoint[] | null;
   isActive: boolean;
 }

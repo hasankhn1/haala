@@ -71,7 +71,7 @@ export default function SelectAddressScreen() {
    *
    * An order is placed against `cart.storeId`, and the server requires *that*
    * store to reach the address (`order.service.ts`, via
-   * `isWithinDeliveryRadius`). This screen used to accept an address if **any**
+   * `isWithinDeliveryArea`). This screen used to accept an address if **any**
    * store served it, which is a different question — the two active Peshawar
    * stores are ~23 km apart with 6 km radii, so an address one of them serves
    * is refused for a basket from the other. That refusal landed on the pay
@@ -182,8 +182,7 @@ export default function SelectAddressScreen() {
       toast.show('Address saved');
       router.back();
     },
-    onError: (e) =>
-      toast.show(messageFor(e, 'Could not save address'), 'error'),
+    onError: (e) => toast.show(messageFor(e, 'Could not save address'), 'error'),
   });
 
   const confirm = () => {
@@ -206,7 +205,12 @@ export default function SelectAddressScreen() {
 
   return (
     <View style={styles.root}>
-      <MapPicker center={center} onCenterChange={setCenter} tip={resolved?.area} style={styles.map} />
+      <MapPicker
+        center={center}
+        onCenterChange={setCenter}
+        tip={resolved?.area}
+        style={styles.map}
+      />
 
       {/* Floating search / back bar */}
       <SafeAreaView style={styles.topBar} edges={['top', 'left', 'right']} pointerEvents="box-none">
@@ -269,8 +273,8 @@ export default function SelectAddressScreen() {
                 <Text variant="bodyStrong">We don’t deliver here yet</Text>
                 <Text variant="bodySm" color="textSecondary">
                   {blockingStore
-                    ? `This spot is outside ${blockingStore}’s delivery radius, and that is the store your basket is from. Move the pin closer, or empty the basket to order from another store.`
-                    : 'This spot is outside every store’s delivery radius. Try moving the pin closer to a serviced area.'}
+                    ? `This spot is outside ${blockingStore}’s delivery area, and that is the store your basket is from. Move the pin closer, or empty the basket to order from another store.`
+                    : 'This spot is outside every store’s delivery area. Try moving the pin closer to a serviced area.'}
                 </Text>
               </View>
             </View>

@@ -73,9 +73,7 @@ export default function HomeScreen() {
   const remaining = Math.max(FREE_DELIVERY_THRESHOLD - subtotal, 0);
   const freeDeliveryPct = Math.min(subtotal / FREE_DELIVERY_THRESHOLD, 1);
   const freeDeliveryCopy =
-    remaining === 0
-      ? 'Delivery is on us 🎉'
-      : `${formatPKR(remaining)} away from free delivery`;
+    remaining === 0 ? 'Delivery is on us 🎉' : `${formatPKR(remaining)} away from free delivery`;
 
   const openCategory = (c: CategoryView) => router.push(`/products?categoryId=${c.id}`);
 
@@ -170,7 +168,7 @@ export default function HomeScreen() {
           <EmptyState
             emoji="📍"
             title="We don’t deliver here yet"
-            subtitle={`${address?.area ?? 'This address'} is outside every store’s delivery radius. Choose a different delivery address to start shopping.`}
+            subtitle={`${address?.area ?? 'This address'} is outside every store’s delivery area. Choose a different delivery address to start shopping.`}
             actionLabel="Change address"
             onAction={() => router.push('/addresses')}
           />
@@ -217,7 +215,10 @@ export default function HomeScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.rail}
           >
-            <Pressable style={[styles.banner, styles.bannerEmber]} onPress={() => router.push('/products')}>
+            <Pressable
+              style={[styles.banner, styles.bannerEmber]}
+              onPress={() => router.push('/products')}
+            >
               <Text variant="h3" color="onPrimary" style={styles.bannerTitle}>
                 Fresh fruit{'\n'}from Swat
               </Text>
@@ -227,7 +228,10 @@ export default function HomeScreen() {
                 </Text>
               </View>
             </Pressable>
-            <Pressable style={[styles.banner, styles.bannerInk]} onPress={() => router.push('/products')}>
+            <Pressable
+              style={[styles.banner, styles.bannerInk]}
+              onPress={() => router.push('/products')}
+            >
               <Text variant="h3" color="onPrimary" style={styles.bannerTitle}>
                 Free delivery{'\n'}on your first
               </Text>
@@ -269,18 +273,24 @@ export default function HomeScreen() {
                       name={item.name}
                       unit={item.unit}
                       price={item.price}
-                    original={item.basePrice}
+                      original={item.basePrice}
                       imageUrl={item.imageUrl}
                       inStock={item.inStock}
-                      quantity={qtyByProduct.get(item.defaultVariantId ?? "") ?? 0}
+                      quantity={qtyByProduct.get(item.defaultVariantId ?? '') ?? 0}
                       busy={busyVariantId === item.defaultVariantId}
                       onPress={() => router.push(`/product/${item.id}`)}
                       onAdd={() => addProduct(item)}
                       onIncrement={() =>
-                        setQty(item.defaultVariantId ?? "", (qtyByProduct.get(item.defaultVariantId ?? "") ?? 0) + 1)
+                        setQty(
+                          item.defaultVariantId ?? '',
+                          (qtyByProduct.get(item.defaultVariantId ?? '') ?? 0) + 1,
+                        )
                       }
                       onDecrement={() =>
-                        setQty(item.defaultVariantId ?? "", (qtyByProduct.get(item.defaultVariantId ?? "") ?? 0) - 1)
+                        setQty(
+                          item.defaultVariantId ?? '',
+                          (qtyByProduct.get(item.defaultVariantId ?? '') ?? 0) - 1,
+                        )
                       }
                     />
                   )}

@@ -1,18 +1,14 @@
+import type { StorePolygonPoint } from '@haala/shared';
+
 /** Great-circle distance between two lat/lng points, in metres. */
-export const haversineMeters = (
-  aLat: number,
-  aLng: number,
-  bLat: number,
-  bLng: number,
-): number => {
+export const haversineMeters = (aLat: number, aLng: number, bLat: number, bLng: number): number => {
   const R = 6_371_000; // earth radius (m)
   const toRad = (d: number): number => (d * Math.PI) / 180;
   const dLat = toRad(bLat - aLat);
   const dLng = toRad(bLng - aLng);
   const lat1 = toRad(aLat);
   const lat2 = toRad(bLat);
-  const h =
-    Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return Math.round(2 * R * Math.asin(Math.sqrt(h)));
 };
 
@@ -22,11 +18,7 @@ export const haversineMeters = (
  * not repeat). A point exactly on an edge may go either way, which is fine
  * here: a delivery boundary doesn't need edge-pixel precision.
  */
-const isInsidePolygon = (
-  polygon: { lat: number; lng: number }[],
-  lat: number,
-  lng: number,
-): boolean => {
+const isInsidePolygon = (polygon: StorePolygonPoint[], lat: number, lng: number): boolean => {
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
     const pi = polygon[i]!;
@@ -50,17 +42,18 @@ const isInsidePolygon = (
  * once already (`isCarryingForCustomer`); any new surface that asks "do we
  * deliver here?" must call this rather than re-derive it.
  *
- * A drawn `polygon` (≥3 points) takes precedence — a circle can't represent a
- * real, lopsided area like DHA Peshawar. No polygon (or fewer than 3 points,
- * which isn't a shape) falls back to the radius, so a store nobody has drawn
- * a boundary for yet keeps working exactly as before.
+ * Named for the area, not the radius: a drawn `polygon` (≥3 points) takes
+ * precedence — a circle can't represent a real, lopsided area like DHA
+ * Peshawar. No polygon (or fewer than 3 points, which isn't a shape) falls
+ * back to `deliveryRadiusMeters`, so a store nobody has drawn a boundary for
+ * yet keeps working exactly as before.
  */
-export const isWithinDeliveryRadius = (
+export const isWithinDeliveryArea = (
   store: {
     latitude: number;
     longitude: number;
     deliveryRadiusMeters: number;
-    polygon?: { lat: number; lng: number }[] | null;
+    polygon?: StorePolygonPoint[] | null;
   },
   lat: number,
   lng: number,
