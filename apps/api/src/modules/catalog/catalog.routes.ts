@@ -16,6 +16,8 @@ const router: Router = Router();
  */
 router.use(optionalAuthenticate);
 
+router.get('/home', asyncHandler(catalogController.home));
+router.get('/departments', asyncHandler(catalogController.departments));
 router.get('/categories', asyncHandler(catalogController.categories));
 router.get(
   '/products',

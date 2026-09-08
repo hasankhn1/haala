@@ -1,12 +1,22 @@
 import { and, asc, count, eq, ilike, sql } from 'drizzle-orm';
 import type { ProductsQuery } from '@haala/shared';
 import { db, type Executor } from '../../db/client';
-import { brands, categories, inventory, productVariants, products, type Category } from '../../db/schema';
+import {
+  brands,
+  businessTypes,
+  categories,
+  inventory,
+  productVariants,
+  products,
+  type BusinessType,
+  type Category,
+} from '../../db/schema';
 
 export interface ProductWithStock {
   id: string;
   brandName: string;
   brandSlug: string;
+  departmentKey: string;
   name: string;
   slug: string;
   unit: string;
@@ -44,6 +54,92 @@ const availableExpr = sql<number>`case when coalesce(${inventory.isAvailable}, t
 const sellableBrand = eq(brands.status, 'active');
 
 export const catalogRepository = {
+  /**
+   * Departments — the business types, as the marketplace home shows them.
+   *
+   * Returns **every** active type, live or not, because a department with
+   * nothing in it is still worth showing: "Bakery — coming soon" tells a
+   * customer the shop is growing, where an absence tells them nothing. Which is
+   * why `hasStock` is returned rather than used as a filter.
+   *
+   * `hasStock` deliberately asks the *same* question as `listCategories` above
+   * and `listProducts` below: a sellable brand, an active product, an inventory
+   * row. Asking a looser question here — "has any product" — is the specific
+   * mistake that once put an empty "Cakes" tile on the categories screen, and
+   * at this level it would put a whole department behind a card that opens onto
+   * nothing.
+   *
+   * `business_types.id` is written out in the subquery rather than interpolated
+   * as `${businessTypes.id}`. Drizzle only qualifies a column inside a `sql`
+   * template when the *outer* query has a join, and this one has none. Tried
+   * both ways against the database: the interpolated form fails outright here,
+   * and the hand-written one returns exactly what the equivalent raw SQL does.
+   * Elsewhere in this codebase the same mistake has been *silent* — a count
+   * that self-compared and returned 0 for every row — so the rule is worth
+   * keeping whichever way it happens to fail today.
+   */
+  async listDepartments(ex: Executor = db): Promise<Array<BusinessType & { hasStock: boolean }>> {
+    return ex
+      .select({
+        id: businessTypes.id,
+        key: businessTypes.key,
+        name: businessTypes.name,
+        sortOrder: businessTypes.sortOrder,
+        isActive: businessTypes.isActive,
+        createdAt: businessTypes.createdAt,
+        updatedAt: businessTypes.updatedAt,
+        hasStock: sql<boolean>`exists (
+          select 1 from brands b
+          join products p on p.brand_id = b.id
+          join product_variants pv on pv.product_id = p.id
+          join inventory i on i.variant_id = pv.id
+          where b.business_type_id = business_types.id
+            and b.status = 'active'
+            and p.is_active = true
+        )`,
+      })
+      .from(businessTypes)
+      .where(eq(businessTypes.isActive, true))
+      .orderBy(asc(businessTypes.sortOrder), asc(businessTypes.name));
+  },
+
+  /**
+   * Categories for the home screen's chips, each tagged with its department.
+   *
+   * Separate from `listCategories` because the chip needs one thing that view
+   * does not carry: which business type the owning brand trades in, so the chip
+   * can wear that department's tint. Same two filters as below — a sellable
+   * brand, and something actually in stock — so a chip never opens onto an
+   * empty shelf.
+   */
+  async listHomeCategories(
+    ex: Executor = db,
+  ): Promise<Array<{ id: string; name: string; departmentKey: string }>> {
+    return ex
+      .select({
+        id: categories.id,
+        name: categories.name,
+        departmentKey: businessTypes.key,
+      })
+      .from(categories)
+      .innerJoin(brands, eq(brands.id, categories.brandId))
+      .innerJoin(businessTypes, eq(businessTypes.id, brands.businessTypeId))
+      .where(
+        and(
+          eq(categories.isActive, true),
+          eq(businessTypes.isActive, true),
+          sellableBrand,
+          sql`exists (
+            select 1 from products
+            join product_variants on product_variants.product_id = products.id
+            join inventory on inventory.variant_id = product_variants.id
+            where products.category_id = ${categories.id} and products.is_active = true
+          )`,
+        ),
+      )
+      .orderBy(asc(categories.sortOrder), asc(categories.name));
+  },
+
   /**
    * Categories a shopper may browse.
    *
@@ -137,6 +233,7 @@ export const catalogRepository = {
         id: products.id,
         brandName: brands.name,
         brandSlug: brands.slug,
+        departmentKey: businessTypes.key,
         name: products.name,
         slug: products.slug,
         unit: products.unit,
@@ -150,6 +247,7 @@ export const catalogRepository = {
       })
       .from(products)
       .innerJoin(brands, eq(brands.id, products.brandId))
+      .innerJoin(businessTypes, eq(businessTypes.id, brands.businessTypeId))
       .innerJoin(productVariants, defaultVariantOn)
       .innerJoin(inventory, joinOn)
       .where(where)
@@ -185,6 +283,7 @@ export const catalogRepository = {
         id: products.id,
         brandName: brands.name,
         brandSlug: brands.slug,
+        departmentKey: businessTypes.key,
         name: products.name,
         slug: products.slug,
         unit: products.unit,
@@ -198,6 +297,7 @@ export const catalogRepository = {
       })
       .from(products)
       .innerJoin(brands, eq(brands.id, products.brandId))
+      .innerJoin(businessTypes, eq(businessTypes.id, brands.businessTypeId))
       .leftJoin(
         productVariants,
         and(eq(productVariants.productId, products.id), eq(productVariants.sortOrder, 0)),

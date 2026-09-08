@@ -38,6 +38,16 @@ export interface ProductView {
    */
   brandName: string;
   brandSlug: string;
+  /**
+   * Which department the product trades in, from its brand’s business type.
+   *
+   * The marketplace home needs it for two things the comp specifies per
+   * department rather than per product: the small label above the name, and
+   * the card’s image height — 150px for grocery, 180px elsewhere, because a
+   * garment photographed on a person needs vertical room a tin of beans does
+   * not.
+   */
+  departmentKey: string;
   id: string;
   name: string;
   slug: string;
@@ -62,4 +72,26 @@ export interface ProductView {
    * loading every size would multiply each row by its variant count.
    */
   variants?: ProductVariantView[];
+}
+
+/**
+ * A department on the marketplace home — one business type, as a shopper sees
+ * it.
+ *
+ * Data only. The colour, the examples line, the CTA and the flag live in
+ * `departmentTints` (`@haala/design-tokens`) and `departmentCopy`
+ * (`business-types.ts`), keyed by `key`. Presentation does not belong in a
+ * response, and keeping it out is what lets the same endpoint serve a
+ * department the apps have not been taught to style yet.
+ */
+export interface DepartmentView {
+  key: string;
+  name: string;
+  sortOrder: number;
+  /**
+   * Whether there is anything to buy in it right now — a sellable brand with an
+   * active, stocked product. Drives "coming soon" without anybody having to
+   * remember to flip a flag when the first product lands.
+   */
+  isLive: boolean;
 }
