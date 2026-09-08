@@ -59,10 +59,10 @@ follows its shape.
 
 `auth` · `users` · `addresses` · `stores` · `catalog` · `inventory` · `cart` ·
 `orders` · `payments` · `riders` · `delivery` · `promotions` · `notifications` ·
-`analytics` · `brands` · `business-types` · `brand` · `uploads`
+`analytics` · `brands` · `business-types` · `brand` · `uploads` · `home`
 
-All implemented. **auth**, **users**, **payments** (abstraction + COD + stub +
-Safepay), the full **customer core** — **addresses**, **stores**
+All implemented. **auth**, **users**, **payments** (abstraction, COD, a local
+stub and Safepay), the full **customer core** — **addresses**, **stores**
 (serviceability), **catalog** (products + per-store inventory), **inventory**
 (+ reservation helpers), **cart**, **orders** (transactional placement/cancel/
 status + live timeline) — **fulfilment**: **riders** (profile, availability,
@@ -74,6 +74,11 @@ location) and **delivery** (claim + workflow) — and **growth**: **promotions**
 paired with a code registry), **brand** (a vendor's own catalogue —
 `/brand/*`, tenant-scoped) and **uploads** (presigned R2 image uploads). See
 [Multi-tenancy](#multi-tenancy) below.
+
+**Marketplace** (September 2026): **home** (the editorial banners ops manages
+for the customer home screen). The customer app's home is now a directory of
+departments rather than a grocery catalogue — see
+[The marketplace home](#the-marketplace-home).
 
 ### Fulfilment
 
@@ -160,8 +165,13 @@ createPayment · verifyPayment · handleWebhook · refundPayment · getPaymentSt
 ```
 
 - **COD** is fully functional (pending → paid when the rider collects).
-- **Online** uses a **stub** provider today; swap in Safepay/JazzCash later by
-  writing one class and registering it — no checkout/order changes.
+- **Online** is **Safepay**, implemented and registered. Which one runs is
+  `PAYMENT_ONLINE_PROVIDER`: `stub` locally, `safepay` where real credentials
+  exist. Adding JazzCash or Easypaisa is one class and one `register()` call —
+  checkout and orders are untouched.
+- Safepay quotes in **decimal rupees** while everything here is integer paisa.
+  That conversion is the highest-consequence arithmetic in the codebase and has
+  its own tests (`providers/safepay.money.test.ts`).
 - Payment creation is **idempotent** on an idempotency key. Webhooks use the
   raw request body for signature verification. Raw card data is never stored.
 
@@ -183,7 +193,78 @@ repository call so they commit or roll back atomically:
 - **Payment confirmation** — update payment + order status together.
 - **Inventory reservation / release**.
 
+## The marketplace home
+
+"Haala is the brand. Grocery is a department." The customer app's home lists
+departments; the grocery catalogue it used to be moved wholesale to
+`src/screens/DepartmentScreen.tsx`, which now takes a business-type key and
+scopes everything to it.
+
+**A department is data, not a screen.** `/catalog/departments` returns every
+active `business_types` row with an `isLive` flag that asks the same question
+the catalogue asks — is there stock — so a department goes live by receiving
+inventory and nothing is deployed. Colour comes from `departmentTints`, copy
+from `departmentCopy` in `@haala/shared`, and both fall back safely for a type
+the apps have not been taught yet.
+
+**One request feeds the screen.** `GET /catalog/home` returns departments,
+banners, popular categories and popular products together; it previously made
+three and settled in three separate jerks.
+
+**Scoping.** `/catalog/products` and `/catalog/categories` both take an optional
+`department`. Absent, they answer across the whole marketplace, which is what
+the Categories tab and search want. Present, they answer for one shop —
+including the paginated `total`, whose count query has to repeat the join or it
+reports the whole catalogue under one department's heading.
+
+`ProductView` carries `departmentKey`, from the product's brand's business type.
+The home grid needs it to label a card and, in a department's own grid, to size
+its image.
+
+### Caching
+
+`common/cache.ts` is a read-through wrapper over the existing Redis client.
+`GET /catalog/home` uses it with a 5-minute TTL, keyed by store — price is a
+per-store override and stock is per-store outright, so a shared key would serve
+one dark store's shelf to a shopper standing beside another. The `storeId` is
+validated to a uuid *before* it reaches the key, because it becomes part of the
+key: unchecked, anyone could mint unlimited entries from the public endpoint.
+
+**It fails open, in two senses, and the second is easy to miss.** Redis errors
+are swallowed and the request computes fresh. But ioredis also *queues* commands
+while disconnected and retries with a growing backoff — with Redis stopped the
+endpoint kept answering 200 with correct data in 1.2s, then 4.5s, then 7.8s.
+Correct and unusable. Every Redis call here is bounded at 150ms, which turns
+that into a flat ~320ms that recovers on its own.
+
+Banner and business-type writes invalidate `cache:home:*` explicitly, so the
+dashboard feels immediate rather than eventually-correct. `SCAN`, not `KEYS` —
+the same Redis holds refresh tokens, and a blocking `KEYS` would stall sign-ins.
+
+**Nothing per-customer may go in there.** The payload is shared by everyone near
+a store. "Buy it again" (`GET /orders/recently-ordered`) is a separate
+authenticated request for exactly that reason, and prices from the catalogue
+rather than the receipt — the seed has an item bought at PKR 2,200 that now
+sells for 1,870, and a card showing the old price would be a lie the customer
+finds at checkout.
+
+### Homepage CMS
+
+`home_banners` is the one part of the home screen ops could not previously
+manage. Departments and brands already had on/off switches where they are
+defined, so the dashboard's **Homepage** page adds only banners and links across
+to the other two rather than duplicating them.
+
+`department_key` is plain text, not a foreign key: retiring a department should
+retire its promo, not delete the artwork. A banner whose department is not live
+is withheld from the app instead, and the dashboard row says so — checking the
+same `isLive` the API checks, not merely whether the department is offered.
+
+The column holds an **object key**, not a URL, so moving buckets or putting a
+CDN in front costs nothing.
+
 ## Data model
+
 
 Money is stored as **integer paisa** everywhere (never floats); formatted only
 at display via `formatPKR`. The delivery-fee rule lives once, in
@@ -195,7 +276,34 @@ Core tables: `users`, `addresses`, `stores`, `categories`, `products`,
 `product_variants` (the sellable sizes — inventory and baskets count these, not
 products), `inventory` (per-store stock with reserved qty), `carts`/`cart_items`,
 `orders`/`order_items`/`order_status_history`, `payments`/`refunds`, `riders`,
-`delivery_assignments`, `promotions`, `notifications`.
+`delivery_assignments`, `promotions`, `notifications`, `home_banners`.
+
+### Baskets are per department
+
+`carts` carries `department_key` and is unique on `(user_id, department_key)`,
+replacing one basket per customer. Somebody buying rice and a shirt holds two,
+and they check out separately: an order is picked and dispatched from one shop,
+so a single order spanning a dark store and a boutique is not a thing that can
+be fulfilled. `POST /orders` therefore names a department.
+
+**Which basket something lands in is derived from the product's brand,
+server-side.** There is no request field for it — accepting one would let a
+caller put a shirt in the grocery basket, and the split rests on that not being
+possible. A guest device holds one flat list with no notion of departments, so
+`POST /cart/merge` fans out across baskets and each stored line carries its
+department so the device groups the way the server does.
+
+`GET /cart` answers with **every** basket. The Cart tab's switcher needs each
+count to draw itself, and fetching per department would let the tabs disagree
+with the basket beneath them.
+
+**A basket untouched for `CART_TTL_DAYS` (7) is emptied on the next read.**
+Prices and stock move; an eight-day-old basket restored at checkout, priced as
+it was, is a worse surprise than an empty one. The sweep runs on the read path
+because there is no scheduler in this deployment and a basket only matters when
+somebody looks at it. Note that editing a line writes `cart_items.updated_at`
+and says nothing about the basket, so `carts.updated_at` is touched explicitly —
+without it, a basket in daily use would still be swept on day eight.
 
 Tenancy tables: `brands` and `business_types`. `categories` and `products` each
 carry a NOT NULL `brand_id`, and their slug uniqueness is **composite** —
@@ -219,6 +327,20 @@ Exactly one variant per product sits at `sort_order = 0`, guaranteed by
 `product_variants_default_uq`. The catalogue joins on that row to resolve the
 price a card shows, so a product without one still exists and quietly stops
 being buyable.
+
+### Delivery areas
+
+`stores.polygon` holds an optional drawn shape (a jsonb list of `{lat,lng}`).
+`isWithinDeliveryArea` in `common/geo.ts` — the single definition of "we deliver
+here", used by both `GET /stores` and `placeOrder` — prefers it and falls back
+to `delivery_radius_meters` when there are fewer than three points, which is not
+a shape. Shape validation lives in `@haala/shared`'s `store-polygon.ts`, so the
+dashboard's editor and the API agree on what a usable polygon is.
+
+A circle is a poor fit for DHA Peshawar's blocks, which is why the function is
+named for the *area* rather than the radius. Ops draws the shape on the Stores
+page, and `placeOrder` re-checks it rather than trusting the basket — a basket
+can be filled before the customer switches to an address somewhere else.
 
 Order status flow (enforced in the Orders service):
 
@@ -277,6 +399,14 @@ limit would be a claim rather than a rule.
 Keys are `brands/<brandId>/<kind>/<uuid>.<ext>`, and `confirm` re-derives the
 prefix from the caller's own brand rather than trusting it.
 
+Homepage banner artwork uses a second prefix, `home/`, signed by
+`POST /admin/banners/uploads/{sign,confirm}` rather than by `/uploads/*`. That
+router runs `brandScope`, which resolves a tenant, and a platform asset has
+none — inventing a brand id to hang it off would put it inside a shop's
+namespace, where that shop's own users would pass the prefix check and be able
+to overwrite it. Under `/admin` the super-admin gate is the whole authorization
+story.
+
 `R2_PUBLIC_BASE_URL` is optional and separate from the credentials, because the
 two are switched on independently. Set, images are addressed at Cloudflare's
 edge; unset, they are served through `GET /media/<key>` — slower, but uploads
@@ -287,7 +417,8 @@ work the moment the bucket exists.
 One Next.js host, two shells, guarded server-side by role:
 
 - `app/(dash)/*` — Haala staff. Orders, riders, catalogue, promotions, stores,
-  staff, plus **brands**, **shop logins** and **business types**.
+  staff, plus **brands**, **shop logins**, **business types** and **homepage**
+  (the customer home's promo banners).
 - `app/brand/*` — one vendor. Their products, categories and shop details, and
   nothing of anyone else's.
 
@@ -329,9 +460,19 @@ transitions and to riders when an order becomes claimable.
 live pipeline, top products, rider and store breakdowns, promo usage.
 **Online payments** — Safepay behind the existing `PaymentProvider` seam.
 
+**Phase 4 — Marketplace (done, September 2026)**
+Clothing seeded and live, so `isLive` is exercised by two departments rather
+than asserted about one. The customer home rebuilt to `Haala Home.dc.html` — a
+department rail, an "All N" sheet, category chips, a promo row and a
+cross-department grid — fed by a single cached `GET /catalog/home`. Department
+screens scoped to their own catalogue, tinted with their own colour and given a
+way back. Baskets split per department with a 7-day life. "Buy it again" from
+real order history. A **Homepage** CMS in the dashboard for the promo banners.
+
 **Deployment** — see [DEPLOYMENT.md](DEPLOYMENT.md). The API deploys to Railway
 from `apps/api/Dockerfile`; migrations run as a pre-deploy step from generated
-SQL, never `db:push`.
+SQL, never `db:push`. `production` is the default branch and Railway deploys
+from it, so a push is a deploy.
 
 ### Ops dashboard
 
@@ -350,19 +491,28 @@ rather than trusting the cookie's presence.
 
 ```bash
 pnpm install
-pnpm infra:up                 # Postgres + Redis via Docker
+pnpm infra:up                 # Postgres :5433 + Redis :6380 via Docker
 cp .env.example .env
-pnpm --filter @haala/api db:push   # apply schema
-pnpm --filter @haala/api db:seed   # optional dev data
+pnpm db:migrate               # apply the generated SQL
+pnpm --filter @haala/api db:seed   # dev data — never against production
 pnpm build                    # build shared packages
 pnpm dev:api                  # http://localhost:4000/api/v1 (GET /health)
-pnpm test                     # 31 tests (money conversion, promo pricing guards)
+pnpm test                     # 178 API + 32 shared, node:test via tsx
 # apps:  pnpm --filter @haala/customer start   |   --filter @haala/rider start
 # dashboard: pnpm --filter @haala/dashboard dev   (http://localhost:3000)
 ```
 
-`db:push` is the local workflow. **Production runs generated migrations only** —
-`push` infers changes and will drop a column against real data. After a schema
+**Production runs generated migrations only** — `db:push` infers changes and
+will drop a column against real data, so it is local-only. After a schema
 change, run `pnpm --filter @haala/api db:generate` and commit the SQL.
+
+Two migration notes worth having before you need them. Drizzle runs every
+pending migration in **one transaction**, so `ALTER TYPE … ADD VALUE` followed
+by a use of that value fails; recreate the type instead. And when two branches
+both generate `00NN`, the one already on `origin/production` keeps the number —
+delete yours, regenerate on top of theirs, and restore the descriptive filename
+and journal tag. The snapshots are a chained diff and must not be renumbered by
+hand. `0014_cart_per_department.sql` is a worked example of expand → backfill →
+contract, including splitting rows that the new uniqueness rule would reject.
 
 Deployment: [DEPLOYMENT.md](DEPLOYMENT.md).

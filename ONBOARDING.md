@@ -8,6 +8,11 @@ As of August 2026 it is also a **marketplace**: alongside Haala's own grocery
 catalogue, home businesses — a bakery, a clothing boutique, frozen food,
 produce, gifts — each get their own login and dashboard for their own products.
 
+Since September the customer app is shaped that way too. Its home is a
+**directory of departments**, not a grocery aisle; the grocery screen you might
+expect is one department among several. **Grocery and clothing are live**; the
+rest exist as rows and go live the day they have stock, with no deploy.
+
 This document is the context that is not obvious from the code. Read it once.
 `CLAUDE.md` is the short list of things that are easy to get wrong; keep that
 one to hand.
@@ -47,7 +52,7 @@ Each of these was argued once. The reasons are here so they are not re-opened.
 | **Railway** | Chosen over a Hetzner/DO VPS — fastest to a live HTTPS URL, no server administration |
 | **Cloudflare R2** | Image uploads. S3-compatible, no egress fees |
 | **`node:test` via tsx** | Deliberately no Jest or Vitest dependency |
-| **Safepay** | Chosen over JazzCash/Easypaisa: self-serve sandbox, no merchant onboarding needed to build against. COD is live; online stays on `stub` until real credentials exist |
+| **Safepay** | Chosen over JazzCash/Easypaisa: self-serve sandbox, no merchant onboarding needed to build against. COD is live; the Safepay provider is written and registered, and `PAYMENT_ONLINE_PROVIDER` picks between it and a local `stub` |
 
 **Money is integer paisa everywhere.** Safepay takes decimal rupees, and that
 conversion is the highest-consequence arithmetic in the codebase.
@@ -78,7 +83,7 @@ step. `@haala/shared` builds to `dist` — rebuild it after editing a contract:
 pnpm install
 pnpm infra:up                        # Postgres :5433, Redis :6380
 pnpm db:migrate
-pnpm --filter @haala/api db:seed
+pnpm --filter @haala/api db:seed     # local only — see Migrations
 pnpm dev:api                         # :4000, health at /health
 
 cp apps/dashboard/.env.example apps/dashboard/.env.local
@@ -105,6 +110,12 @@ Seeded accounts, local only — password `haala1234`:
 | `+923009990000` | `super_admin` | `/orders` — the ops dashboard |
 | `+923001112233` | `customer` | the customer app |
 | `+923004445566` | `rider` | the rider app |
+
+The seed also creates **two stocked departments**: Haala's own grocery
+catalogue, and a clothing shop, *Gul Ahmed Corner*, with the design's Men /
+Women / Kids / Shoes / Sportswear aisles. That second one exists so the
+marketplace is exercised rather than asserted about — with one department live,
+every cross-department guarantee passes for the wrong reason.
 
 **The seed creates no brand user** — a shop login is issued deliberately, not
 conjured. Make one: sidebar → **Shop logins** → pick a shop, fill in three
@@ -171,22 +182,67 @@ rather than a JSON blob interpreted at runtime.
 
 ---
 
+## Departments and baskets
+
+Two ideas that shape most of the customer app, neither obvious from a file tree.
+
+**A department is a business type with stock in it.** `/catalog/departments`
+returns every active `business_types` row and marks each `isLive` by asking the
+same question the catalogue asks — is there anything to sell. So a department
+goes live by receiving inventory, and nothing is deployed. Its colour comes
+from `departmentTints`, its words from `departmentCopy`; both fall back safely
+for a type the apps have not been taught, so a new row shows up immediately in
+neutral clay rather than crashing or being dropped.
+
+The home screen is a directory of those. Everything below it — the department
+storefront, the listing, the product page, the basket, checkout — is the shell
+that used to be Home, now scoped by a `department` parameter that both
+`/catalog/products` and `/catalog/categories` accept. Omit it and you get the
+whole marketplace, which is what the Categories tab and search want.
+
+**A customer has one basket per department, and they check out separately.** An
+order is picked and dispatched from one shop, so a basket mixing a dark store
+with a boutique produces an order nobody can fulfil. Which basket something
+lands in is read from the product's brand on the server — there is no request
+field for it, deliberately. The Cart tab has a switcher across whatever baskets
+exist, and each pays its own delivery fee.
+
+Baskets are emptied after seven days without being touched. Prices and stock
+move; restoring a week-old basket at checkout, priced as it was, is a worse
+surprise than finding it empty.
+
 ## The design pipeline
 
 **No engineer will guess this one.** The UI does not come from Figma.
 
-The source of truth is a **Claude Design** file, `Grocery App.dc.html`, in the
-project *Grocery App Design System*, pulled with the **DesignSync** tool. The
-design system it defines is called **Basket**: ember `#FF5A1F` on a white
+The source of truth is **Claude Design**, pulled with the **DesignSync** tool.
+Three files now, and they cover different screens:
+
+| File | Covers |
+| --- | --- |
+| `Grocery App.dc.html` | the department storefront, listing, product, order flow |
+| `Auth & Checkout.dc.html` | sign-in, the provider sheet, checkout |
+| `Haala Home.dc.html` | the marketplace home and the departments sheet |
+
+The design system they define is called **Basket**: ember `#FF5A1F` on a white
 canvas, warm near-black type `#191410`, Plus Jakarta Sans, heavy radii,
 extrabold headings.
 
-Three rules, each learned the hard way:
+Four rules, each learned the hard way:
 
 **Re-fetch it every time.** A cached copy was read for four rounds of work and
 had gone a whole screen out of date — an entire set-location screen existed
 that nobody knew about. If Hassan says a screen exists and your copy disagrees,
 your copy is stale.
+
+**Build what it draws, and say so where you cannot.** The marketplace home was
+first built with full-width stacked cards where the comp has a 210px horizontal
+rail, and with a "Coming soon" section the design does not have — that had to be
+redone. Where the comp genuinely cannot be reproduced, leave a comment at the
+point of deviation: its product grid varies image height per department, which
+works in CSS Grid because rows self-align, and staggers badly in React Native's
+`flexWrap`. So the cross-department grid uses one height, and the reason is in
+the file.
 
 **`#EDE7E0` is not a background colour.** It appears exactly once in the file,
 in the `<helmet>` block that styles the design document's own page — it is the
@@ -258,12 +314,25 @@ before running it:
 
 `drizzle-kit generate` will happily emit both of those. Read what it writes.
 
+**Two branches will eventually generate the same number.** It happened with
+`0012`: one branch added `stores.polygon`, another added `home_banners`, and the
+merge conflicted on `meta/_journal.json`. The one already on `origin/production`
+keeps the number. Delete yours, run `drizzle-kit generate` again on top of
+theirs, then restore the descriptive filename and journal tag. Do **not**
+renumber the snapshot by hand — it is a chained diff, and the tool rebuilding it
+is the point. Prove the result by applying the whole chain to a throwaway
+database from zero.
+
 `db:push` is **local only** — it infers changes and will drop a column against
 real data. Production applies the generated SQL as a Railway *pre-deploy* step,
 not on container boot, which would race itself when scaled past one instance.
 
-Migration `0006`–`0008` are the multi-tenant rollout and are worth reading as a
-worked example.
+`db:seed` is local only too, for a duller reason: it would put orderable fake
+garments in a live shop.
+
+Worked examples worth reading: `0006`–`0008` are the multi-tenant rollout, and
+`0014_cart_per_department` is expand → backfill → contract where the backfill
+also has to *split* rows the new uniqueness rule would reject.
 
 ---
 
@@ -293,8 +362,8 @@ Two more, from `CLAUDE.md` but worth the context here:
 
 ## Left out on purpose
 
-These appear in the design comps and are **not** implemented, because no
-backend supports them. They are decisions, not oversights:
+These appear in the design comps and are **not** implemented. They are
+decisions, not oversights:
 
 - Service fee and tipping — the bill lines exist and compute, the charge is a
   pricing decision nobody has made
@@ -302,6 +371,16 @@ backend supports them. They are decisions, not oversights:
 - OTP auth — the comps show phone + OTP; the API is phone + password
 - The customer app still shows **one image per product**, though products now
   carry a gallery. The data is there; the carousel is not built
+- **Global search across departments** — `GET /search?q=…` returning brand hits
+  and department-grouped results with scope chips. The comp designs it; today's
+  search is the catalogue's `q` parameter
+- **Department landing pages** with tinted headers and pill filters, beyond the
+  storefront that exists
+
+Recently *un*-left: the marketplace home's promo row, cross-department grid and
+"Recommended for you" were all listed here as blocked on data. The data exists
+now — banners from the CMS, `departmentKey` on every product, order history —
+and all three are built.
 
 The comps are also priced in Bahraini dinar and name Dubai hubs. Money goes
 through `formatPKR`; store names come from the `stores` table.

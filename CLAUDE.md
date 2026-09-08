@@ -1,8 +1,10 @@
 # Working on Haala
 
 Quick-commerce grocery delivery for DHA Peshawar, Pakistan (PKR), now a
-multi-tenant platform: Haala's own catalogue plus home businesses — bakery,
-clothing, produce — each with their own login and dashboard.
+multi-tenant **marketplace**: Haala's own grocery catalogue plus home
+businesses — bakery, clothing, produce — each with their own login and
+dashboard. Grocery and clothing are live; the rest are seeded and waiting for
+stock.
 
 New here? Read `ONBOARDING.md` first. This file is the short list of things that
 are easy to get wrong.
@@ -29,6 +31,18 @@ Breaking one of these breaks money or tenancy, silently.
 - A product always has **exactly one variant at `sort_order = 0`** — the
   catalogue joins on it to price a card. Enforced by
   `product_variants_default_uq`.
+- **A basket belongs to one department**, and which one is read from the
+  product's brand, server-side. Never a request field — accepting one lets a
+  caller drop a shirt into the grocery basket. `carts_user_department_uq`.
+- **An order draws from one basket.** It is picked and dispatched from one shop,
+  so `POST /orders` names a department and `placeOrder` reads that basket only.
+- **A department screen shows only its own department.** Both
+  `/catalog/products` and `/catalog/categories` take `department`, and the
+  paginated `total` must be filtered too — an unfiltered count prints "89
+  products" above a shop holding 17.
+- **Per-customer data never enters a cached response.** `GET /catalog/home` is
+  cached per *store* and shared by everyone near it; "buy it again" is a
+  separate authenticated request for exactly this reason.
 
 ## Traps
 
@@ -48,13 +62,19 @@ Each of these has already cost a debugging session.
 | Drizzle runs **all pending migrations in one transaction** | `ALTER TYPE … ADD VALUE` then using that value fails. Recreate the type instead |
 | `ADD COLUMN … NOT NULL` fails on a table with rows | Expand → backfill → contract, in separate files |
 | A dev server on :3000 corrupts a concurrent `next build` | Stop it first |
+| Two branches both generate migration `00NN` and the merge conflicts on `meta/_journal.json` | The one already on `origin/production` keeps the number. Delete yours, `drizzle-kit generate` again on top of theirs, then restore the descriptive filename and journal tag. Never renumber the snapshot by hand — it is a chained diff |
+| `@haala/shared` builds to `dist`, and the API and dashboard resolve it from there | `pnpm --filter @haala/shared build` after **any** contract edit, or typecheck reports a field you just added as missing |
+| A `try/catch` around Redis is only half of failing open | ioredis *queues* while disconnected and retries with backoff, so a dead cache answers correctly in 1.2s, then 4.5s, then 7.8s. Every call in `common/cache.ts` is also bounded by a 150ms timeout |
+| React Native Web silently drops `accessibilityState` | A tab rendered `role` and `aria-label` and no `aria-selected`. Put the state in the label too |
+| `flexWrap` is not CSS Grid | A grid built from wrapping flex does **not** align rows: one taller card pushes only its own column. Give cards a fixed image height and reserve the text lines, or rows stagger |
+| Auth is rate-limited to 30 requests per 15 minutes, and browser-driven testing burns it fast | The limiter is in-memory: restart the API to clear it |
 | Next reads env **once at boot**, so a dashboard started before you edited `.env.local` keeps the old value — and every screen looks normal while it does | Before believing a data bug, check the red strip at the top of the dashboard, or the `- API:` line in its startup log. No strip means localhost |
 
 ## Verifying
 
 ```bash
 pnpm typecheck                        # all workspaces
-pnpm test                             # 71 API + 13 shared, node:test via tsx
+pnpm test                             # 178 API + 32 shared, node:test via tsx
 pnpm --filter @haala/dashboard build
 cd apps/customer && node ../../node_modules/expo/bin/cli export -p android --output-dir /tmp/x
 ```
@@ -64,23 +84,46 @@ hoisted layout.
 
 **Tooling does not catch the things that matter most here.** Typecheck and
 `expo export` both passed while map markers were invisible, while empty-state
-glyphs were clipped, and while a count query returned 0 for every row. Tenancy
-isolation passes typecheck whether or not it holds — only
-`apps/api/src/modules/brand/isolation.test.ts` distinguishes the two. When you
-change something in that area, break it on purpose and confirm the tests fail.
+glyphs were clipped, while a count query returned 0 for every row, and while a
+route existed in a file but had never been registered. Tenancy isolation passes
+typecheck whether or not it holds — only
+`apps/api/src/modules/brand/isolation.test.ts` distinguishes the two.
+
+So: **break it on purpose.** Every guarantee added since August has a test that
+was verified by sabotaging the code and watching it fail — the department
+filter, the cache's fail-open, the basket split, the 7-day sweep, banner
+authorization. A test that has never been seen to fail is a test you are
+guessing about.
+
+And **render the screen.** Typecheck says nothing about what happens during
+render; `expo start --web` plus headless Chrome over CDP will click and type
+against the real app. That is how the staggered product grid, the invisible
+ETA pill on a dark header, and a "Back to basket" button that went to checkout
+were all found — none of them was visible in the diff.
 
 ## Do not
 
 - **Push.** `gh` here is authenticated as `hassan-eyewa` while the repo belongs
-  to `hasankhn1`. Ask Hassan to run `git push`.
+  to `hasankhn1`. Ask Hassan to run `git push`. `production` is the default
+  branch and Railway deploys from it, so a push is a deploy.
 - **Run `db:push` against anything but local.** It infers changes and will drop
   a column. Production applies generated SQL from `apps/api/drizzle/`.
+- **Run `db:seed` against production.** It would put orderable fake garments in
+  a live shop. Same shape of mistake as the one above.
 - **Commit `.env`.** It holds live R2 and Safepay credentials.
 - **Re-litigate settled decisions**: Express over NestJS, the Basket design
   system, Railway, and brands stocking shared dark stores. The reasoning is in
   `ONBOARDING.md`; reopening them costs a day and lands in the same place.
-- **Work from a cached copy of the design.** Re-fetch `Grocery App.dc.html`
-  every time — a stale copy once went a whole screen out of date.
+- **Work from a cached copy of the design.** Re-fetch every time — a stale copy
+  once went a whole screen out of date. There are now three files:
+  `Grocery App.dc.html` (the department shell), `Auth & Checkout.dc.html`, and
+  `Haala Home.dc.html` (the marketplace home).
+- **Substitute a layout for the comp's.** The marketplace home was first built
+  with full-width stacked cards where the comp draws a 210px horizontal rail,
+  and with a "Coming soon" section the design does not have. If the comp cannot
+  be built as drawn — RN has no CSS Grid, so its per-department image heights
+  stagger a wrapping flex row — say so in a comment at the point of deviation
+  rather than quietly redesigning.
 
 ## A boundary worth knowing
 
