@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FlashList } from '@shopify/flash-list';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
@@ -43,6 +43,28 @@ export default function SearchScreen() {
   };
 
   const items = results.data?.items ?? [];
+
+  /*
+   * Brands that match the query, from the results the search already returned —
+   * apparel is looked up by label ("Nike") as often as by product. Grouped from
+   * the same rows, so no extra request. Tapping one runs the brand as a search.
+   */
+  const brandHits = useMemo(() => {
+    const q = query.toLowerCase();
+    const by = new Map<string, { slug: string; name: string; dept: string; count: number }>();
+    for (const p of items) {
+      if (!p.brandName.toLowerCase().includes(q)) continue;
+      const row = by.get(p.brandSlug) ?? { slug: p.brandSlug, name: p.brandName, dept: p.departmentKey, count: 0 };
+      row.count += 1;
+      by.set(p.brandSlug, row);
+    }
+    return [...by.values()].slice(0, 4);
+  }, [items, query]);
+
+  const openBrand = (b: { slug: string; name: string; dept: string }) =>
+    b.dept === 'clothing'
+      ? router.push(`/(tabs)/department/clothing?brand=${b.slug}`)
+      : router.push(`/products?q=${encodeURIComponent(b.name)}`);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -129,6 +151,37 @@ export default function SearchScreen() {
             contentContainerStyle={styles.list}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
+            ListHeaderComponent={
+              brandHits.length > 0 ? (
+                <View style={styles.brands}>
+                  <Text variant="labelCaps" color="textSecondary">
+                    Brands
+                  </Text>
+                  {brandHits.map((b) => (
+                    <Pressable key={b.slug} style={styles.brandRow} onPress={() => openBrand(b)}>
+                      <View style={styles.brandAvatar}>
+                        <Text variant="labelSm">
+                          {b.name
+                            .split(' ')
+                            .map((w) => w[0])
+                            .filter(Boolean)
+                            .slice(0, 2)
+                            .join('')
+                            .toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={styles.flex}>
+                        <Text variant="bodyStrong">{b.name}</Text>
+                        <Text variant="caption" color="textSecondary">
+                          {b.count} result{b.count === 1 ? '' : 's'}
+                        </Text>
+                      </View>
+                      <Icon name="chevron-forward" size={16} color={theme.colors.textTertiary} />
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null
+            }
             renderItem={({ item }: { item: ProductView }) => (
               <View style={styles.cell}>
                 <ProductCard
@@ -195,6 +248,16 @@ const styles = StyleSheet.create({
   recentRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md },
   popular: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm },
   list: { paddingHorizontal: theme.spacing.md, paddingBottom: theme.spacing['2xl'] },
+  brands: { paddingHorizontal: theme.spacing.sm, paddingBottom: theme.spacing.md, gap: theme.spacing.xs },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md, paddingVertical: theme.spacing.sm },
+  brandAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.colors.surfaceMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   cell: { flex: 1, padding: theme.spacing.sm },
   skelWrap: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: theme.spacing.md },
   // `flex: 1` collapses to full width inside a wrapping row — pin to half.

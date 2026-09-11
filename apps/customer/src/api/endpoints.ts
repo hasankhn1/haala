@@ -84,6 +84,7 @@ export const catalogApi = {
     categoryId?: string;
     q?: string;
     page?: number;
+    pageSize?: number;
   }) => api.get<Paginated<ProductView>>(`/catalog/products${qs(params)}`),
   product: (id: string, storeId: string) =>
     api.get<ProductView>(`/catalog/products/${id}${qs({ storeId })}`),

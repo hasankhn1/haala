@@ -1,5 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { DepartmentScreen } from '../../../src/screens/DepartmentScreen';
+import { ClothingScreen } from '../../../src/screens/clothing/ClothingScreen';
 
 /**
  * One department's storefront.
@@ -13,7 +14,11 @@ import { DepartmentScreen } from '../../../src/screens/DepartmentScreen';
  * the home rail; it says "coming soon" in the departments sheet instead.
  */
 export default function DepartmentRoute() {
-  const { key } = useLocalSearchParams<{ key?: string }>();
+  const { key, brand } = useLocalSearchParams<{ key?: string; brand?: string }>();
+  // Clothing is a filter-driven listing, not grocery's hero-and-rails
+  // storefront — same components, a different shell. `brand` preselects the
+  // brand filter when arriving from the Brands directory or a brand rail.
+  if (key === 'clothing') return <ClothingScreen initialBrand={brand} />;
   // Falling back to grocery rather than rendering an unscoped shop: an absent
   // key can only come from a malformed link, and the unscoped screen — every
   // department's products under one heading — is the bug this replaced.
