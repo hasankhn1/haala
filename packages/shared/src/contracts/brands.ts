@@ -56,7 +56,10 @@ export const createBrandUserSchema = z
   .object({
     name: z.string().trim().min(2).max(80),
     phone: phoneSchema,
-    email: z.string().email().max(160).optional(),
+    // Lower-cased + trimmed like emailAuthSchema, so a login can't be minted
+    // twice under different casing (the uniqueness check and users_email_uq are
+    // both case-sensitive).
+    email: z.string().trim().toLowerCase().email().max(160).optional(),
     password: z.string().min(8).max(128),
   })
   .strict();

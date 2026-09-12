@@ -188,6 +188,9 @@ export const brandService = {
     if (await userRepository.findByPhone(input.phone)) {
       throw AppError.conflict('An account with this phone already exists');
     }
+    if (input.email && (await userRepository.findByEmail(input.email))) {
+      throw AppError.conflict('An account with this email already exists');
+    }
 
     const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
     const [row] = await db
