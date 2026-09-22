@@ -48,6 +48,9 @@ export const config = {
       .filter(Boolean),
   },
 
+  /** Reachable from the internet — see `PUBLIC_API_URL`. */
+  publicApiUrl: env.PUBLIC_API_URL.replace(/\/$/, ''),
+
   payments: {
     onlineProvider: env.PAYMENT_ONLINE_PROVIDER,
     safepay: {
@@ -56,6 +59,15 @@ export const config = {
       webhookSecret: env.SAFEPAY_WEBHOOK_SECRET,
       baseUrl: env.SAFEPAY_BASE_URL.replace(/\/$/, ''),
       environment: env.SAFEPAY_ENVIRONMENT,
+    },
+    rapid: {
+      merchantId: env.RAPID_MERCHANT_ID,
+      clientId: env.RAPID_CLIENT_ID,
+      clientSecret: env.RAPID_CLIENT_SECRET,
+      webhookSecret: env.RAPID_WEBHOOK_SECRET,
+      environment: env.RAPID_ENVIRONMENT,
+      baseUrl: env.RAPID_BASE_URL.replace(/\/$/, ''),
+      merchantName: env.RAPID_MERCHANT_NAME,
     },
   },
 } as const;

@@ -4,6 +4,7 @@ import { AppError } from '../../../common/errors';
 import type { PaymentProvider } from './payment-provider.interface';
 import { codProvider } from './cod.provider';
 import { safepayProvider } from './safepay.provider';
+import { rapidProvider } from './rapid.provider';
 import { stubOnlineProvider } from './stub-online.provider';
 
 /**
@@ -20,9 +21,11 @@ const register = (provider: PaymentProvider): void => {
 register(codProvider);
 register(stubOnlineProvider);
 register(safepayProvider);
+register(rapidProvider);
 // Additional gateways (JazzCash, Easypaisa) plug in here — one class each,
 // selected at runtime via PAYMENT_ONLINE_PROVIDER. Nothing in checkout or
-// orders needs to change.
+// orders needs to change. Registering a provider does not switch anything on:
+// `forMethod` reads the configured key, so an unused one costs nothing.
 
 export const paymentRegistry = {
   get(key: string): PaymentProvider {

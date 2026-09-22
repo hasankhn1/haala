@@ -58,6 +58,50 @@ Point Safepay's webhook at:
 https://<api-domain>/api/v1/payments/webhooks/safepay
 ```
 
+### Rapid Gateway
+
+The other online provider, using their hosted-redirect flow.
+
+```
+PAYMENT_ONLINE_PROVIDER=rapid
+PUBLIC_API_URL=https://<api-domain>   # where their hosted page returns the browser
+RAPID_MERCHANT_ID=...
+RAPID_CLIENT_ID=                      # blank → defaults to the merchant id
+RAPID_CLIENT_SECRET=...
+RAPID_WEBHOOK_SECRET=...
+RAPID_ENVIRONMENT=LIVE
+RAPID_BASE_URL=https://secure.rapid-gateway.com
+RAPID_MERCHANT_NAME=Haala
+```
+
+Webhook, registered in their portal:
+
+```
+https://<api-domain>/api/v1/payments/webhooks/rapid
+```
+
+**`PUBLIC_API_URL` is not optional here.** The return URLs handed to their
+hosted page are built from it, and a customer's browser loads them on a mobile
+network — the default `http://localhost:4000` would strand every payer on a
+dead page. Locally this has to be a tunnel.
+
+**Webhook settings are per environment.** The URL and signing salt saved in
+their TEST mode do not apply to LIVE and vice versa. Their own documentation
+names "no webhook URL saved for TEST" as the usual reason sandbox payments
+complete and nothing ever arrives — so registering LIVE does not mean sandbox
+works, and switching `RAPID_ENVIRONMENT` means changing `RAPID_WEBHOOK_SECRET`
+too.
+
+Sandbox picks an outcome from the amount: **PKR 100 succeeds**, 200 fails, 300
+stays pending, 400 expires, 500 times out. A test basket that does not total
+exactly one of those will not behave.
+
+Refunds are **not** wired for this provider — their refund events are
+documented, the endpoint that raises one is not. `refundPayment` throws with a
+message saying to refund from their portal, so an attempt is a visible failure
+rather than a silent no-op. COD cancel-and-refund never reaches a gateway and is
+unaffected.
+
 ## 3. Migrations
 
 `railway.json` runs migrations as a **pre-deploy** step:

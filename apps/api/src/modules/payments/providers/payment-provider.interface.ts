@@ -48,9 +48,40 @@ export interface WebhookInput {
 
 export interface WebhookResult {
   handled: boolean;
+  /**
+   * Set when a delivery was refused for a reason a **retry could fix** — an
+   * unverifiable signature, usually because the configured secret is wrong.
+   *
+   * Gateways treat 2xx as "delivered, stop retrying". Answering 200 to a
+   * webhook we could not verify therefore throws away the only notification we
+   * were going to get. Answering non-2xx instead buys the length of their
+   * retry ladder — six hours, for Rapid Gateway — to notice and fix the
+   * configuration.
+   *
+   * Left unset for anything retrying cannot help: an unknown reference, an
+   * event we do not act on, a mismatched amount. Those are acknowledged.
+   */
+  retryable?: boolean;
   orderId?: string;
+  /**
+   * The payment's idempotency key, for a gateway that echoes back *our*
+   * reference rather than telling us an order id.
+   *
+   * Rapid Gateway is one: its webhook carries `merchantTransactionId`, which is
+   * the `BASKET_ID` we submitted. The service resolves the payment from
+   * whichever of these a provider can supply.
+   */
+  idempotencyKey?: string;
   providerRef?: string;
   status?: PaymentStatus;
+  /**
+   * The amount the gateway says was paid, in paisa.
+   *
+   * Checked against the payment row before the status is believed — a webhook
+   * claiming a different figure than the one we charged is either a bug or an
+   * attack, and neither should mark an order paid.
+   */
+  amount?: number;
 }
 
 export interface RefundInput {

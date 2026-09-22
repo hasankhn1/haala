@@ -24,6 +24,23 @@ export const paymentController = {
       headers: req.headers,
       rawBody: req.body as Buffer,
     });
+    /*
+     * 2xx tells a gateway the delivery landed and it should stop retrying, so
+     * a webhook we could not *verify* must not get one — that would discard
+     * the only notification we were ever going to receive. 401 instead, which
+     * buys their whole retry ladder to notice a wrong secret.
+     *
+     * Everything else is acknowledged, including deliveries we deliberately
+     * ignore: retrying an unknown reference or an event we do not act on would
+     * fail the same way five more times.
+     */
+    if (result.retryable) {
+      res.status(401).json({
+        ok: false,
+        error: { code: 'WEBHOOK_UNVERIFIED', message: 'Signature could not be verified' },
+      });
+      return;
+    }
     sendSuccess(res, result);
   },
 };

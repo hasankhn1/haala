@@ -74,15 +74,66 @@ export const paymentService = {
   },
 
   /** Process a verified provider webhook and reconcile the payment status. */
-  async handleWebhook(providerKey: string, webhook: WebhookInput): Promise<{ handled: boolean }> {
+  async handleWebhook(
+    providerKey: string,
+    webhook: WebhookInput,
+  ): Promise<{ handled: boolean; retryable?: boolean }> {
     const provider = paymentRegistry.get(providerKey);
     const result = await provider.handleWebhook(webhook);
-    if (!result.handled || !result.orderId || !result.status) return { handled: false };
+    if (!result.handled || !result.status) {
+      return { handled: false, ...(result.retryable ? { retryable: true } : {}) };
+    }
 
-    const payment = await paymentRepository.findByOrderId(result.orderId);
+    /*
+     * A provider identifies the payment by whichever reference its gateway
+     * gives back. Safepay knows our order id; Rapid Gateway echoes the
+     * `BASKET_ID` we submitted, which is the payment's idempotency key. Both
+     * columns are unique-indexed, so either resolves exactly one row.
+     */
+    const payment = result.orderId
+      ? await paymentRepository.findByOrderId(result.orderId)
+      : result.idempotencyKey
+        ? await paymentRepository.findByIdempotencyKey(result.idempotencyKey)
+        : undefined;
+
     if (!payment) {
-      logger.warn({ orderId: result.orderId }, 'Webhook for unknown order');
+      logger.warn(
+        { orderId: result.orderId, idempotencyKey: result.idempotencyKey },
+        'Webhook for unknown payment',
+      );
       return { handled: false };
+    }
+
+    /*
+     * The amount has to match what we charged.
+     *
+     * A webhook claiming a different figure is either a bug at the gateway or
+     * someone who has worked out our endpoint, and neither should mark an order
+     * paid. Providers that cannot report an amount simply omit it.
+     */
+    if (result.amount !== undefined && result.amount !== payment.amount) {
+      logger.error(
+        { paymentId: payment.id, expected: payment.amount, claimed: result.amount },
+        'Webhook amount does not match the payment — refusing',
+      );
+      return { handled: false };
+    }
+
+    /*
+     * Never move backwards out of `paid`.
+     *
+     * Gateways retry — Rapid Gateway's ladder runs 30s, 2m, 10m, 1h, 6h — and
+     * deliveries can arrive out of order, so a stale `failed` can legitimately
+     * land after a `completed`. Re-applying the same status is harmless;
+     * un-paying a paid order is not, and it would strand an order that has
+     * already been picked.
+     */
+    if (payment.status === PaymentStatus.Paid && result.status !== PaymentStatus.Paid) {
+      logger.warn(
+        { paymentId: payment.id, incoming: result.status },
+        'Ignoring a webhook that would un-pay a paid payment',
+      );
+      return { handled: true };
     }
 
     await paymentRepository.updateStatus(payment.id, result.status, {
