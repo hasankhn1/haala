@@ -11,6 +11,7 @@ import { cached, cacheKey, HOME_TTL_SECONDS } from '../../common/cache';
 import { AppError } from '../../common/errors';
 import type { Category } from '../../db/schema';
 import { bannerService } from '../home/banner.service';
+import { featuredService } from '../home/featured.service';
 import { catalogRepository, type ProductWithStock } from './catalog.repository';
 
 const toCategoryView = (c: Category): CategoryView => ({
@@ -47,11 +48,11 @@ export const toProductView = (p: ProductWithStock): ProductView => ({
 /** Chips wrap onto a second row past this, and the comp draws one row. */
 const HOME_CATEGORY_LIMIT = 12;
 
-/** The comp's grid is two columns; six rows of it is a generous home screen. */
+/**
+ * A hard cap on the grid, independent of how many ops features. The comp draws
+ * two columns; six rows of it is already a generous home screen.
+ */
 const POPULAR_LIMIT = 12;
-
-/** How wide a slice of the catalogue the ranking above sorts over. */
-const POPULAR_SCAN_SIZE = 100;
 
 export const catalogService = {
   /**
@@ -105,7 +106,7 @@ export const catalogService = {
 
       const popularCategories: HomeCategoryView[] = categoryRows
         .filter((c) => liveKeys.has(c.departmentKey))
-        .map((c) => ({ id: c.id, name: c.name, departmentKey: c.departmentKey }))
+        .map((c) => ({ id: c.id, name: c.name, imageUrl: c.imageUrl, departmentKey: c.departmentKey }))
         .slice(0, HOME_CATEGORY_LIMIT);
 
       return { departments, banners, popularCategories, popularProducts };
@@ -113,36 +114,41 @@ export const catalogService = {
   },
 
   /**
-   * The "Popular right now" grid.
+   * The "Popular right now" grid — the products ops has chosen.
    *
-   * **It is not popularity.** Nothing here records views or sales yet, so
-   * ranking by them would be a lie dressed as data. What it actually ranks is
-   * *discount depth* — the store markdown a shopper can see for themselves on
-   * the card — and among equally-priced items it keeps the catalogue's own
-   * order. That is a defensible thing to put under that heading, and when order
-   * history is worth mining this function is the only place that changes.
+   * **Exclusive**: this returns exactly what is curated, in that order, and
+   * nothing else. It replaced an automatic ranking by discount depth, which was
+   * honest about what it was but gave ops no say in the most valuable strip of
+   * the app, and whose coverage across categories was a side effect of
+   * whichever rows fell inside a 100-row scan.
    *
-   * Needs a store: without one there is no price and no stock, and a grid of
-   * products that cannot be added to a basket is worse than no grid.
+   * Curation is global; **availability is not**. Pricing the chosen ids against
+   * this store is what filters the list: `listProductsByIds` inner-joins
+   * inventory and requires an active product and an unsuspended shop, so a
+   * feature that is out of stock, delisted or from a suspended brand drops out
+   * here without a single extra condition. Two stores therefore show different
+   * subsets of one curated list, which is correct — a shopper should not be
+   * shown something the shop they are buying from cannot sell.
+   *
+   * Needs a store for the same reason: without one there is no price and no
+   * stock, and a grid of products that cannot be added to a basket is worse
+   * than no grid.
    */
   async popularProducts(storeId: string | null, liveKeys?: Set<string>): Promise<ProductView[]> {
     if (!storeId) return [];
 
-    const { items } = await catalogRepository.listProducts({
-      storeId,
-      page: 1,
-      // Ranking happens here rather than in SQL, so the page has to be wide
-      // enough to rank over. Bounded well under the catalogue size on purpose:
-      // this is a home screen, not a report.
-      pageSize: POPULAR_SCAN_SIZE,
-    });
+    const curated = await featuredService.activeProductIds();
+    if (curated.length === 0) return [];
 
-    const discount = (p: ProductWithStock) =>
-      p.basePrice > 0 ? (p.basePrice - Number(p.price)) / p.basePrice : 0;
+    const rows = await catalogRepository.listProductsByIds(curated, storeId);
 
-    return items
-      .filter((p) => Number(p.availableQty) > 0)
-      .sort((a, b) => discount(b) - discount(a))
+    // `listProductsByIds` does not preserve the order of the ids it was given,
+    // and that order *is* the feature here — it is what an editor arranged.
+    const rank = new Map(curated.map((id, i) => [id, i]));
+
+    return rows
+      .filter((p) => (liveKeys ? liveKeys.has(p.departmentKey) : true))
+      .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
       .slice(0, POPULAR_LIMIT)
       .map(toProductView);
   },

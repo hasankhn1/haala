@@ -50,6 +50,13 @@ export interface HomeView {
 export interface HomeCategoryView {
   id: string;
   name: string;
+  /**
+   * The category's own photo, so the home draws the same tile a department
+   * does. Without it the home fell back to one generic tag glyph repeated
+   * across every category, which is what made the row look wrong beside the
+   * photographed tiles inside a shop.
+   */
+  imageUrl: string | null;
   /** Business-type key of the brand that owns it, for the chip's tint. */
   departmentKey: string;
 }
@@ -83,3 +90,56 @@ export type CreateBannerInput = z.infer<typeof createBannerSchema>;
 /** Every field optional, so a reorder or an on/off is not a whole-object PUT. */
 export const updateBannerSchema = createBannerSchema.partial().strict();
 export type UpdateBannerInput = z.infer<typeof updateBannerSchema>;
+
+/**
+ * A featured product, as the dashboard lists them.
+ *
+ * Carries the product's own details because the picker has to be readable —
+ * a list of uuids is not something anybody can arrange into a good homepage.
+ */
+export interface FeaturedProductView {
+  id: string;
+  productId: string;
+  name: string;
+  categoryId: string;
+  categoryName: string;
+  departmentKey: string;
+  imageUrl: string | null;
+  /** Catalogue price, paisa. The store's own price may differ. */
+  basePrice: number;
+  /**
+   * False when the product itself is off sale or its shop is suspended. Such a
+   * feature is withheld from the app, and the dashboard says so rather than
+   * leaving an editor to wonder why their choice never appeared.
+   */
+  sellable: boolean;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+/** One candidate in the dashboard's product search. */
+export interface ProductPickerRow {
+  id: string;
+  name: string;
+  categoryId: string;
+  categoryName: string;
+  departmentKey: string;
+  imageUrl: string | null;
+  basePrice: number;
+}
+
+export const createFeaturedProductSchema = z
+  .object({
+    productId: z.string().uuid(),
+    sortOrder: z.number().int().min(0).max(9999).optional(),
+  })
+  .strict();
+export type CreateFeaturedProductInput = z.infer<typeof createFeaturedProductSchema>;
+
+export const updateFeaturedProductSchema = z
+  .object({
+    isActive: z.boolean().optional(),
+    sortOrder: z.number().int().min(0).max(9999).optional(),
+  })
+  .strict();
+export type UpdateFeaturedProductInput = z.infer<typeof updateFeaturedProductSchema>;

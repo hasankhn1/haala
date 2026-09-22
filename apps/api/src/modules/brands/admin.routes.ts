@@ -6,9 +6,11 @@ import {
   createBrandSchema,
   createBrandUserSchema,
   createBannerSchema,
+  createFeaturedProductSchema,
   createBusinessTypeSchema,
   setUserActiveSchema,
   updateBannerSchema,
+  updateFeaturedProductSchema,
   updateBrandSchema,
   updateBusinessTypeSchema,
 } from '@haala/shared';
@@ -19,6 +21,7 @@ import { validate } from '../../common/middleware/validate';
 import { invalidate } from '../../common/cache';
 import { businessTypeService } from '../business-types/business-type.service';
 import { bannerService } from '../home/banner.service';
+import { featuredService } from '../home/featured.service';
 import { uploadService } from '../uploads/upload.service';
 import { brandService } from './brand.service';
 
@@ -183,6 +186,76 @@ router.delete(
     // response would surface a successful delete as "Unexpected server
     // response" — right in the object store, wrong on the screen.
     sendSuccess(res, { ok: true });
+  }),
+);
+
+// ── Featured products ─────────────────────────────────────────────────────
+/*
+ * "Popular right now" on the marketplace home.
+ *
+ * Same shape as the banner routes above and for the same reason: this is
+ * editorial content, and every write busts the cached home payload so the app
+ * agrees with the dashboard the moment Save returns rather than five minutes
+ * later.
+ */
+router.get(
+  '/home-products',
+  asyncHandler(async (_req, res) => {
+    sendSuccess(res, await featuredService.list());
+  }),
+);
+
+router.post(
+  '/home-products',
+  validate({ body: createFeaturedProductSchema }),
+  asyncHandler(async (req, res) => {
+    const created = await featuredService.create(req.body);
+    await invalidate(HOME_CACHE_PREFIX);
+    sendSuccess(res, created, 201);
+  }),
+);
+
+router.patch(
+  '/home-products/:id',
+  validate({ params: idParams, body: updateFeaturedProductSchema }),
+  asyncHandler(async (req, res) => {
+    const updated = await featuredService.update(req.params.id as string, req.body);
+    await invalidate(HOME_CACHE_PREFIX);
+    sendSuccess(res, updated);
+  }),
+);
+
+router.delete(
+  '/home-products/:id',
+  validate({ params: idParams }),
+  asyncHandler(async (req, res) => {
+    await featuredService.remove(req.params.id as string);
+    await invalidate(HOME_CACHE_PREFIX);
+    sendSuccess(res, { ok: true });
+  }),
+);
+
+/*
+ * Candidates for the picker.
+ *
+ * A route of its own because nothing existing fits: `/ops/stores/:id/catalog`
+ * is variant-grained and store-scoped, `/brand/products` is tenant-scoped, and
+ * `/catalog/products` requires a `storeId` the dashboard has no reason to
+ * choose — featuring a product is a marketplace decision, not a store one.
+ */
+const productSearchQuery = z
+  .object({
+    q: z.string().trim().max(80).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+  })
+  .strict();
+
+router.get(
+  '/products',
+  validate({ query: productSearchQuery }),
+  asyncHandler(async (req, res) => {
+    const { q, limit } = req.query as unknown as { q?: string; limit: number };
+    sendSuccess(res, await featuredService.search(q, limit));
   }),
 );
 

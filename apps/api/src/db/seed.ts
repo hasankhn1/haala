@@ -8,6 +8,7 @@ import {
   brands,
   businessTypes,
   categories,
+  homeProducts,
   inventory,
   productVariants,
   products,
@@ -490,6 +491,39 @@ const seed = async (): Promise<void> => {
       });
   }
 
+  /*
+   * A starter "Popular right now", one product per category.
+   *
+   * The curated grid is exclusive — nothing fills it automatically — so a fresh
+   * database would otherwise render the home screen with that section missing
+   * entirely, and the first person to look would reasonably think it was
+   * broken. The production migration backfills the same way for the same
+   * reason; this is its equivalent for anyone starting from nothing.
+   *
+   * Only when the table is empty. Re-seeding must not silently undo whatever
+   * ops arranged in the dashboard.
+   */
+  const [existingFeatured] = await db.select({ id: homeProducts.id }).from(homeProducts).limit(1);
+  let featuredCount = 0;
+  if (!existingFeatured) {
+    const firstPerCategory = await db
+      .selectDistinctOn([products.categoryId], { id: products.id })
+      .from(products)
+      .innerJoin(brands, eq(brands.id, products.brandId))
+      .where(and(eq(products.isActive, true), eq(brands.status, 'active')))
+      .orderBy(products.categoryId, products.createdAt)
+      .limit(12);
+
+    for (const [order, row] of firstPerCategory.entries()) {
+      await db
+        .insert(homeProducts)
+        .values({ productId: row.id, sortOrder: order })
+        .onConflictDoNothing({ target: homeProducts.productId });
+    }
+    featuredCount = firstPerCategory.length;
+  }
+
+
   logger.info(
     {
       stores: storeRows.length,
@@ -497,6 +531,7 @@ const seed = async (): Promise<void> => {
       products: productCount,
       inventoryRows: stockRows,
       promotions: SEED_PROMOTIONS.length,
+        featuredProducts: featuredCount,
     },
     'Seed complete ✔',
   );

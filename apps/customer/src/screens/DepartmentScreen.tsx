@@ -338,22 +338,31 @@ export function DepartmentScreen({ department }: { department: string }) {
                 </Text>
               </Pressable>
             </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.rail}
-            >
+            {/*
+              Wraps rather than scrolls. Grocery has seven aisles and only about
+              four fit across, so three were invisible unless you thought to
+              swipe — on the screen whose whole job is getting you into the
+              catalogue.
+
+              Two things keep the rows level, because **`flexWrap` is not CSS
+              Grid**: a wrapping flex row does not align rows, so one tile with
+              a two-line name would push only its own column down and stagger
+              the grid. The label reserves two lines' height, and the cells are
+              a fixed percentage with no `flexGrow` — growing would stretch a
+              lone tile on the last row to the full width.
+            */}
+            <View style={styles.catGrid}>
               {categories.data.map((c) => (
                 <Pressable key={c.id} style={styles.catTile} onPress={() => openCategory(c)}>
                   <View style={styles.catTileImage}>
                     <Thumb imageUrl={c.imageUrl} name={c.name} fill radius={theme.radii.md} />
                   </View>
-                  <Text variant="labelSm" align="center" numberOfLines={2}>
+                  <Text variant="labelSm" align="center" numberOfLines={2} style={styles.catName}>
                     {c.name}
                   </Text>
                 </Pressable>
               ))}
-            </ScrollView>
+            </View>
           </View>
         ) : null}
 
@@ -613,10 +622,15 @@ const styles = StyleSheet.create({
   seeAll: { color: theme.colors.primaryPressed },
   // Rails bleed to the right screen edge; the section header stays on the grid.
   rail: { gap: theme.spacing.md, paddingRight: theme.layout.margin },
-  catTile: { width: 64, alignItems: 'center', gap: theme.spacing.sm },
+  /** Four per row. 22% + the 12px gap leaves a few px of slack, which is fine
+   *  — the alternative, `flexGrow`, stretches a lone tile on the last row. */
+  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.md },
+  catTile: { width: '22%', alignItems: 'center', gap: theme.spacing.sm },
+  /** Two lines of `labelSm` (14px leading), reserved so rows stay level. */
+  catName: { minHeight: 28 },
   catTileImage: {
-    width: 64,
-    height: 64,
+    width: '100%',
+    aspectRatio: 1,
     borderRadius: theme.radii.lg,
     backgroundColor: theme.colors.infoSoft,
     padding: 7,

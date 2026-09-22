@@ -114,11 +114,12 @@ export const catalogRepository = {
    */
   async listHomeCategories(
     ex: Executor = db,
-  ): Promise<Array<{ id: string; name: string; departmentKey: string }>> {
+  ): Promise<Array<{ id: string; name: string; imageUrl: string | null; departmentKey: string }>> {
     return ex
       .select({
         id: categories.id,
         name: categories.name,
+        imageUrl: categories.imageUrl,
         departmentKey: businessTypes.key,
       })
       .from(categories)

@@ -247,30 +247,38 @@ export default function HomeScreen() {
             <Text variant="h3" style={styles.sectionTitle}>
               Popular categories
             </Text>
+            {/*
+              The same tile a department draws: the category's own photo with
+              its name underneath.
+
+              It was a pill with a tinted square and one generic tag glyph
+              repeated across every category — which read as placeholder art
+              beside the photographed tiles inside a shop, and told a shopper
+              nothing. Using the real image means the two screens agree about
+              what a category looks like.
+
+              Still a horizontal rail rather than a wrapping grid: the home
+              carries up to twelve categories across every department, and three
+              rows of tiles would push the promos and the product grid below the
+              fold. A department shows its own handful and wraps.
+            */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.chipRow}
+              contentContainerStyle={styles.catRail}
             >
               {chips.map((c) => (
                 <Pressable
                   key={c.id}
-                  style={styles.chip}
+                  style={styles.catTile}
                   onPress={() => router.push(`/department/${c.departmentKey}?categoryId=${c.id}`)}
                   accessibilityRole="button"
                   accessibilityLabel={`${c.name} in ${nameByKey.get(c.departmentKey) ?? c.departmentKey}`}
                 >
-                  <View style={[styles.chipTile, { backgroundColor: tintFor(c.departmentKey) }]}>
-                    <Icon
-                      name="pricetag-outline"
-                      size={13}
-                      color={theme.colors.textInverse}
-                      strokeWidth={2}
-                    />
+                  <View style={styles.catTileImage}>
+                    <Thumb imageUrl={c.imageUrl} name={c.name} fill radius={theme.radii.md} />
                   </View>
-                  {/* Bold, per the comp: the chip is a control, and its label
-                      carries the same weight as the button text it behaves like. */}
-                  <Text variant="bodyStrong" numberOfLines={1}>
+                  <Text variant="labelSm" align="center" numberOfLines={2} style={styles.catName}>
                     {c.name}
                   </Text>
                 </Pressable>
@@ -655,30 +663,25 @@ const styles = StyleSheet.create({
   },
   flagText: { color: theme.colors.onPromo, fontSize: 9.5, lineHeight: 13, letterSpacing: 0.2 },
 
-  chipRow: {
+  catRail: {
     flexDirection: 'row',
-    gap: 8,
+    gap: theme.spacing.md,
     paddingHorizontal: theme.layout.margin,
     paddingBottom: 4,
   },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radii.pill,
-    paddingLeft: 9,
-    paddingRight: 13,
-    paddingVertical: 8,
+  /** Matches `DepartmentScreen`'s tile — fixed here because a rail has no row
+   *  to divide up, where the department's grid does. */
+  catTile: { width: 68, alignItems: 'center', gap: theme.spacing.sm },
+  catTileImage: {
+    width: 68,
+    height: 68,
+    borderRadius: theme.radii.lg,
+    backgroundColor: theme.colors.infoSoft,
+    padding: 7,
+    overflow: 'hidden',
   },
-  chipTile: {
-    width: 24,
-    height: 24,
-    borderRadius: theme.radii.xs - 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  /** Two lines of `labelSm`, reserved so a long name cannot shorten the rail. */
+  catName: { minHeight: 28 },
 
   promoRow: {
     flexDirection: 'row',

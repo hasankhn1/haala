@@ -3,7 +3,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { type FormEvent, useState } from 'react';
-import type { AdminBannerView, BusinessTypeView, DepartmentView } from '@haala/shared';
+import type {
+  AdminBannerView,
+  BusinessTypeView,
+  DepartmentView,
+  FeaturedProductView,
+  ProductPickerRow,
+} from '@haala/shared';
 import { ImageUploader } from '@/components/ImageUploader';
 import { ApiError, api } from '@/lib/api';
 
@@ -117,6 +123,98 @@ export default function HomepagePage() {
     },
     onError,
   });
+
+  // ── Featured products ───────────────────────────────────────────────────
+  const [search, setSearch] = useState('');
+
+  const featuredQuery = useQuery({
+    queryKey: ['admin', 'home-products'],
+    queryFn: () => api.get<FeaturedProductView[]>('/admin/home-products'),
+  });
+
+  const searchResults = useQuery({
+    queryKey: ['admin', 'product-search', search],
+    queryFn: () => api.get<ProductPickerRow[]>(`/admin/products?q=${encodeURIComponent(search)}`),
+  });
+
+  const invalidateFeatured = () => {
+    qc.invalidateQueries({ queryKey: ['admin', 'home-products'] });
+    // The customer home is cached server-side and the routes clear it, but the
+    // dashboard's own copy of `/catalog/departments` drives the coverage hint.
+    qc.invalidateQueries({ queryKey: ['catalog', 'departments'] });
+  };
+
+  const feature = useMutation({
+    mutationFn: (productId: string) =>
+      api.post<FeaturedProductView>('/admin/home-products', { productId }),
+    onSuccess: () => {
+      setError(null);
+      invalidateFeatured();
+    },
+    onError,
+  });
+
+  const patchFeatured = useMutation({
+    mutationFn: ({ id, ...body }: { id: string } & Partial<FeaturedProductView>) =>
+      api.patch<FeaturedProductView>(`/admin/home-products/${id}`, body),
+    onSuccess: () => {
+      setError(null);
+      invalidateFeatured();
+    },
+    onError,
+  });
+
+  const unfeature = useMutation({
+    mutationFn: (id: string) => api.del(`/admin/home-products/${id}`),
+    onSuccess: () => {
+      setError(null);
+      invalidateFeatured();
+    },
+    onError,
+  });
+
+  const featured = featuredQuery.data ?? [];
+  const featuredIds = new Set(featured.map((f) => f.productId));
+  const candidates = searchResults.data ?? [];
+
+  /**
+   * Categories with nothing featured.
+   *
+   * Derived from the candidate list rather than a separate categories fetch:
+   * the search already returns every sellable product's category, so an unnamed
+   * category here means one whose products are all unsellable — which is not a
+   * coverage gap an editor can act on.
+   */
+  const uncovered = [
+    ...new Set(
+      candidates
+        .filter((c) => !featuredIds.has(c.id))
+        .map((c) => c.categoryName)
+        .filter((name) => !featured.some((f) => f.categoryName === name)),
+    ),
+  ].sort();
+
+  /**
+   * Move a feature one place by **renumbering positions**, not by swapping the
+   * two rows' `sortOrder` values.
+   *
+   * Swapping is the obvious implementation and it is wrong: nothing guarantees
+   * the numbers are distinct, and swapping equal values leaves the list exactly
+   * as it was — the arrow appears to do nothing. Same bug, same fix, as the
+   * banner rows above.
+   */
+  const moveFeatured = (index: number, by: -1 | 1) => {
+    const next = [...featured];
+    const target = next[index];
+    const neighbour = next[index + by];
+    if (!target || !neighbour) return;
+    next[index] = neighbour;
+    next[index + by] = target;
+
+    next.forEach((f, i) => {
+      if (f.sortOrder !== i) patchFeatured.mutate({ id: f.id, sortOrder: i });
+    });
+  };
 
   const rows = banners.data ?? [];
   const departments = types.data ?? [];
@@ -388,6 +486,183 @@ export default function HomepagePage() {
               No banners yet. The promo row is hidden in the app until there is one.
             </div>
           ) : null}
+        </div>
+      </div>
+
+      {/*
+        Featured products — "Popular right now" on the customer home.
+
+        Below the banners rather than beside them because both are editorial
+        content for the same screen, and a page that reads top to bottom in the
+        order the app draws is easier to hold in your head than two columns.
+      */}
+      <div className="card" style={{ marginTop: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16 }}>
+          <div>
+            <h2 style={{ marginTop: 0, marginBottom: 4 }}>Popular right now</h2>
+            <p className="muted" style={{ fontSize: 13, margin: 0 }}>
+              The grid on the customer home shows exactly these, in this order. Nothing is added
+              automatically — if this list is empty, the section does not appear.
+            </p>
+          </div>
+        </div>
+
+        {/*
+          Which categories have nothing featured. This is what makes "products
+          from all categories" something an editor can see rather than hope for.
+        */}
+        {uncovered.length > 0 ? (
+          <div className="badge neutral" style={{ marginTop: 12, display: 'inline-block' }}>
+            Nothing featured from: {uncovered.join(', ')}
+          </div>
+        ) : null}
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 320px) 1fr', gap: 24, marginTop: 16 }}>
+          <div style={{ display: 'grid', gap: 10, alignSelf: 'start' }}>
+            <div className="field">
+              <label htmlFor="product-search">Add a product</label>
+              <input
+                id="product-search"
+                value={search}
+                placeholder="Search by name…"
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+
+            <div style={{ maxHeight: 340, overflowY: 'auto', display: 'grid', gap: 4 }}>
+              {candidates.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className="btn ghost"
+                  style={{ justifyContent: 'flex-start', textAlign: 'left' }}
+                  disabled={featuredIds.has(c.id) || feature.isPending}
+                  onClick={() => feature.mutate(c.id)}
+                >
+                  <span>
+                    {c.name}
+                    <span className="muted" style={{ fontSize: 12, marginLeft: 8 }}>
+                      {c.categoryName}
+                    </span>
+                  </span>
+                  {featuredIds.has(c.id) ? (
+                    <span className="muted" style={{ fontSize: 12, marginLeft: 'auto' }}>
+                      featured
+                    </span>
+                  ) : null}
+                </button>
+              ))}
+              {searchResults.isLoading ? <div className="empty">Searching…</div> : null}
+              {!searchResults.isLoading && candidates.length === 0 ? (
+                <div className="empty">No products match.</div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: 70 }}>Photo</th>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th style={{ width: 90 }}>Order</th>
+                  <th style={{ width: 170 }} />
+                </tr>
+              </thead>
+              <tbody>
+                {featured.map((f, i) => (
+                  <tr key={f.id} style={f.isActive ? undefined : { opacity: 0.55 }}>
+                    <td>
+                      {f.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={f.imageUrl}
+                          alt=""
+                          style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 8 }}
+                        />
+                      ) : (
+                        <span className="muted" style={{ fontSize: 12 }}>
+                          —
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <strong>{f.name}</strong>
+                      {f.isActive ? null : (
+                        <span className="badge neutral" style={{ marginLeft: 8 }}>
+                          off
+                        </span>
+                      )}
+                      {/*
+                        Withheld for a reason the editor did not choose — the
+                        product went off sale or its shop was suspended. Saying
+                        so beats leaving somebody to wonder why their pick never
+                        showed up.
+                      */}
+                      {f.sellable ? null : (
+                        <div className="badge bad" style={{ marginTop: 6 }}>
+                          held back — this product is off sale
+                        </div>
+                      )}
+                    </td>
+                    <td className="muted" style={{ whiteSpace: 'nowrap' }}>
+                      {f.categoryName}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button
+                          className="btn ghost"
+                          type="button"
+                          aria-label={`Move ${f.name} up`}
+                          disabled={i === 0 || patchFeatured.isPending}
+                          onClick={() => moveFeatured(i, -1)}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          className="btn ghost"
+                          type="button"
+                          aria-label={`Move ${f.name} down`}
+                          disabled={i === featured.length - 1 || patchFeatured.isPending}
+                          onClick={() => moveFeatured(i, 1)}
+                        >
+                          ↓
+                        </button>
+                      </div>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', whiteSpace: 'nowrap' }}>
+                        <button
+                          className="btn ghost"
+                          type="button"
+                          disabled={patchFeatured.isPending}
+                          onClick={() => patchFeatured.mutate({ id: f.id, isActive: !f.isActive })}
+                        >
+                          {f.isActive ? 'Turn off' : 'Turn on'}
+                        </button>
+                        <button
+                          className="btn ghost"
+                          type="button"
+                          disabled={unfeature.isPending}
+                          onClick={() => unfeature.mutate(f.id)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {featuredQuery.isLoading ? <div className="empty">Loading…</div> : null}
+            {!featuredQuery.isLoading && featured.length === 0 ? (
+              <div className="empty">
+                Nothing featured. The “Popular right now” section is hidden in the app until you
+                add something.
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </>
