@@ -25,5 +25,6 @@ export const qk = {
   orders: ['orders'] as const,
   promo: (code: string) => ['promo', code] as const,
   notifications: ['notifications'] as const,
+  paymentMethods: ['payment-methods'] as const,
   order: (id: string) => ['order', id] as const,
 };

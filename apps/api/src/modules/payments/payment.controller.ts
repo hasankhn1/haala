@@ -1,8 +1,20 @@
 import type { Request, Response } from 'express';
 import { sendSuccess } from '../../common/http';
 import { paymentService } from './payment.service';
+import { walletService } from './wallet.service';
 
 export const paymentController = {
+  /** GET /payments/methods — the signed-in customer's saved cards. */
+  async listMethods(req: Request, res: Response): Promise<void> {
+    sendSuccess(res, { cards: await walletService.list(req.auth!.userId) });
+  },
+
+  /** DELETE /payments/methods/:token */
+  async removeMethod(req: Request, res: Response): Promise<void> {
+    await walletService.remove(req.auth!.userId, req.params.token!);
+    sendSuccess(res, { removed: true });
+  },
+
   /** GET /payments/:orderId/status */
   async status(req: Request, res: Response): Promise<void> {
     const result = await paymentService.getStatus(req.params.orderId!);

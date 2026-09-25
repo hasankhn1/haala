@@ -41,66 +41,50 @@ Online payments, once you have Safepay credentials:
 
 ```
 PAYMENT_ONLINE_PROVIDER=safepay
-SAFEPAY_API_KEY=...
-SAFEPAY_SECRET_KEY=...
-SAFEPAY_WEBHOOK_SECRET=...            # must match the Safepay dashboard
+PUBLIC_API_URL=https://<api-domain>   # where their hosted page returns the browser
+SAFEPAY_API_KEY=...                   # public key, `sec_…`
+SAFEPAY_SECRET_KEY=...                # private key — never leaves the server
+SAFEPAY_WEBHOOK_SECRET=...            # Developers → Endpoints → shared secret
 SAFEPAY_BASE_URL=https://api.getsafepay.com
 SAFEPAY_ENVIRONMENT=production
+SAFEPAY_INTENT=CYBERSOURCE
 ```
 
 Leave `PAYMENT_ONLINE_PROVIDER=stub` until those are real. The Safepay provider
 throws on first use if selected without credentials — deliberately loud, rather
 than silently taking payments nowhere.
 
-Point Safepay's webhook at:
+Webhook, registered in the Safepay dashboard under Developers → Endpoints:
 
 ```
 https://<api-domain>/api/v1/payments/webhooks/safepay
 ```
 
-### Rapid Gateway
+Subscribe to the **2.0.0** payment events. Signatures are HMAC-SHA512 over the
+raw body in `X-SFPY-SIGNATURE`; an unverifiable one is answered **401**, not
+200, so their retry queue keeps trying while a wrong secret is fixed.
 
-The other online provider, using their hosted-redirect flow.
+**`PUBLIC_API_URL` is not optional here.** The return URLs handed to the hosted
+page are built from it, and a customer's browser loads them on a mobile network
+— the default `http://localhost:4000` would strand every payer on a dead page.
+Locally this has to be a tunnel (`cloudflared tunnel --url http://localhost:4000`).
 
-```
-PAYMENT_ONLINE_PROVIDER=rapid
-PUBLIC_API_URL=https://<api-domain>   # where their hosted page returns the browser
-RAPID_MERCHANT_ID=...
-RAPID_CLIENT_ID=                      # blank → defaults to the merchant id
-RAPID_CLIENT_SECRET=...
-RAPID_WEBHOOK_SECRET=...
-RAPID_ENVIRONMENT=LIVE
-RAPID_BASE_URL=https://secure.rapid-gateway.com
-RAPID_MERCHANT_NAME=Haala
-```
+**Sandbox and live are separate accounts**, each with its own API keys, its own
+webhook endpoint and its own shared secret. Nothing carries over, and the
+webhook payload's `merchant_api_key` is checked against `SAFEPAY_API_KEY` — so
+pointing a sandbox endpoint at the live API cannot settle a real order with a
+free test payment. Getting that pairing wrong shows up as an acknowledged
+webhook that changes nothing, logged as "for a different merchant account".
 
-Webhook, registered in their portal:
+One asymmetry worth knowing, because it works in sandbox and 404s on the first
+live payment: the **checkout** host is `https://getsafepay.com` in production
+but `https://sandbox.api.getsafepay.com` in sandbox — production drops the
+`api.` that `SAFEPAY_BASE_URL` carries. That table is in `safepay.provider.ts`
+and has a test over both branches.
 
-```
-https://<api-domain>/api/v1/payments/webhooks/rapid
-```
-
-**`PUBLIC_API_URL` is not optional here.** The return URLs handed to their
-hosted page are built from it, and a customer's browser loads them on a mobile
-network — the default `http://localhost:4000` would strand every payer on a
-dead page. Locally this has to be a tunnel.
-
-**Webhook settings are per environment.** The URL and signing salt saved in
-their TEST mode do not apply to LIVE and vice versa. Their own documentation
-names "no webhook URL saved for TEST" as the usual reason sandbox payments
-complete and nothing ever arrives — so registering LIVE does not mean sandbox
-works, and switching `RAPID_ENVIRONMENT` means changing `RAPID_WEBHOOK_SECRET`
-too.
-
-Sandbox picks an outcome from the amount: **PKR 100 succeeds**, 200 fails, 300
-stays pending, 400 expires, 500 times out. A test basket that does not total
-exactly one of those will not behave.
-
-Refunds are **not** wired for this provider — their refund events are
-documented, the endpoint that raises one is not. `refundPayment` throws with a
-message saying to refund from their portal, so an attempt is a visible failure
-rather than a silent no-op. COD cancel-and-refund never reaches a gateway and is
-unaffected.
+Refunds are wired, including partial ones. Card refunds are only accepted for
+90 days after the transaction; within 24 hours of capture, a reversal is the
+better instrument and is done from their dashboard.
 
 ## 3. Migrations
 

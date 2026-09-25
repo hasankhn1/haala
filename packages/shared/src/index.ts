@@ -20,3 +20,4 @@ export * from './contracts/ops';
 export * from './contracts/promotions';
 export * from './contracts/notifications';
 export * from './contracts/analytics';
+export * from './contracts/payments';

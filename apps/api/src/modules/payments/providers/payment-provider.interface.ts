@@ -10,6 +10,16 @@ export interface PaymentCustomer {
    */
   phone: string | null;
   email?: string | null;
+  /**
+   * This customer's identity at the gateway, if we have already made one —
+   * Safepay's `cus_…`, persisted on `users.safepayCustomerToken`.
+   *
+   * Null means "not yet", not "never": a provider that can create one should,
+   * and report it back on `CreatePaymentResult.customerRef` so it is reused
+   * next time. Passing the same person as a new customer on every order is how
+   * their saved cards end up scattered across accounts nobody can reach.
+   */
+  providerCustomerRef?: string | null;
 }
 
 export interface CreatePaymentInput {
@@ -34,6 +44,12 @@ export interface CreatePaymentResult {
   providerRef: string | null;
   status: PaymentStatus;
   checkout?: CheckoutHandoff | null;
+  /**
+   * Set only when the provider **created** a gateway customer during this call,
+   * so the caller can persist it against the user. Unset when one was reused or
+   * when the provider has no such concept.
+   */
+  customerRef?: string | null;
 }
 
 export interface VerifyPaymentInput {

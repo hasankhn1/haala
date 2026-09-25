@@ -22,6 +22,12 @@ export interface InitiatePaymentInput {
 export interface InitiatePaymentResult {
   payment: Payment;
   checkout: CheckoutHandoff | null;
+  /**
+   * A gateway customer the provider created during this call. The caller owns
+   * the user row, so the caller persists it — this module has no business
+   * writing to `users`.
+   */
+  customerRef?: string | null;
 }
 
 export const paymentService = {
@@ -60,7 +66,11 @@ export const paymentService = {
       ex,
     );
 
-    return { payment, checkout: result.checkout ?? null };
+    return {
+      payment,
+      checkout: result.checkout ?? null,
+      ...(result.customerRef ? { customerRef: result.customerRef } : {}),
+    };
   },
 
   async verify(orderId: string): Promise<Payment> {

@@ -136,6 +136,12 @@ export default function AccountScreen() {
               />
               <Divider />
               <MenuRow
+                icon="card-outline"
+                label="Payment methods"
+                onPress={() => router.push('/payment-methods')}
+              />
+              <Divider />
+              <MenuRow
                 icon="notifications-outline"
                 label="Notifications"
                 badge={unread}

@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "safepay_customer_token" text;

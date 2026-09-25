@@ -45,6 +45,18 @@ export const users = pgTable(
      * E.164, validated against `phoneSchema` server-side.
      */
     deliveryPhone: text(),
+    /**
+     * This customer's identity at Safepay (`cus_…`), created on their first
+     * online checkout and reused forever after. Null for everyone who has only
+     * ever paid cash, which is most people.
+     *
+     * **It is the only key.** Safepay puts no uniqueness constraint on a
+     * customer's email — creating a second one for the same person succeeds
+     * silently and strands every card saved against the first, with no error
+     * and no way to notice from their side. So this column, not the email, is
+     * what makes "the customer we already made" findable.
+     */
+    safepayCustomerToken: text(),
     isActive: boolean().notNull().default(true),
     ...timestamps(),
   },

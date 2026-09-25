@@ -28,6 +28,7 @@ import { useAuth } from '../src/auth/AuthContext';
 import { useBasket, useMergeGuestCart } from '../src/hooks/useCart';
 import { haptics } from '../src/lib/haptics';
 import { runOnlineCheckout } from '../src/lib/onlineCheckout';
+import { usePaymentSheet } from '../src/components/PaymentSheet';
 import { MobileNumberDrawer } from '../src/components/MobileNumberDrawer';
 import { track } from '../src/lib/analytics';
 import { useCheckoutDraft } from '../src/store/useCheckoutDraft';
@@ -145,8 +146,21 @@ export default function CheckoutScreen() {
     offeredContact.current = true;
     setContactSheet(true);
   }, [signedIn, deliveryPhone]);
+  /*
+   * Where the gateway's page gets rendered. Native puts it in a modal WebView
+   * inside the app; web opens a tab. `runOnlineCheckout` is handed `present`
+   * and does not know or care which it got.
+   */
+  const { present: presentPayment, sheet: paymentSheet } = usePaymentSheet();
   const [addressId, setAddressId] = useState<string | null>(null);
-  const [method, setMethod] = useState<PaymentMethod>('cod');
+  /*
+   * Card first, by product decision (2026-09-25). COD stays one tap away.
+   *
+   * Worth watching rather than assuming: the DHA poll found 2 of 72 residents
+   * already ordering online, so paying by card is new behaviour for very nearly
+   * everyone here. If first-order completion drops, this line is the revert.
+   */
+  const [method, setMethod] = useState<PaymentMethod>('online');
   const [sheet, setSheet] = useState(false);
   const [promoInput, setPromoInput] = useState('');
   const [appliedCode, setAppliedCode] = useState<string | null>(null);
@@ -280,7 +294,7 @@ export default function CheckoutScreen() {
 
       // The order exists by now either way, so whatever the payment handoff
       // does we land on the confirmation rather than losing the order.
-      const outcome = await runOnlineCheckout(res);
+      const outcome = await runOnlineCheckout(res, presentPayment);
       if (outcome.kind === 'resolved' && outcome.status === 'failed') {
         haptics.error();
         toast.show('Payment was not completed. You can retry from your orders.', 'error');
@@ -503,18 +517,18 @@ export default function CheckoutScreen() {
           </Text>
           <View style={styles.outlined}>
             <PayRow
-              icon="cash-outline"
-              name="Cash on delivery"
-              sub="Pay the rider when it arrives"
-              selected={method === 'cod'}
-              onPress={() => setMethod('cod')}
-            />
-            <PayRow
               icon="card-outline"
               name="Card / wallet"
               sub="Secure hosted checkout"
               selected={method === 'online'}
               onPress={() => setMethod('online')}
+            />
+            <PayRow
+              icon="cash-outline"
+              name="Cash on delivery"
+              sub="Pay the rider when it arrives"
+              selected={method === 'cod'}
+              onPress={() => setMethod('cod')}
               last
             />
             <View style={styles.pciStrip}>
@@ -692,6 +706,9 @@ export default function CheckoutScreen() {
           setJustSaved(true);
         }}
       />
+
+      {/* Null on web, where the checkout opens in a tab instead. */}
+      {paymentSheet}
     </SafeAreaView>
   );
 }

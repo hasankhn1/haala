@@ -36,45 +36,40 @@ const envSchema = z.object({
 
   PAYMENT_ONLINE_PROVIDER: z.string().default('stub'),
 
-  // Safepay. Optional so a dev environment boots on the stub provider; the
-  // provider itself fails loudly if it's selected without credentials, which is
-  // better than silently taking payments nowhere.
+  // ── Safepay ──────────────────────────────────────────────────────────────
+  // All optional: an instance taking COD only is a legitimate deployment, so a
+  // missing key fails at the point of use with a message naming it rather than
+  // refusing to boot. The provider is loud when it is selected without them.
+
+  /** Public key (`sec_…`). Goes in request bodies as `merchant_api_key`. */
   SAFEPAY_API_KEY: blankAsUndefined(z.string().optional()),
+  /** Private key. Goes in the `X-SFPY-MERCHANT-SECRET` header. Never leaves the server. */
   SAFEPAY_SECRET_KEY: blankAsUndefined(z.string().optional()),
+  /**
+   * The endpoint's shared secret, from Dashboard → Developers → Endpoints.
+   * **Per environment** — sandbox and live are separate accounts with separate
+   * secrets, and rotating one invalidates the old immediately.
+   */
   SAFEPAY_WEBHOOK_SECRET: blankAsUndefined(z.string().optional()),
   SAFEPAY_BASE_URL: z.string().url().default('https://sandbox.api.getsafepay.com'),
   SAFEPAY_ENVIRONMENT: z.enum(['sandbox', 'production']).default('sandbox'),
+  /**
+   * The payment channel the shopper is taken through. Which of these works is a
+   * property of the Safepay account, not of this code — both are valid and
+   * their examples use CYBERSOURCE.
+   */
+  SAFEPAY_INTENT: z.enum(['CYBERSOURCE', 'MPGS']).default('CYBERSOURCE'),
 
-  // ── Rapid Gateway ────────────────────────────────────────────────────────
-  // All optional: an instance taking COD only is a legitimate deployment, so a
-  // missing key fails at the point of use with a message naming it rather than
-  // refusing to boot.
   /**
    * Where this API is reachable *from the internet* — the return URLs handed to
-   * a payment gateway's hosted page, which a customer's browser loads on a
-   * mobile network with no idea what `localhost` means.
+   * the hosted checkout page, which a customer's browser loads on a mobile
+   * network with no idea what `localhost` means.
    *
    * Locally this is a tunnel; in production it is the Railway URL. Defaults to
    * the local address so nothing breaks for COD-only development, where no
    * third party ever calls back.
    */
   PUBLIC_API_URL: z.string().url().default('http://localhost:4000'),
-
-  RAPID_MERCHANT_ID: blankAsUndefined(z.string().optional()),
-  /**
-   * The OAuth Basic pair. Kept separate from the merchant id because their
-   * prose says `base64(clientId:clientSecret)` while their sample code passes
-   * the merchant id as the client id — this way either arrangement works
-   * without a code change.
-   */
-  RAPID_CLIENT_ID: blankAsUndefined(z.string().optional()),
-  RAPID_CLIENT_SECRET: blankAsUndefined(z.string().optional()),
-  /** Webhook signing salt. **Per environment** — the TEST and LIVE salts differ. */
-  RAPID_WEBHOOK_SECRET: blankAsUndefined(z.string().optional()),
-  RAPID_ENVIRONMENT: z.enum(['TEST', 'LIVE']).default('TEST'),
-  RAPID_BASE_URL: z.string().url().default('https://secure.rapid-gateway.com'),
-  /** Shown on their hosted checkout page. */
-  RAPID_MERCHANT_NAME: z.string().default('Haala'),
 
   // Cloudflare R2, for brand-uploaded images. Optional as a set: an environment
   // without them boots fine and the upload endpoints answer 503, which is

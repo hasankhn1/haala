@@ -16,6 +16,7 @@ import type {
   LoginInput,
   MergeCartInput,
   NotificationListView,
+  SavedCardListView,
   OrderSummaryView,
   OrderView,
   Paginated,
@@ -133,6 +134,15 @@ export const paymentsApi = {
   verify: (orderId: string) =>
     api.post<{ status: PaymentStatus }>(`/payments/${orderId}/verify`),
   status: (orderId: string) => api.get<{ status: PaymentStatus }>(`/payments/${orderId}/status`),
+
+  /**
+   * The cards Safepay holds for this customer. There is no parameter for whose
+   * — the server reads that from the access token, which is the only thing
+   * keeping one person's wallet out of another's.
+   */
+  methods: () => api.get<SavedCardListView>('/payments/methods'),
+  removeMethod: (token: string) =>
+    api.del<{ removed: boolean }>(`/payments/methods/${encodeURIComponent(token)}`),
 };
 
 export const promotionsApi = {

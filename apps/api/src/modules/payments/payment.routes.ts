@@ -1,6 +1,8 @@
 import express, { Router } from 'express';
+import { savedCardTokenSchema } from '@haala/shared';
 import { asyncHandler } from '../../common/http';
 import { authenticate } from '../../common/middleware/authenticate';
+import { validate } from '../../common/middleware/validate';
 import { paymentController } from './payment.controller';
 
 const router: Router = Router();
@@ -48,6 +50,22 @@ router.get(
           '</body>',
       );
   }),
+);
+
+/**
+ * Saved cards. Registered before the `/:orderId/…` routes so a literal segment
+ * is never read as an order id.
+ *
+ * There is no parameter for *whose* wallet: the customer token comes from the
+ * authenticated user's own row. Accepting a `cus_…` here would let anyone who
+ * guessed one list and delete somebody else's cards.
+ */
+router.get('/methods', authenticate, asyncHandler(paymentController.listMethods));
+router.delete(
+  '/methods/:token',
+  authenticate,
+  validate({ params: savedCardTokenSchema }),
+  asyncHandler(paymentController.removeMethod),
 );
 
 router.get('/:orderId/status', authenticate, asyncHandler(paymentController.status));

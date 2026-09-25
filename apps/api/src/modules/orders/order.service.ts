@@ -264,10 +264,23 @@ export const orderService = {
             // `deliveryPhone` exists as a separate column.
             phone: user.deliveryPhone ?? user.phone,
             email: user.email,
+            // Who this person already is at the gateway, so a returning
+            // customer keeps the cards they saved.
+            providerCustomerRef: user.safepayCustomerToken,
           },
         },
         tx,
       );
+
+      /*
+       * Persist a gateway customer the provider had to create. In the same
+       * transaction as the order on purpose: if the order rolls back, so does
+       * this, and the next attempt creates one rather than reusing a token
+       * whose only record we just discarded.
+       */
+      if (payment.customerRef) {
+        await userRepository.update(user.id, { safepayCustomerToken: payment.customerRef }, tx);
+      }
 
       await cartRepository.clear(cart.id, tx);
       await cartRepository.setStore(cart.id, null, tx);
