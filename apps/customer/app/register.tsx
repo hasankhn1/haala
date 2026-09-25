@@ -14,6 +14,7 @@ import { Button, Icon, Input, Text, theme } from '@haala/ui';
 import { messageFor } from '../src/api/client';
 import { useAuth } from '../src/auth/AuthContext';
 import { PhoneField, isCompletePhone, toE164 } from '../src/components/PhoneField';
+import { useSplashReplay } from '../src/components/SplashLoader';
 
 /**
  * Create account — Onyx & Ink. Mirrors the Stitch sign-up: stacked fields on a
@@ -23,6 +24,7 @@ import { PhoneField, isCompletePhone, toE164 } from '../src/components/PhoneFiel
 export default function RegisterScreen() {
   const { register } = useAuth();
   const router = useRouter();
+  const replaySplash = useSplashReplay();
   const [name, setName] = useState('');
   const [national, setNational] = useState('');
   const [email, setEmail] = useState('');
@@ -47,6 +49,7 @@ export default function RegisterScreen() {
         // The contract takes `email?`, so omit it rather than sending "".
         ...(email.trim() ? { email: email.trim() } : {}),
       });
+      replaySplash?.();
       router.replace('/(tabs)');
     } catch (e) {
       setError(messageFor(e, 'Could not create account'));

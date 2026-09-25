@@ -11,6 +11,14 @@
     "plugins": [
       "expo-router",
       [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FF5A1F",
+          "image": "./assets/splash-blank.png",
+          "imageWidth": 64
+        }
+      ],
+      [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Haala uses your location to find the nearest store and set your delivery address."

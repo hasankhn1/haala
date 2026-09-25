@@ -9,6 +9,7 @@ import { catalogApi, ordersApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
 import { useAuth } from '../../src/auth/AuthContext';
 import { DepartmentsSheet } from '../../src/components/DepartmentsSheet';
+import { useSplashDone } from '../../src/components/SplashLoader';
 import { useProductActions } from '../../src/hooks/useProductActions';
 import { toDepartment, type Department } from '../../src/lib/departments';
 import { useCurrentStore } from '../../src/store/useCurrentStore';
@@ -62,7 +63,7 @@ import { useCurrentStore } from '../../src/store/useCurrentStore';
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { address, outOfArea, storeId } = useCurrentStore();
+  const { address, outOfArea, storeId, isLoading: storeLoading } = useCurrentStore();
   const [refreshing, setRefreshing] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -71,6 +72,8 @@ export default function HomeScreen() {
     queryFn: () => catalogApi.home(storeId),
     staleTime: 5 * 60_000,
   });
+  // Until the store resolves, `home` is the storeless payload about to be replaced.
+  useSplashDone(!storeLoading && !home.isLoading);
 
   const { cart, qtyByProduct, busyVariantId, addProduct } = useProductActions(storeId);
 

@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { SignInFlow } from '../src/components/SignInFlow';
 import { RouteError } from '../src/components/RouteError';
+import { useSplashReplay } from '../src/components/SplashLoader';
 
 /**
  * Sign in — the app's entry point while signed out, and reached from the
@@ -12,9 +13,14 @@ import { RouteError } from '../src/components/RouteError';
  */
 export default function LoginScreen() {
   const router = useRouter();
+  const replaySplash = useSplashReplay();
   return (
     <SignInFlow
-      onSignedIn={() => router.replace('/(tabs)')}
+      // Signing in here lands on home, so it gets the same loader as a launch.
+      onSignedIn={() => {
+        replaySplash?.();
+        router.replace('/(tabs)');
+      }}
       /*
        * "Continue as guest" — and the back arrow, when there is somewhere to go
        * back to.

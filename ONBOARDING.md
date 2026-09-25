@@ -216,13 +216,14 @@ surprise than finding it empty.
 **No engineer will guess this one.** The UI does not come from Figma.
 
 The source of truth is **Claude Design**, pulled with the **DesignSync** tool.
-Three files now, and they cover different screens:
+Four files now, and they cover different screens:
 
 | File | Covers |
 | --- | --- |
 | `Grocery App.dc.html` | the department storefront, listing, product, order flow |
 | `Auth & Checkout.dc.html` | sign-in, the provider sheet, checkout |
 | `Haala Home.dc.html` | the marketplace home and the departments sheet |
+| `Haala Splash.dc.html` | the launch loader GIF, and the ember the native splash must match |
 
 The design system they define is called **Basket**: ember `#FF5A1F` on a white
 canvas, warm near-black type `#191410`, Plus Jakarta Sans, heavy radii,
