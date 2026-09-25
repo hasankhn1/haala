@@ -54,6 +54,7 @@ Each of these has already cost a debugging session.
 | Local Postgres and Redis are on **5433 / 6380** — Homebrew holds 5432/6379 | `role haala does not exist` means you hit the host Postgres |
 | `pnpm add` for an Expo package pulls a version for the wrong SDK and nests it, failing Gradle 26 minutes in | Always `expo install` |
 | The Kotlin pin must match React Native's own | RN 0.76.9 → `1.9.25`, in both `apps/*/app.json`. Only Gradle catches a mismatch |
+| An `expo-splash-screen` plugin entry with a colour and no `image` still points Android at `@drawable/splashscreen_logo`, which is never generated — the EAS build dies in `processReleaseResources` | Always pass an `image`. The customer app's is a transparent `assets/splash-blank.png`, so the native splash is plain ember |
 | `react-dom` unpinned crashes both Expo apps on web at runtime, and bundles fine | All three apps pin `18.3.1` |
 | Metro resolves `require()` at **bundle** time | A runtime `Platform.OS` guard does not prevent a bundling failure. Split with `.web.tsx` |
 | Maps never work in Expo Go — it uses its own Maps key | Judge maps only from a dev build or the APK |
@@ -115,9 +116,10 @@ were all found — none of them was visible in the diff.
   system, Railway, and brands stocking shared dark stores. The reasoning is in
   `ONBOARDING.md`; reopening them costs a day and lands in the same place.
 - **Work from a cached copy of the design.** Re-fetch every time — a stale copy
-  once went a whole screen out of date. There are now three files:
-  `Grocery App.dc.html` (the department shell), `Auth & Checkout.dc.html`, and
-  `Haala Home.dc.html` (the marketplace home).
+  once went a whole screen out of date. There are now four files:
+  `Grocery App.dc.html` (the department shell), `Auth & Checkout.dc.html`,
+  `Haala Home.dc.html` (the marketplace home), and `Haala Splash.dc.html` (the
+  launch loader).
 - **Substitute a layout for the comp's.** The marketplace home was first built
   with full-width stacked cards where the comp draws a 210px horizontal rail,
   and with a "Coming soon" section the design does not have. If the comp cannot

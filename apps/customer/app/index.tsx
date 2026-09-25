@@ -1,18 +1,11 @@
 import { Redirect } from 'expo-router';
-import { ActivityIndicator, View } from 'react-native';
-import { theme } from '@haala/ui';
 import { useAuth } from '../src/auth/AuthContext';
 
 export default function Index() {
   const { status } = useAuth();
 
-  if (status === 'loading') {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={theme.colors.primary} size="large" />
-      </View>
-    );
-  }
+  // The launch loader in the root layout covers this until the session is in.
+  if (status === 'loading') return null;
 
   /**
    * Signed out, the app opens on sign-in; signed in, straight to the shop.
