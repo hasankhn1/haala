@@ -20,6 +20,16 @@ export const pushTokens = pgTable(
     token: text().notNull(),
     /** "ios" | "android" — informational, for debugging delivery failures. */
     platform: text(),
+    /**
+     * The Android channel ids this handset actually created, comma-separated.
+     *
+     * Null for a token registered by a build that predates per-category
+     * channels — it has only `default`. Android drops a notification whose
+     * channel does not exist, so targeting `payments` at such a handset loses
+     * the notification silently; `pushToUsers` falls back to `default` unless
+     * the channel is listed here. Empty for iOS, which has no channels.
+     */
+    channels: text(),
     createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
   },

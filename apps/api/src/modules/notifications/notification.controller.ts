@@ -32,6 +32,7 @@ export const notificationController = {
       req.auth!.userId,
       req.body.token,
       req.body.platform ?? null,
+      req.body.channels ?? null,
     );
     sendSuccess(res, { success: true }, 201);
   },

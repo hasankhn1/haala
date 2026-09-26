@@ -1,7 +1,11 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { NOTIFICATION_CHANNEL } from '@haala/shared';
+import {
+  activeNotificationCategories,
+  NOTIFICATION_CHANNEL,
+  type NotificationCategory,
+} from '@haala/shared';
 import {
   configureForegroundNotifications,
   getExpoPushToken,
@@ -22,20 +26,39 @@ configureForegroundNotifications({ showAlert: false });
  * Payments are high so a failed payment interrupts; offers are low and silent.
  * These names are what the customer sees in Android's own settings.
  */
-const CHANNELS: PushChannel[] = [
-  { id: NOTIFICATION_CHANNEL.order, name: 'Order updates', importance: 'high' },
-  { id: NOTIFICATION_CHANNEL.payment, name: 'Payments', importance: 'high' },
-  { id: NOTIFICATION_CHANNEL.brand, name: 'Brand orders', importance: 'default' },
-  { id: NOTIFICATION_CHANNEL.service, name: 'Account & service', importance: 'default' },
-  { id: NOTIFICATION_CHANNEL.offer, name: 'Offers', importance: 'low' },
-];
+const CHANNEL_SPEC: Record<NotificationCategory, { name: string; importance: PushChannel['importance'] }> = {
+  order: { name: 'Order updates', importance: 'high' },
+  payment: { name: 'Payments', importance: 'high' },
+  brand: { name: 'Brand orders', importance: 'default' },
+  service: { name: 'Account & service', importance: 'default' },
+  offer: { name: 'Offers', importance: 'low' },
+};
 
-const register = async (prompt: boolean): Promise<boolean> => {
+/*
+ * Only categories that can actually send something.
+ *
+ * Android never lets an app delete a channel it has created — it lingers in the
+ * customer's system settings forever — so creating one for `brand`, which no
+ * notification type maps to yet, is a permanent piece of furniture advertising
+ * a feature that does not exist. It appears the day brand types do.
+ */
+const CHANNELS: PushChannel[] = activeNotificationCategories().map((category) => ({
+  id: NOTIFICATION_CHANNEL[category],
+  ...CHANNEL_SPEC[category],
+}));
+
+const register = async (prompt: boolean, isCancelled: () => boolean = () => false): Promise<boolean> => {
   const reg = await getExpoPushToken({ prompt, channels: CHANNELS });
   // Null is the ordinary case on a simulator or after a declined prompt.
   if (!reg) return false;
+  // Checked after the await, which is the only place it can have changed.
+  if (isCancelled()) return false;
   try {
-    await notificationsApi.registerPushToken(reg.token, reg.platform);
+    await notificationsApi.registerPushToken(
+      reg.token,
+      reg.platform,
+      reg.platform === 'android' ? CHANNELS.map((c) => c.id) : undefined,
+    );
   } catch {
     // A failed registration costs notifications, not the session. The next
     // launch registers again.
@@ -65,7 +88,21 @@ export function usePushRegistration(isAuthenticated: boolean): void {
   const qc = useQueryClient();
 
   useEffect(() => {
-    if (isAuthenticated) void register(false);
+    if (!isAuthenticated) return;
+    /*
+     * `register` awaits `getExpoPushToken`, which on Android also creates the
+     * channels — hundreds of milliseconds. Sign out inside that window and
+     * `unregisterPushToken` deletes the row *first*, then this resolves and
+     * POSTs the token straight back, so the handset keeps receiving the
+     * previous customer's order and payment notifications.
+     *
+     * The guard was here before this file was rewritten; it is not decoration.
+     */
+    let cancelled = false;
+    void register(false, () => cancelled);
+    return () => {
+      cancelled = true;
+    };
   }, [isAuthenticated]);
 
   // Whatever lands while the app is open is already in the inbox server-side.

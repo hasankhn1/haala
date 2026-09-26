@@ -5,6 +5,12 @@ export const registerPushTokenSchema = z
     /** Expo push token, e.g. `ExponentPushToken[xxxxxxxx]`. */
     token: z.string().min(10).max(256),
     platform: z.enum(['ios', 'android']).optional(),
+    /**
+     * Android channel ids this build created. Optional, because a build that
+     * predates channels does not send it — and its absence is the signal that
+     * the handset has only `default`.
+     */
+    channels: z.array(z.string().min(1).max(40)).max(10).optional(),
   })
   .strict();
 export type RegisterPushTokenInput = z.infer<typeof registerPushTokenSchema>;
@@ -80,6 +86,22 @@ export const notificationCategory = (type: string): NotificationCategory =>
 /** Every stored type that belongs to `category` — what the inbox filter matches on. */
 export const notificationTypesIn = (category: NotificationCategory): string[] =>
   Object.keys(CATEGORY_BY_TYPE).filter((t) => CATEGORY_BY_TYPE[t] === category);
+
+/**
+ * Categories that can actually carry a notification today.
+ *
+ * `brand` is declared everywhere — inbox filter, preference switch, Android
+ * channel — and no type maps to it yet, because nothing sends brand-order
+ * notifications. Offering it anyway gives the customer a filter chip that
+ * answers "Nothing here yet" forever, a switch that writes to a column nothing
+ * reads, and a channel in Android's own settings that never fires.
+ *
+ * Deriving the surfaces from this instead of listing categories by hand means
+ * they light up on their own the day a brand type is added to
+ * `CATEGORY_BY_TYPE`, rather than being dead wiring somebody has to remember.
+ */
+export const activeNotificationCategories = (): NotificationCategory[] =>
+  NOTIFICATION_CATEGORIES.filter((c) => notificationTypesIn(c).length > 0);
 
 /**
  * Android channel per category. Order updates keep the id `default` because

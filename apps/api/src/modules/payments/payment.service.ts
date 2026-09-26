@@ -31,6 +31,38 @@ export interface InitiatePaymentResult {
   customerRef?: string | null;
 }
 
+/**
+ * The states that legitimately come **after** `paid`.
+ *
+ * A refund is not the payment coming undone — it is the next thing that happens
+ * to money we definitely received — so it has to be allowed through, or a refund
+ * issued from the gateway's own dashboard would never reach us.
+ */
+const AFTER_PAID: ReadonlySet<PaymentStatus> = new Set([
+  PaymentStatus.Paid,
+  PaymentStatus.Refunded,
+  PaymentStatus.PartiallyRefunded,
+]);
+
+/**
+ * **A paid payment never becomes unpaid.**
+ *
+ * Two callers need this and only one had it. Gateways retry and deliveries
+ * arrive out of order, so a stale `failed` can land after a `succeeded` — and
+ * `verify()` is the worse case, because the customer app calls it the instant
+ * the checkout sheet closes (`runOnlineCheckout`), which is exactly when it
+ * races the webhook and reads a tracker that has not settled yet.
+ *
+ * Since `verify()` also announces the outcome now, an unguarded one does not
+ * just corrupt the row — it pushes "Payment didn't go through" at a customer
+ * whose order is paid and possibly already picked.
+ *
+ * Exported for its own tests: the direction of this check is the whole point,
+ * and it has to be able to fail.
+ */
+export const wouldUnpay = (current: PaymentStatus, next: PaymentStatus): boolean =>
+  current === PaymentStatus.Paid && !AFTER_PAID.has(next);
+
 export const paymentService = {
   /**
    * Create (or return the existing) payment for an order. Idempotent on
@@ -80,6 +112,20 @@ export const paymentService = {
 
     const provider = paymentRegistry.get(payment.provider);
     const { status } = await provider.verifyPayment({ orderId, providerRef: payment.providerRef });
+
+    /*
+     * The same guard the webhook has, for the same reason — and this is the
+     * caller that needs it most. `transitionStatus` only refuses a *no-op*
+     * (`status <> $2`), so paid → pending is a write it would happily make.
+     */
+    if (wouldUnpay(payment.status, status)) {
+      logger.warn(
+        { paymentId: payment.id, incoming: status },
+        'Ignoring a verify that would un-pay a paid payment',
+      );
+      return payment;
+    }
+
     const moved = await paymentRepository.transitionStatus(payment.id, status);
     if (moved) void notificationService.notifyPaymentOutcome(moved);
     return moved ?? payment;
@@ -131,16 +177,7 @@ export const paymentService = {
       return { handled: false };
     }
 
-    /*
-     * Never move backwards out of `paid`.
-     *
-     * Gateways retry — Rapid Gateway's ladder runs 30s, 2m, 10m, 1h, 6h — and
-     * deliveries can arrive out of order, so a stale `failed` can legitimately
-     * land after a `completed`. Re-applying the same status is harmless;
-     * un-paying a paid order is not, and it would strand an order that has
-     * already been picked.
-     */
-    if (payment.status === PaymentStatus.Paid && result.status !== PaymentStatus.Paid) {
+    if (wouldUnpay(payment.status, result.status)) {
       logger.warn(
         { paymentId: payment.id, incoming: result.status },
         'Ignoring a webhook that would un-pay a paid payment',
@@ -152,11 +189,23 @@ export const paymentService = {
       providerRef: result.providerRef ?? payment.providerRef,
       rawPayload: safeJson(webhook.rawBody),
     };
-    // A retried delivery of a status we already hold still records its payload,
-    // but only a real transition is announced to the customer.
+    /*
+     * One statement per delivery.
+     *
+     * This used to fall back to a second `updateStatus` when `transitionStatus`
+     * matched nothing, so every redelivery on a gateway's retry ladder cost an
+     * extra round trip and a no-op UPDATE on a hot table. The fallback only
+     * re-recorded the payload of an event we already hold — the same event,
+     * redelivered — so dropping it loses nothing and keeps the first payload,
+     * which is the one that actually moved the payment.
+     *
+     * The condition has to stay inside the UPDATE. `verify` and the webhook
+     * race routinely, and comparing a status we read a moment ago would let
+     * both of them decide they were the transition and push the customer two
+     * notifications.
+     */
     const moved = await paymentRepository.transitionStatus(payment.id, result.status, patch);
     if (moved) void notificationService.notifyPaymentOutcome(moved);
-    else await paymentRepository.updateStatus(payment.id, result.status, patch);
     return { handled: true };
   },
 

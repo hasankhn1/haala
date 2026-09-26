@@ -48,6 +48,25 @@ const markPrimed = async (orderId: string): Promise<void> => {
 };
 
 /**
+ * One priming decision at a time.
+ *
+ * `shouldPrime` reads and `markPrimed` re-reads, so two runs that overlap both
+ * see `shown: 0`, both write `1`, and both push the modal — two stacked screens
+ * and a counter that no longer matches how many times the customer was actually
+ * asked. That is not hypothetical: React 18 double-invokes effects in dev and
+ * expo-router remounts a screen when its params change.
+ *
+ * AsyncStorage has no compare-and-set, so the decisions are queued instead. The
+ * second run then reads the state the first one wrote and correctly declines.
+ */
+let queue: Promise<unknown> = Promise.resolve();
+const serialized = <T>(fn: () => Promise<T>): Promise<T> => {
+  const run = queue.then(fn, fn);
+  queue = run.catch(() => undefined);
+  return run;
+};
+
+/**
  * Show the priming screen from `moment` if it is due. `orderId` is null until
  * the screen has an order to speak about, which also holds the prompt back
  * until the screen underneath has painted.
@@ -58,11 +77,15 @@ export function usePushPriming(moment: PrimingMoment, orderId: string | null): v
   useEffect(() => {
     if (!orderId) return;
     let cancelled = false;
-    void (async () => {
+    void serialized(async () => {
       if (!(await shouldPrime(moment, orderId)) || cancelled) return;
       await markPrimed(orderId);
+      // Re-checked after the write: the screen can unmount during it, and
+      // navigating away from a screen that is already gone puts the modal on
+      // top of wherever the customer went instead.
+      if (cancelled) return;
       router.push('/enable-notifications');
-    })();
+    });
     return () => {
       cancelled = true;
     };

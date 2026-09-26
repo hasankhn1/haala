@@ -136,7 +136,16 @@ function Banner({ item, onGone }: { item: BannerItem; onGone: () => void }) {
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
-    if (isOrder) return;
+    /*
+     * Order banners with a progress bar stay until dismissed — the bar is the
+     * point, and it has no timer. But `order` also covers `order_cancelled`,
+     * `delivery_failed` and legacy `order_update`, which have no entry in
+     * `ORDER_PROGRESS`: those drew no bar *and* started no countdown, so an
+     * "Order cancelled" card sat over the top of every screen indefinitely with
+     * nothing to suggest it would ever leave. Anything without a bar gets the
+     * countdown.
+     */
+    if (progress !== undefined) return;
     // Width can't run on the native driver, so the countdown bar is JS-driven.
     Animated.timing(remaining, {
       toValue: 0,
@@ -144,7 +153,7 @@ function Banner({ item, onGone }: { item: BannerItem; onGone: () => void }) {
       easing: Easing.linear,
       useNativeDriver: false,
     }).start(({ finished }) => finished && dismiss());
-  }, [offset, remaining, isOrder, dismiss, item.title, item.body]);
+  }, [offset, remaining, progress, dismiss, item.title, item.body]);
 
   // Replaced or unmounted: stop the clocks, or a leftover countdown dismisses
   // whatever is showing next.
@@ -158,8 +167,17 @@ function Banner({ item, onGone }: { item: BannerItem; onGone: () => void }) {
 
   const swipe = useRef(
     PanResponder.create({
-      // Only a vertical drag is a swipe; a tap must still reach the Pressable.
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      /*
+       * Only an *upward* vertical drag, because only an upward one does
+       * anything: the move handler clamps to `Math.min(0, dy)` and release
+       * only dismisses on `dy < -30`. Claiming downward drags too meant the
+       * banner captured the gesture, did nothing with it, and stopped the list
+       * underneath from scrolling — the top of the screen silently swallowed
+       * every downward flick that started on it.
+       *
+       * A tap must still reach the Pressable, hence the 6px threshold.
+       */
+      onMoveShouldSetPanResponder: (_, g) => g.dy < -6 && Math.abs(g.dy) > Math.abs(g.dx),
       onPanResponderMove: (_, g) => offset.setValue(Math.min(0, g.dy)),
       onPanResponderRelease: (_, g) => {
         if (g.dy < -30 || g.vy < -0.5) dismiss();

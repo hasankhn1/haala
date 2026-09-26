@@ -92,6 +92,26 @@ const contained = async (what: string, ctx: Record<string, unknown>, run: () => 
   }
 };
 
+/** Every handset has this one; the plugin declares it and old builds only made it. */
+const DEFAULT_CHANNEL = 'default';
+
+/**
+ * The Android channel to target on *this* handset.
+ *
+ * Android silently drops a notification whose channel does not exist, and a
+ * build that predates per-category channels created only `default` — so sending
+ * `payments` to it loses exactly the notifications that matter most, with
+ * nothing in any log. Tokens record what they created; anything not on that
+ * list falls back to `default`, which always exists.
+ *
+ * iOS ignores the field entirely.
+ */
+export const channelFor = (token: { channels: string | null }, want?: string): string => {
+  if (!want || want === DEFAULT_CHANNEL) return DEFAULT_CHANNEL;
+  const has = (token.channels ?? '').split(',').filter(Boolean);
+  return has.includes(want) ? want : DEFAULT_CHANNEL;
+};
+
 export const notificationService = {
   /**
    * Persist a notification, push it to the user's live sockets, and — if their
@@ -147,7 +167,7 @@ export const notificationService = {
       if (tokens.length === 0) return;
 
       const { sent, invalidTokens } = await sendPush(
-        tokens.map((t) => ({ channelId: 'default', ...message, to: t.token })),
+        tokens.map((t) => ({ ...message, channelId: channelFor(t, message.channelId), to: t.token })),
       );
 
       // Prune dead tokens rather than retrying them on every future order.
@@ -233,7 +253,17 @@ export const notificationService = {
       assignment.status === DeliveryStatus.EnRouteToCustomer;
     if (!enRoute || assignment.arrivingNotifiedAt) return;
     const { latitude, longitude } = order.deliveryAddress;
-    if (haversineMeters(at.lat, at.lng, latitude, longitude) > ARRIVING_RADIUS_METERS) return;
+    /*
+     * Written as "not within the radius" rather than "further than it", because
+     * the two differ on NaN and NaN is reachable here: `deliveryAddress` is
+     * `jsonb().$type<AddressSnapshot>()`, so the shape is a compile-time claim
+     * with nothing validating it on the way out of the database. A row missing
+     * its coordinates makes `haversineMeters` return NaN, and `NaN > 400` is
+     * false — which would pass the guard and tell the customer the rider is at
+     * the gate while they are still at the store. `NaN <= 400` is also false,
+     * so this way round stays quiet.
+     */
+    if (!(haversineMeters(at.lat, at.lng, latitude, longitude) <= ARRIVING_RADIUS_METERS)) return;
     await contained('arriving', { orderId: order.id }, async () => {
       if (!(await deliveryRepository.markArrivingNotified(assignment.id))) return;
       await this.create({
@@ -382,8 +412,13 @@ export const notificationService = {
     return toPreferencesView(await notificationRepository.upsertPreferences(userId, patch));
   },
 
-  async registerToken(userId: string, token: string, platform: string | null): Promise<void> {
-    await notificationRepository.upsertToken(userId, token, platform);
+  async registerToken(
+    userId: string,
+    token: string,
+    platform: string | null,
+    channels: string[] | null = null,
+  ): Promise<void> {
+    await notificationRepository.upsertToken(userId, token, platform, channels);
   },
 
   async unregisterToken(userId: string, token: string): Promise<void> {

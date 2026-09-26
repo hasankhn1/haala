@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Text, theme } from '@haala/ui';
-import { NowDotMark } from '../src/components/NotificationTile';
+import { NowDotMark } from '../src/components/BrandMarks';
 import { enablePush } from '../src/lib/usePushRegistration';
 
 /**
@@ -32,6 +32,14 @@ export default function EnableNotificationsScreen() {
     try {
       await enablePush();
     } finally {
+      /*
+       * Cleared as well as navigated away from. The screen relied entirely on
+       * being unmounted by `router.back()`, so anywhere that does not unmount
+       * it — a deep link that made this modal the root of its stack, a back
+       * swallowed mid-transition — left the button spinning with no way to
+       * retry.
+       */
+      setBusy(false);
       router.back();
     }
   };
@@ -119,7 +127,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     paddingHorizontal: theme.spacing.xl,
   },
-  flex: { flex: 1 },
   centered: { textAlign: 'center' },
   skip: { alignSelf: 'flex-end', paddingTop: theme.spacing.md },
   content: { paddingTop: 22, paddingBottom: theme.spacing.xl },
