@@ -6,7 +6,6 @@ import { formatPKR, NotificationType } from '@haala/shared';
  * The rules the design sets, which `notification.copy.test.ts` holds us to:
  * - title ≤ 40 characters, body ≤ 90 — the number goes in the title, because
  *   the title is what survives truncation on a lock screen;
- * - Roman Urdu for one phrase at most, never the key fact;
  * - no emoji, no ALL CAPS, no exclamation runs;
  * - a missing rider name reads "Your rider", and a missing duration drops its
  *   "· N min" suffix rather than printing a placeholder.
@@ -14,6 +13,13 @@ import { formatPKR, NotificationType } from '@haala/shared';
  * Money uses `formatPKR` ("PKR 2,340"), not the comp's "Rs 2,340": every
  * receipt, basket and order screen already prints PKR, and a push that names
  * the amount differently from the order it links to reads as a different sum.
+ *
+ * **Deviation from the comp, on Hassan's instruction (2026-09-26): plain
+ * English throughout.** The design specifies "Roman Urdu, one phrase max,
+ * never the key fact", and exactly two strings followed it — the out-for-
+ * delivery title and the thank-you on delivery. Both are English now. Nothing
+ * else about the spec changed, so restoring that register later is those two
+ * strings and no more.
  */
 
 export interface Copy {
@@ -42,7 +48,7 @@ export const copy = {
   riderAssigned: (riderName: string | null, storeName: string): Copy => ({
     type: NotificationType.RiderAssigned,
     title: firstName(riderName) ? `${firstName(riderName)} is your rider` : 'Rider assigned',
-    body: `Collecting your bag from ${storeName} now.`,
+    body: `Collecting your order from ${storeName} now.`,
   }),
 
   /**
@@ -52,21 +58,21 @@ export const copy = {
    */
   outForDelivery: (riderName: string | null): Copy => ({
     type: NotificationType.OutForDelivery,
-    title: 'Raaste mein hai',
-    body: `${rider(riderName)} left the store. Track your order live on the map.`,
+    title: 'On the way',
+    body: `${rider(riderName)} has left the store. Track your order live on the map.`,
   }),
 
   /** The rider is inside `ARRIVING_RADIUS_METERS` of the drop-off. */
   arriving: (riderName: string | null): Copy => ({
     type: NotificationType.Arriving,
     title: 'Arriving in 2 min',
-    body: `${rider(riderName)} is almost at your door. Keep your phone handy.`,
+    body: `${rider(riderName)} is nearly at your address. Please keep your phone nearby.`,
   }),
 
   arrived: (riderName: string | null): Copy => ({
     type: NotificationType.Arrived,
     title: `${rider(riderName)} has arrived`,
-    body: 'Outside with your order. Keep your phone handy.',
+    body: 'Outside with your order now.',
   }),
 
   /**
@@ -79,25 +85,25 @@ export const copy = {
       minutes !== null && minutes > 0 && minutes <= DELIVERED_BOAST_MAX_MIN
         ? `Delivered in ${minutes} min`
         : 'Delivered',
-    body: `Shukriya! ${itemCount} ${itemCount === 1 ? 'item' : 'items'} handed over at ${clock(at)}.`,
+    body: `Thank you. ${itemCount} ${itemCount === 1 ? 'item' : 'items'} handed over at ${clock(at)}.`,
   }),
 
   orderCancelled: (orderNumber: string): Copy => ({
     type: NotificationType.OrderCancelled,
     title: `Order cancelled · ${orderNumber}`,
-    body: 'Anything you paid online will be refunded.',
+    body: 'Any online payment will be refunded to you.',
   }),
 
   deliveryFailed: (orderNumber: string): Copy => ({
     type: NotificationType.DeliveryFailed,
-    title: "Delivery didn't go through",
-    body: `We couldn't complete order ${orderNumber}. Support will be in touch.`,
+    title: 'Delivery unsuccessful',
+    body: `We could not complete order ${orderNumber}. Our team will contact you.`,
   }),
 
   paymentReceived: (amount: number, orderNumber: string): Copy => ({
     type: NotificationType.PaymentReceived,
     title: `Payment received · ${formatPKR(amount)}`,
-    body: `Paid online for order ${orderNumber}.`,
+    body: `Your online payment for order ${orderNumber} is confirmed.`,
   }),
 
   /**
@@ -109,13 +115,13 @@ export const copy = {
    */
   paymentFailed: (amount: number, orderNumber: string): Copy => ({
     type: NotificationType.PaymentFailed,
-    title: "Payment didn't go through",
-    body: `${formatPKR(amount)} for order ${orderNumber} wasn't completed.`,
+    title: 'Payment unsuccessful',
+    body: `${formatPKR(amount)} for order ${orderNumber} was not completed.`,
   }),
 
   refundIssued: (amount: number): Copy => ({
     type: NotificationType.RefundIssued,
     title: `Refund issued · ${formatPKR(amount)}`,
-    body: 'Back to your original payment method in 3–5 working days.',
+    body: 'Funds return to your original payment method in 3–5 working days.',
   }),
 };

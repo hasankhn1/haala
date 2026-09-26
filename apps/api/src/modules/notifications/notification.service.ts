@@ -188,7 +188,7 @@ export const notificationService = {
    * 15-minute promise they land within seconds of each other, and the rider
    * claiming the order (`notifyRiderAssigned`) says everything `packed` did.
    * `out_for_delivery` is silent because it follows pickup almost at once, and
-   * pickup is when the design says "Raaste mein hai".
+   * pickup is when the customer is told the order is on the way.
    */
   async notifyOrderStatus(order: Order): Promise<void> {
     await contained('order status', { orderId: order.id, status: order.status }, async () => {

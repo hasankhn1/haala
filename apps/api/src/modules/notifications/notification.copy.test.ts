@@ -48,12 +48,12 @@ describe('every template fits the design', () => {
 describe('missing values fall back as the design specifies', () => {
   it('names the rider by first name only', () => {
     assert.equal(copy.riderAssigned(RIDER, STORE).title, 'Muhammad is your rider');
-    assert.match(copy.outForDelivery(RIDER).body, /^Muhammad left the store/);
+    assert.match(copy.outForDelivery(RIDER).body, /^Muhammad has left the store/);
   });
 
   it('says "Your rider" when there is no name', () => {
-    assert.match(copy.outForDelivery(null).body, /^Your rider left the store/);
-    assert.match(copy.outForDelivery('   ').body, /^Your rider left the store/);
+    assert.match(copy.outForDelivery(null).body, /^Your rider has left the store/);
+    assert.match(copy.outForDelivery('   ').body, /^Your rider has left the store/);
     assert.equal(copy.arrived(null).title, 'Your rider has arrived');
   });
 

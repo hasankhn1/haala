@@ -2,6 +2,7 @@
   "expo": {
     "name": "Haala",
     "slug": "haala",
+    "icon": "./assets/icon.png",
     "scheme": "haala",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -53,7 +54,8 @@
       "package": "com.haala.customer",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "backgroundColor": "#FF5A1F"
+        "backgroundColor": "#FF5A1F",
+        "foregroundImage": "./assets/adaptive-icon.png"
       },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
