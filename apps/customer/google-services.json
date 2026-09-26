@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "133102686477",
+    "project_id": "haala-8673b",
+    "storage_bucket": "haala-8673b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:133102686477:android:7364fc8fd10dca89b7e044",
+        "android_client_info": {
+          "package_name": "com.haala.customer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAMCYg5or9VD83GrLYswPtaK2gv9xb0ZOQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
