@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { after, before, describe, it } from 'node:test';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { PaymentMethod, PaymentStatus } from '@haala/shared';
 import { createApp } from '../../app';
 import { config } from '../../config';
 import { closeDb, db } from '../../db/client';
-import { orders, payments, stores, users } from '../../db/schema';
+import { notifications, orders, payments, stores, users } from '../../db/schema';
 import { closeRedis } from '../../redis/client';
 
 /**
@@ -138,9 +138,18 @@ before(async () => {
   paymentId = payment!.id;
 });
 
+/** Payment notifications written for this fixture's order. */
+const announcements = () =>
+  db
+    .select({ id: notifications.id, type: notifications.type })
+    .from(notifications)
+    .where(sql`${notifications.data}->>'orderId' = ${orderId}`);
+
 after(async () => {
   (config.payments.safepay as { webhookSecret?: string }).webhookSecret = restoreSecret;
   (config.payments.safepay as { apiKey?: string }).apiKey = restoreApiKey;
+  // Keyed to the order through `data` rather than a foreign key, so no cascade.
+  await db.delete(notifications).where(sql`${notifications.data}->>'orderId' = ${orderId}`);
   // Cascades to the payment row.
   await db.delete(orders).where(eq(orders.id, orderId));
   await close();
@@ -197,6 +206,27 @@ describe('an event for another Safepay account is refused', () => {
     );
     assert.equal(status, 200, 'acknowledged: retrying cannot change the key');
     assert.equal(await statusNow(), PaymentStatus.Paid, 'and our payment is untouched');
+  });
+});
+
+describe('the customer hears about it once', () => {
+  it('announces the payment exactly once across every delivery above', async () => {
+    /*
+     * One success, one stale failure and one duplicate success have landed by
+     * now. Only the first moved the payment, so only the first may buzz a
+     * phone — a retry ladder that re-announces "Payment received" five times
+     * over six hours reads like five charges.
+     *
+     * The announcement is fire-and-forget, so give it a moment to land.
+     */
+    for (let i = 0; i < 20 && (await announcements()).length === 0; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    const rows = await announcements();
+    assert.deepEqual(
+      rows.map((r) => r.type),
+      ['payment_received'],
+    );
   });
 });
 

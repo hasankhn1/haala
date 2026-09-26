@@ -22,6 +22,7 @@ import { ordersApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
 import { DeliveryMap } from '../../src/components/DeliveryMap';
 import { haptics } from '../../src/lib/haptics';
+import { usePushPriming } from '../../src/lib/pushPriming';
 import { useOrderSocket } from '../../src/realtime/useOrderSocket';
 import { useCurrentStore } from '../../src/store/useCurrentStore';
 
@@ -96,6 +97,9 @@ export default function OrderScreen() {
   const o = order.data;
   const canCancel = o ? CANCELLABLE.has(o.status) : false;
   const live = o ? !TERMINAL.has(o.status) && o.status !== 'delivered' : false;
+  // The second and last ask, for someone who said "Not now" after an earlier
+  // order — and only while this one is still on its way, when it can matter.
+  usePushPriming('tracking', live ? id : null);
   const beat = o ? (RAIL_INDEX[o.status] ?? 0) : 0;
   const eta = o ? etaMinutes(o) : 0;
 

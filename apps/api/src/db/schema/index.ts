@@ -16,5 +16,6 @@ export * from './delivery';
 export * from './promotions';
 export * from './notifications';
 export * from './push-tokens';
+export * from './notification-preferences';
 export * from './home-banners';
 export * from './home-products';

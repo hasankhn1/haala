@@ -1,4 +1,4 @@
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 /**
  * Google's and Apple's own marks, drawn from `Auth & Checkout.dc.html`.
@@ -45,6 +45,38 @@ export function AppleMark({ size = 18 }: { size?: number }) {
         fill="#FFFFFF"
         d="M16.4 12.7c0-2.4 1.9-3.5 2-3.6-1.1-1.6-2.8-1.8-3.4-1.9-1.5-.1-2.8.8-3.5.8-.7 0-1.8-.8-3-.8-1.6 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.3 2.9 2.3 1.2 0 1.6-.7 3-.7 1.4 0 1.8.7 3 .7 1.2 0 2.1-1.2 2.9-2.3.6-.9.9-1.4 1.3-2.4-2.4-.9-2.6-3.4-2.6-3.7zM14.3 5.6c.6-.8 1-1.8.9-2.9-.9.1-2 .6-2.7 1.4-.6.7-1 1.8-.9 2.8 1 .1 2-.5 2.7-1.3z"
       />
+    </Svg>
+  );
+}
+
+/** The "h" with its detached dot: Haala's mark, on a 24-unit grid. */
+const H_PATH =
+  'M4 3h4v6.6c1-1 2.4-1.6 4-1.6 3.6 0 6 2.4 6 6V21h-4v-7c0-1.7-1-2.8-2.6-2.8S8 12.3 8 14v7H4Z';
+
+/**
+ * Haala's mark — the "h" and the Now Dot.
+ *
+ * Ours rather than someone else's, so unlike the two above it **is** themed:
+ * callers pass the colours, and it appears in ember on a wash, in white on a
+ * filled badge, and at 16pt inside a button.
+ *
+ * It lived in `NotificationTile.tsx` until two unrelated screens were importing
+ * a notification module to draw an illustration. This file already exists for
+ * exactly this — inlined brand paths that lucide does not carry.
+ */
+export function NowDotMark({
+  size,
+  color,
+  dotColor = color,
+}: {
+  size: number;
+  color: string;
+  dotColor?: string;
+}) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d={H_PATH} fill={color} />
+      <Circle cx={20.2} cy={4.6} r={2.5} fill={dotColor} />
     </Svg>
   );
 }

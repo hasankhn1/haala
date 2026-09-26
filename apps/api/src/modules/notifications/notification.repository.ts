@@ -1,19 +1,33 @@
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db, type Executor } from '../../db/client';
 import {
+  notificationPreferences,
   notifications,
   pushTokens,
   type NewNotification,
+  type NewNotificationPreferences,
   type Notification,
+  type NotificationPreferences,
   type PushToken,
 } from '../../db/schema';
 
 export const notificationRepository = {
-  async listByUser(userId: string, limit = 50, ex: Executor = db): Promise<Notification[]> {
+  /** Newest first. `types` narrows to one category's types; omit it for all. */
+  async listByUser(
+    userId: string,
+    types?: string[],
+    limit = 50,
+    ex: Executor = db,
+  ): Promise<Notification[]> {
     return ex
       .select()
       .from(notifications)
-      .where(eq(notifications.userId, userId))
+      .where(
+        and(
+          eq(notifications.userId, userId),
+          types ? inArray(notifications.type, types) : undefined,
+        ),
+      )
       .orderBy(desc(notifications.createdAt))
       .limit(limit);
   },
@@ -55,6 +69,39 @@ export const notificationRepository = {
     return rows.length;
   },
 
+  // ── Preferences ──
+
+  async findPreferences(
+    userId: string,
+    ex: Executor = db,
+  ): Promise<NotificationPreferences | undefined> {
+    const [row] = await ex
+      .select()
+      .from(notificationPreferences)
+      .where(eq(notificationPreferences.userId, userId));
+    return row;
+  },
+
+  /**
+   * Insert-or-merge. Only the columns in `patch` change, so a customer's first
+   * toggle creates the row with every other column at its default.
+   */
+  async upsertPreferences(
+    userId: string,
+    patch: Omit<Partial<NewNotificationPreferences>, 'userId' | 'createdAt' | 'updatedAt'>,
+    ex: Executor = db,
+  ): Promise<NotificationPreferences> {
+    const [row] = await ex
+      .insert(notificationPreferences)
+      .values({ userId, ...patch })
+      .onConflictDoUpdate({
+        target: notificationPreferences.userId,
+        set: { ...patch, updatedAt: new Date() },
+      })
+      .returning();
+    return row as NotificationPreferences;
+  },
+
   // ── Push tokens ──
 
   async tokensForUser(userId: string, ex: Executor = db): Promise<PushToken[]> {
@@ -78,14 +125,18 @@ export const notificationRepository = {
     userId: string,
     token: string,
     platform: string | null,
+    channels: string[] | null,
     ex: Executor = db,
   ): Promise<void> {
+    // Overwritten on every registration rather than merged: the set belongs to
+    // the build that is running now, and a downgrade must narrow it.
+    const joined = channels && channels.length > 0 ? channels.join(',') : null;
     await ex
       .insert(pushTokens)
-      .values({ userId, token, platform })
+      .values({ userId, token, platform, channels: joined })
       .onConflictDoUpdate({
         target: pushTokens.token,
-        set: { userId, platform, updatedAt: new Date() },
+        set: { userId, platform, channels: joined, updatedAt: new Date() },
       });
   },
 

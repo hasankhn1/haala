@@ -1,61 +1,141 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { configureForegroundNotifications, getExpoPushToken, onNotificationTapped } from '@haala/ui';
+import {
+  activeNotificationCategories,
+  NOTIFICATION_CHANNEL,
+  type NotificationCategory,
+} from '@haala/shared';
+import {
+  configureForegroundNotifications,
+  getExpoPushToken,
+  onNotificationReceived,
+  onNotificationTapped,
+  type PushChannel,
+} from '@haala/ui';
 import { notificationsApi } from '../api/endpoints';
+import { qk } from '../api/queryKeys';
 
 // Set once, at module scope, so the handler exists before any notification can
-// arrive — doing it inside an effect races the first push.
-configureForegroundNotifications();
+// arrive — doing it inside an effect races the first push. No OS alert while
+// the app is open: `InAppBanner` shows it instead.
+configureForegroundNotifications({ showAlert: false });
 
 /**
- * Registers this device for push once the user is authenticated, and routes
- * notification taps to the relevant order.
+ * One Android channel per category, as the design's spec sheet sets them.
+ * Payments are high so a failed payment interrupts; offers are low and silent.
+ * These names are what the customer sees in Android's own settings.
+ */
+const CHANNEL_SPEC: Record<NotificationCategory, { name: string; importance: PushChannel['importance'] }> = {
+  order: { name: 'Order updates', importance: 'high' },
+  payment: { name: 'Payments', importance: 'high' },
+  brand: { name: 'Brand orders', importance: 'default' },
+  service: { name: 'Account & service', importance: 'default' },
+  offer: { name: 'Offers', importance: 'low' },
+};
+
+/*
+ * Only categories that can actually send something.
  *
- * The token is deliberately registered *after* sign-in rather than at launch:
- * the API stores it against a user, so a token registered while anonymous would
- * have nobody to notify. It is de-registered on sign-out so the next person to
- * use the handset doesn't receive the previous user's order updates.
+ * Android never lets an app delete a channel it has created — it lingers in the
+ * customer's system settings forever — so creating one for `brand`, which no
+ * notification type maps to yet, is a permanent piece of furniture advertising
+ * a feature that does not exist. It appears the day brand types do.
+ */
+const CHANNELS: PushChannel[] = activeNotificationCategories().map((category) => ({
+  id: NOTIFICATION_CHANNEL[category],
+  ...CHANNEL_SPEC[category],
+}));
+
+const register = async (prompt: boolean, isCancelled: () => boolean = () => false): Promise<boolean> => {
+  const reg = await getExpoPushToken({ prompt, channels: CHANNELS });
+  // Null is the ordinary case on a simulator or after a declined prompt.
+  if (!reg) return false;
+  // Checked after the await, which is the only place it can have changed.
+  if (isCancelled()) return false;
+  try {
+    await notificationsApi.registerPushToken(
+      reg.token,
+      reg.platform,
+      reg.platform === 'android' ? CHANNELS.map((c) => c.id) : undefined,
+    );
+  } catch {
+    // A failed registration costs notifications, not the session. The next
+    // launch registers again.
+  }
+  return true;
+};
+
+/**
+ * Ask for permission and register — the "Turn on notifications" button. The
+ * only place the customer app shows the OS prompt, so it is always preceded by
+ * a screen explaining why.
+ */
+export const enablePush = (): Promise<boolean> => register(true);
+
+/**
+ * Registers this device for push once the user is authenticated, keeps the
+ * inbox fresh as pushes arrive, and routes taps.
+ *
+ * Registration here never prompts. The design asks right after the first order
+ * — the moment a customer most wants to hear from us — not at sign-in, so this
+ * only picks up permission that already exists. The token goes up after sign-in
+ * because the API stores it against a user; it is removed on sign-out so the
+ * next person to use the handset doesn't receive the previous user's updates.
  */
 export function usePushRegistration(isAuthenticated: boolean): void {
   const router = useRouter();
-  const registered = useRef<string | null>(null);
+  const qc = useQueryClient();
 
   useEffect(() => {
     if (!isAuthenticated) return;
+    /*
+     * `register` awaits `getExpoPushToken`, which on Android also creates the
+     * channels — hundreds of milliseconds. Sign out inside that window and
+     * `unregisterPushToken` deletes the row *first*, then this resolves and
+     * POSTs the token straight back, so the handset keeps receiving the
+     * previous customer's order and payment notifications.
+     *
+     * The guard was here before this file was rewritten; it is not decoration.
+     */
     let cancelled = false;
-
-    (async () => {
-      const reg = await getExpoPushToken();
-      // Null is the ordinary case on a simulator or after a declined prompt.
-      if (!reg || cancelled || registered.current === reg.token) return;
-      try {
-        await notificationsApi.registerPushToken(reg.token, reg.platform);
-        registered.current = reg.token;
-      } catch {
-        // A failed registration costs notifications, not the session.
-      }
-    })();
-
+    void register(false, () => cancelled);
     return () => {
       cancelled = true;
     };
   }, [isAuthenticated]);
 
-  // Tapping an order notification should land on that order, not the home tab.
-  useEffect(() => {
-    return onNotificationTapped((data) => {
-      const orderId = typeof data.orderId === 'string' ? data.orderId : null;
-      if (orderId) router.push(`/order/${orderId}`);
-    });
-  }, [router]);
+  // Whatever lands while the app is open is already in the inbox server-side.
+  useEffect(
+    () => onNotificationReceived(() => qc.invalidateQueries({ queryKey: qk.notifications })),
+    [qc],
+  );
+
+  // A tap lands on the order it is about; anything else lands in the inbox.
+  useEffect(
+    () =>
+      onNotificationTapped((data) => {
+        if (typeof data.notificationId === 'string') {
+          notificationsApi
+            .markRead(data.notificationId)
+            .then(() => qc.invalidateQueries({ queryKey: qk.notifications }))
+            .catch(() => undefined);
+        }
+        const orderId = typeof data.orderId === 'string' ? data.orderId : null;
+        router.push(orderId ? `/order/${orderId}` : '/notifications');
+      }),
+    [router, qc],
+  );
 }
 
 /**
  * Called during sign-out, before the tokens are cleared — the request needs the
- * still-valid access token to authenticate.
+ * still-valid access token to authenticate. Never prompts: a customer who never
+ * granted permission has no token to remove, and must not meet the OS dialog
+ * on their way out.
  */
 export async function unregisterPushToken(): Promise<void> {
-  const reg = await getExpoPushToken();
+  const reg = await getExpoPushToken({ prompt: false, channels: CHANNELS });
   if (!reg) return;
   await notificationsApi.unregisterPushToken(reg.token).catch(() => undefined);
 }

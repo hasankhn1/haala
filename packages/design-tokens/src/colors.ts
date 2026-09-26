@@ -130,6 +130,12 @@ export const colors = {
   primary: palette.ember[500],
   primaryPressed: palette.ember[600],
   primarySoft: palette.ember[100],
+  /**
+   * A small ember tag — "Haala rider" in the inbox. A step deeper than
+   * `primarySoft` because it has to survive sitting on an unread row, which is
+   * `primarySoft` itself.
+   */
+  primaryTag: palette.ember[200],
   onPrimary: palette.neutral[0],
 
   /**
@@ -261,6 +267,30 @@ export const departmentTints: Record<string, string> = {
 
 /** The ground for a department with nothing to sell yet. */
 export const departmentTintMuted = palette.clay[400];
+
+/**
+ * A notification's category tile — the 40pt circle in the inbox and the in-app
+ * banner, from `Haala Notifications.dc.html`.
+ *
+ * Like `departmentTints`, these are identity colours read by key rather than
+ * semantic roles: the tile is how a customer tells an order update from a
+ * refund before reading a word. The comp confines them to the tile — "never
+ * text" — so each carries the ink that sits on it. Offers take sun, which is
+ * the one place yellow is allowed: it means savings. Payment's green and red
+ * are the comp's own, a step deeper than `success` / `error`, because they
+ * fill a circle behind a white glyph rather than colour a word.
+ *
+ * Keys match `NotificationCategory` in `@haala/shared`, plus the failed-payment
+ * variant, which shares a category and a channel but not a colour.
+ */
+export const notificationTints = {
+  order: { fill: palette.ember[500], ink: palette.neutral[0] },
+  brand: { fill: palette.clay[900], ink: palette.neutral[0] },
+  payment: { fill: '#1E8A57', ink: palette.neutral[0] },
+  paymentFailed: { fill: '#D23B2A', ink: palette.neutral[0] },
+  offer: { fill: palette.sun[500], ink: palette.clay[900] },
+  service: { fill: '#55636F', ink: palette.neutral[0] }, // slate, the one cool note
+} as const;
 
 export const statusColors = {
   placed: { fg: palette.clay[700], bg: palette.clay[100] },

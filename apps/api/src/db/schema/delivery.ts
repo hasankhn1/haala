@@ -23,6 +23,12 @@ export const deliveryAssignments = pgTable(
     acceptedAt: timestamp({ withTimezone: true }),
     pickedUpAt: timestamp({ withTimezone: true }),
     deliveredAt: timestamp({ withTimezone: true }),
+    /**
+     * When the customer was told the rider is nearly there. Written once, by a
+     * conditional update, so the rider's location pings — every few seconds
+     * inside the radius — produce exactly one "Arriving" push.
+     */
+    arrivingNotifiedAt: timestamp({ withTimezone: true }),
     ...timestamps(),
   },
   (t) => [uniqueIndex('delivery_assignments_order_uq').on(t.orderId)],

@@ -10,6 +10,7 @@ import { ordersApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
 import { ETA_MINUTES } from '../../src/config';
 import { haptics } from '../../src/lib/haptics';
+import { usePushPriming } from '../../src/lib/pushPriming';
 
 /**
  * Order placed — Basket's full-bleed ember confirmation.
@@ -46,6 +47,10 @@ export default function OrderConfirmedScreen() {
     enabled: !!id,
   });
   const o = order.data;
+
+  // The design's moment to ask for notifications: an order just placed is when
+  // hearing about it matters most. Waits for the order so the ticket paints first.
+  usePushPriming('order-placed', o?.id ?? null);
 
   const step = o ? (STEP_INDEX[o.status] ?? 0) : 0;
   const itemCount = o?.items.reduce((n, i) => n + i.quantity, 0) ?? 0;

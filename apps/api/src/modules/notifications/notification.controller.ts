@@ -1,10 +1,12 @@
 import type { Request, Response } from 'express';
+import type { ListNotificationsQuery } from '@haala/shared';
 import { sendSuccess } from '../../common/http';
 import { notificationService } from './notification.service';
 
 export const notificationController = {
   async list(req: Request, res: Response): Promise<void> {
-    sendSuccess(res, await notificationService.list(req.auth!.userId));
+    const { category } = req.query as unknown as ListNotificationsQuery;
+    sendSuccess(res, await notificationService.list(req.auth!.userId, category));
   },
 
   async markRead(req: Request, res: Response): Promise<void> {
@@ -17,11 +19,20 @@ export const notificationController = {
     sendSuccess(res, { success: true, count });
   },
 
+  async preferences(req: Request, res: Response): Promise<void> {
+    sendSuccess(res, await notificationService.preferences(req.auth!.userId));
+  },
+
+  async updatePreferences(req: Request, res: Response): Promise<void> {
+    sendSuccess(res, await notificationService.updatePreferences(req.auth!.userId, req.body));
+  },
+
   async registerToken(req: Request, res: Response): Promise<void> {
     await notificationService.registerToken(
       req.auth!.userId,
       req.body.token,
       req.body.platform ?? null,
+      req.body.channels ?? null,
     );
     sendSuccess(res, { success: true }, 201);
   },

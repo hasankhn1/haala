@@ -142,19 +142,42 @@ it, so a receipt reads "Delivery: Free" instead of implying a coupon.
 ### Notifications
 
 `notificationService.create()` writes an inbox row, emits
-`notification:created` over socket.io, and pushes to the user's devices via
-Expo's HTTP API. It never throws — it is called alongside order transitions, and
-a push failure must not surface as a failed delivery.
+`notification:created` over socket.io, and — if the customer's preferences allow
+it right now — pushes to their devices via Expo's HTTP API. It never throws: it
+is called alongside order transitions, and a push failure must not surface as a
+failed delivery.
 
-Which transitions notify is deliberate: `placed`, `confirmed` and `preparing`
-are silent, because on a 15-minute promise they fire within seconds of each other
-and three buzzes for one order teaches people to mute the app. `arrived` gets its
-own push from the delivery side — it has no order-status equivalent and is the
-moment that most needs one.
+Every notification has a **type** (its template, e.g. `rider_assigned`) and,
+derived from it in `@haala/shared`, a **category** — order, brand, payment,
+offer, service. The category is the one axis that drives the inbox filter, the
+tile colour, the Android channel and the preference switch, so those four cannot
+disagree. Copy lives in `notification.copy.ts`, held to the design's limits
+(title ≤ 40, body ≤ 90) by its test.
+
+Which transitions notify is deliberate. `placed` through `packed` are silent:
+on a 15-minute promise they land within seconds of each other, and three buzzes
+for one order teaches people to mute the app. The customer hears when a rider
+claims the order, at pickup ("Raaste mein hai"), once when the rider comes
+within 400 m (`arriving`, made once-only by a conditional update on
+`delivery_assignments.arriving_notified_at`), at the door, and on delivery,
+cancellation or failure. Online payments announce `paid` and `failed` only on an
+actual change of status — the conditional update in
+`paymentRepository.transitionStatus` means a retried webhook, or `verify`
+racing the webhook, cannot announce twice. Refunds announce when issued.
+
+Preferences (`notification_preferences`, one row per customer, created on first
+change) gate the **push only**; the inbox row is always written. Offers default
+off. Quiet hours — 11 PM to 8 AM and Jummah, Pakistan time — hold back offers
+and service alerts and never order or payment updates.
 
 Riders are notified when an order reaches `packed`, scoped exactly as the
 claimable pool is, so nobody is told about a pickup they can't take. Tokens Expo
 reports as `DeviceNotRegistered` are deleted rather than retried forever.
+
+The customer app never shows the OS permission prompt at sign-in. It registers
+silently when permission already exists, and asks through a priming screen
+right after the first order, and once more on a later order's tracking screen.
+While the app is open, pushes appear as its own top banner rather than the OS's.
 
 ### Payments
 
@@ -455,7 +478,9 @@ codes, staff accounts.
 **Promotions** — percentage / fixed / free-delivery codes with usage and
 per-customer limits, quoted in the cart and re-priced at placement.
 **Notifications** — inbox + Expo push to both apps, on customer-visible order
-transitions and to riders when an order becomes claimable.
+transitions and to riders when an order becomes claimable. Categorised, with
+per-customer preferences, quiet hours, an in-app banner and permission priming
+(September 2026, `Haala Notifications.dc.html`).
 **Analytics** — `/analytics/overview`: volume, money, the two fulfilment timings,
 live pipeline, top products, rider and store breakdowns, promo usage.
 **Online payments** — Safepay behind the existing `PaymentProvider` seam.

@@ -14,3 +14,10 @@
  * never offered a pickup across town.
  */
 export const RIDER_PICKUP_RADIUS_METERS = 8_000;
+
+/**
+ * How close a rider carrying an order must be to the drop-off before the
+ * customer hears "Arriving in 2 min" — the design's trigger. About two minutes
+ * at motorbike speed through DHA's blocks.
+ */
+export const ARRIVING_RADIUS_METERS = 400;

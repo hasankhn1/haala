@@ -3,6 +3,7 @@ import { AppError } from '../../common/errors';
 import { logger } from '../../common/logger';
 import { db, type Executor } from '../../db/client';
 import type { Payment } from '../../db/schema';
+import { notificationService } from '../notifications/notification.service';
 import { paymentRepository } from './payment.repository';
 import type {
   CheckoutHandoff,
@@ -35,8 +36,7 @@ export interface InitiatePaymentResult {
  *
  * A refund is not the payment coming undone — it is the next thing that happens
  * to money we definitely received — so it has to be allowed through, or a refund
- * issued from the gateway's own dashboard (the documented path for Safepay,
- * whose refund endpoint ops uses directly) would never reach us.
+ * issued from the gateway's own dashboard would never reach us.
  */
 const AFTER_PAID: ReadonlySet<PaymentStatus> = new Set([
   PaymentStatus.Paid,
@@ -47,14 +47,15 @@ const AFTER_PAID: ReadonlySet<PaymentStatus> = new Set([
 /**
  * **A paid payment never becomes unpaid.**
  *
- * Two callers need this and only one used to have it. Gateways retry and
- * deliveries arrive out of order, so a stale `failed` can land after a
- * `succeeded` — and `verify()` is worse, because the customer app calls it the
- * instant the checkout sheet closes (`runOnlineCheckout`), which is exactly
- * when it can race the webhook and read a tracker that has not settled yet.
+ * Two callers need this and only one had it. Gateways retry and deliveries
+ * arrive out of order, so a stale `failed` can land after a `succeeded` — and
+ * `verify()` is the worse case, because the customer app calls it the instant
+ * the checkout sheet closes (`runOnlineCheckout`), which is exactly when it
+ * races the webhook and reads a tracker that has not settled yet.
  *
- * Re-applying the same status is harmless. Un-paying an order that has already
- * been picked is not recoverable.
+ * Since `verify()` also announces the outcome now, an unguarded one does not
+ * just corrupt the row — it pushes "Payment didn't go through" at a customer
+ * whose order is paid and possibly already picked.
  *
  * Exported for its own tests: the direction of this check is the whole point,
  * and it has to be able to fail.
@@ -114,13 +115,8 @@ export const paymentService = {
 
     /*
      * The same guard the webhook has, for the same reason — and this is the
-     * caller that needs it most.
-     *
-     * `runOnlineCheckout` calls this the moment the checkout sheet closes, so
-     * it routinely races the webhook that settles the payment. Safepay answers
-     * from `tracker.state`, and anything that is not `TRACKER_ENDED` maps to
-     * `pending` — so a verify that arrives a moment early would otherwise take
-     * an order that the webhook has already paid and put it back to pending.
+     * caller that needs it most. `transitionStatus` only refuses a *no-op*
+     * (`status <> $2`), so paid → pending is a write it would happily make.
      */
     if (wouldUnpay(payment.status, status)) {
       logger.warn(
@@ -130,8 +126,9 @@ export const paymentService = {
       return payment;
     }
 
-    const updated = await paymentRepository.updateStatus(payment.id, status);
-    return updated ?? payment;
+    const moved = await paymentRepository.transitionStatus(payment.id, status);
+    if (moved) void notificationService.notifyPaymentOutcome(moved);
+    return moved ?? payment;
   },
 
   /** Process a verified provider webhook and reconcile the payment status. */
@@ -188,10 +185,27 @@ export const paymentService = {
       return { handled: true };
     }
 
-    await paymentRepository.updateStatus(payment.id, result.status, {
+    const patch = {
       providerRef: result.providerRef ?? payment.providerRef,
       rawPayload: safeJson(webhook.rawBody),
-    });
+    };
+    /*
+     * One statement per delivery.
+     *
+     * This used to fall back to a second `updateStatus` when `transitionStatus`
+     * matched nothing, so every redelivery on a gateway's retry ladder cost an
+     * extra round trip and a no-op UPDATE on a hot table. The fallback only
+     * re-recorded the payload of an event we already hold — the same event,
+     * redelivered — so dropping it loses nothing and keeps the first payload,
+     * which is the one that actually moved the payment.
+     *
+     * The condition has to stay inside the UPDATE. `verify` and the webhook
+     * race routinely, and comparing a status we read a moment ago would let
+     * both of them decide they were the transition and push the customer two
+     * notifications.
+     */
+    const moved = await paymentRepository.transitionStatus(payment.id, result.status, patch);
+    if (moved) void notificationService.notifyPaymentOutcome(moved);
     return { handled: true };
   },
 
@@ -225,6 +239,8 @@ export const paymentService = {
       payment.id,
       isFull ? PaymentStatus.Refunded : PaymentStatus.PartiallyRefunded,
     );
+    // A refund the gateway refused needs a human, not a "Refund issued" push.
+    if (result.status !== 'failed') void notificationService.notifyRefund(orderId, amount);
   },
 
   /** Called by the Delivery flow when a rider collects COD. */

@@ -148,6 +148,12 @@ export default function AccountScreen() {
                 onPress={() => router.push('/notifications')}
               />
               <Divider />
+              <MenuRow
+                icon="options-outline"
+                label="Notification settings"
+                onPress={() => router.push('/notification-settings')}
+              />
+              <Divider />
             </>
           ) : null}
           <MenuRow icon="help-circle-outline" label="Help & support" onPress={() => {}} />
