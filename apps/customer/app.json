@@ -51,6 +51,7 @@
     },
     "android": {
       "package": "com.haala.customer",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#FF5A1F"
       },
