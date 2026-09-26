@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
+  activeNotificationCategories,
   NotificationCategory,
   QUIET_HOURS,
   type NotificationPreferencesView,
@@ -26,7 +27,12 @@ import { qk } from '../src/api/queryKeys';
  * Notifications, it just doesn't buzz.
  */
 
-const ROWS: { key: NotificationCategory; title: string; sub: string }[] = [
+/*
+ * Same rule as the inbox chips: a switch for a category nothing can send is a
+ * promise the app cannot keep. Filtered below rather than deleted, so it
+ * returns when brand-order types do.
+ */
+const ALL_ROWS: { key: NotificationCategory; title: string; sub: string }[] = [
   { key: NotificationCategory.Order, title: 'Order updates', sub: 'Rider, arrival, delivered' },
   { key: NotificationCategory.Brand, title: 'Brand orders', sub: 'Shipping from partner brands' },
   {
@@ -45,6 +51,8 @@ const ROWS: { key: NotificationCategory; title: string; sub: string }[] = [
     sub: 'Opening hours, new areas',
   },
 ];
+
+const ROWS = ALL_ROWS.filter((r) => activeNotificationCategories().includes(r.key));
 
 /** 23 → "11:00 PM". */
 const hourLabel = (hour: number): string =>

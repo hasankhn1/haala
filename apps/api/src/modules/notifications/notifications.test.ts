@@ -54,7 +54,15 @@ async function signUp(): Promise<{ token: string; userId: string }> {
   const res = await call('POST', '/api/v1/auth/register', {
     body: {
       name: `Notify Test ${seq}`,
-      phone: `+9231${String(Date.now()).slice(-8)}${seq}`.slice(0, 13),
+      /*
+       * `seq` goes *before* the truncation, not after. `+9231` is five
+       * characters and the timestamp eight, so `.slice(0, 13)` was cutting off
+       * the very thing that made two registrations in the same millisecond
+       * distinct — the second then collided on `users_phone_uq`, got a 409, and
+       * failed the assertion below. Only on a fast machine, or once CI lowers
+       * the bcrypt rounds.
+       */
+      phone: `+9231${seq}${String(Date.now()).slice(-7)}`.slice(0, 13),
       password: 'haala1234',
     },
   });

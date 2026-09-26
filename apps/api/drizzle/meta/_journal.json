@@ -127,6 +127,13 @@
       "when": 1790361807489,
       "tag": "0017_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790423017505,
+      "tag": "0018_push_token_channels",
+      "breakpoints": true
     }
   ]
 }

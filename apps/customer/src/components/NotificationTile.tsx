@@ -1,5 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
+import { NowDotMark } from './BrandMarks';
 import { NotificationCategory, NotificationType } from '@haala/shared';
 import { theme } from '@haala/ui';
 
@@ -12,33 +13,12 @@ import { theme } from '@haala/ui';
  * Lucide's bag and card are close but not the same silhouettes.
  */
 
-/** The "h" with its detached dot: Haala's mark, 24-unit grid. */
-const H_PATH =
-  'M4 3h4v6.6c1-1 2.4-1.6 4-1.6 3.6 0 6 2.4 6 6V21h-4v-7c0-1.7-1-2.8-2.6-2.8S8 12.3 8 14v7H4Z';
-
 const GLYPH: Record<Exclude<NotificationCategory, typeof NotificationCategory.Order>, string> = {
   brand: 'M6 8h12l-1 12H7L6 8Z M9.5 8V6.5a2.5 2.5 0 0 1 5 0V8',
   payment: 'M3.5 6.5h17v11h-17z M3.5 10.5h17 M7 14.5h3',
   offer: 'M4 4h7l9 9-7 7-9-9V4Z M8 8h.01',
   service: 'M4 10l1.5-5h13L20 10 M5 10v9h14v-9 M4 10h16 M10 19v-5h4v5',
 };
-
-export function NowDotMark({
-  size,
-  color,
-  dotColor = color,
-}: {
-  size: number;
-  color: string;
-  dotColor?: string;
-}) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path d={H_PATH} fill={color} />
-      <Circle cx={20.2} cy={4.6} r={2.5} fill={dotColor} />
-    </Svg>
-  );
-}
 
 const tintFor = (category: NotificationCategory, type?: string) =>
   type === NotificationType.PaymentFailed

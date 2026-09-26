@@ -334,13 +334,24 @@ export const orderService = {
     });
 
     // Refund any captured payment (COD pending → nothing to do).
+    /*
+     * Announce the cancellation *before* raising the refund it causes.
+     *
+     * `paymentService.refund` ends by pushing "Refund issued", so doing it the
+     * other way round buzzes the customer twice in reverse causal order — a
+     * refund for an order they have not yet been told was cancelled, followed
+     * by a cancellation promising a refund they have already been given.
+     */
+    const cancelled = (await orderRepository.findById(orderId)) as Order;
+    emitStatus(cancelled);
+
     const payment = await paymentRepository.findByOrderId(orderId);
     if (payment?.status === PaymentStatus.Paid) {
       await paymentService.refund(orderId, order.total, 'Order cancelled');
     }
 
+    // Re-read: the refund moves the payment, and the view carries its status.
     const updated = (await orderRepository.findById(orderId)) as Order;
-    emitStatus(updated);
     return this.buildView(updated);
   },
 

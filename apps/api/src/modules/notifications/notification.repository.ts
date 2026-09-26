@@ -125,14 +125,18 @@ export const notificationRepository = {
     userId: string,
     token: string,
     platform: string | null,
+    channels: string[] | null,
     ex: Executor = db,
   ): Promise<void> {
+    // Overwritten on every registration rather than merged: the set belongs to
+    // the build that is running now, and a downgrade must narrow it.
+    const joined = channels && channels.length > 0 ? channels.join(',') : null;
     await ex
       .insert(pushTokens)
-      .values({ userId, token, platform })
+      .values({ userId, token, platform, channels: joined })
       .onConflictDoUpdate({
         target: pushTokens.token,
-        set: { userId, platform, updatedAt: new Date() },
+        set: { userId, platform, channels: joined, updatedAt: new Date() },
       });
   },
 

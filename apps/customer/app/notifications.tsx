@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import {
@@ -10,11 +10,17 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { NotificationCategory, NotificationType, type NotificationView } from '@haala/shared';
+import {
+  activeNotificationCategories,
+  NotificationCategory,
+  NotificationType,
+  type NotificationView,
+} from '@haala/shared';
 import { Button, Chip, Icon, StateView, Text, theme } from '@haala/ui';
 import { notificationsApi } from '../src/api/endpoints';
 import { qk } from '../src/api/queryKeys';
-import { NotificationTile, NowDotMark } from '../src/components/NotificationTile';
+import { NowDotMark } from '../src/components/BrandMarks';
+import { NotificationTile } from '../src/components/NotificationTile';
 
 /**
  * The inbox, from `Haala Notifications.dc.html`: category filters, Today and
@@ -27,13 +33,23 @@ import { NotificationTile, NowDotMark } from '../src/components/NotificationTile
 
 type Filter = 'all' | NotificationCategory;
 
+const FILTER_LABEL: Record<NotificationCategory, string> = {
+  [NotificationCategory.Order]: 'Orders',
+  [NotificationCategory.Brand]: 'Brands',
+  [NotificationCategory.Payment]: 'Payments',
+  [NotificationCategory.Offer]: 'Offers',
+  [NotificationCategory.Service]: 'Service',
+};
+
+/*
+ * Only categories that can actually hold something. `brand` has no types yet,
+ * and a chip that answers "Nothing here yet" however many notifications you
+ * have reads as a broken inbox rather than an empty one. It appears on its own
+ * once brand-order types exist.
+ */
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: 'All' },
-  { key: NotificationCategory.Order, label: 'Orders' },
-  { key: NotificationCategory.Brand, label: 'Brands' },
-  { key: NotificationCategory.Payment, label: 'Payments' },
-  { key: NotificationCategory.Offer, label: 'Offers' },
-  { key: NotificationCategory.Service, label: 'Service' },
+  ...activeNotificationCategories().map((key) => ({ key, label: FILTER_LABEL[key] })),
 ];
 
 /** Types a Haala rider carries out — the comp tags them so nobody waits on a brand. */
@@ -84,11 +100,49 @@ export default function NotificationsScreen() {
 
   const items = query.data?.items ?? [];
   const unread = query.data?.unreadCount ?? 0;
-  const now = new Date();
-  const sections = [
-    { title: 'Today', data: items.filter((n) => sameDay(new Date(n.createdAt), now)) },
-    { title: 'Earlier', data: items.filter((n) => !sameDay(new Date(n.createdAt), now)) },
-  ].filter((s) => s.data.length > 0);
+
+  /*
+   * Memoised on `items`, because `SectionList` keys its work off the identity
+   * of `sections` and of each section object. Rebuilt on every render — and
+   * this screen re-renders whenever a `markRead` mutation settles or a filter
+   * chip is tapped — it re-renders all 50 tiles, each holding an SVG, rather
+   * than reusing any of them.
+   *
+   * `now` has to be inside: taking it as a dependency of itself would rebuild
+   * the sections on every render again. The day boundary only matters to the
+   * Today/Earlier split, which is recomputed whenever the data changes.
+   */
+  /*
+   * A clock that actually advances. `new Date()` on every render looked live
+   * and was not — it only moved when something *else* re-rendered the screen,
+   * so an inbox left open showed "12m" indefinitely. A minute is the smallest
+   * unit these labels use, so ticking faster would buy nothing.
+   */
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  /*
+   * Keyed on the day rather than on `now`, so the minute tick refreshes the
+   * relative labels without rebuilding the section array — `SectionList` keys
+   * its work off the identity of `sections` and of each section object, and
+   * this screen re-renders whenever a `markRead` settles or a chip is tapped.
+   * Rebuilt every render, it re-rendered all 50 tiles, each holding an SVG.
+   */
+  const dayKey = now.toDateString();
+  const sections = useMemo(
+    () =>
+      [
+        { title: 'Today', data: items.filter((n) => sameDay(new Date(n.createdAt), now)) },
+        { title: 'Earlier', data: items.filter((n) => !sameDay(new Date(n.createdAt), now)) },
+      ].filter((s) => s.data.length > 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `dayKey` is the
+    // part of `now` the split depends on; taking `now` itself would rebuild
+    // these arrays every minute for a boundary that moves once a day.
+    [items, dayKey],
+  );
 
   // Nothing at all, as opposed to nothing in this category, gets the full
   // welcome — and no header action or filters, which would have nothing to act on.

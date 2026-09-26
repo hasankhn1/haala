@@ -127,8 +127,16 @@ export const notificationsApi = {
     api.patch<NotificationPreferencesView>('/notifications/preferences', input),
   markRead: (id: string) => api.post<{ success: boolean }>(`/notifications/${id}/read`),
   markAllRead: () => api.post<{ success: boolean; count: number }>('/notifications/read-all'),
-  registerPushToken: (token: string, platform: 'ios' | 'android') =>
-    api.post<{ success: boolean }>('/notifications/push-token', { token, platform }),
+  /**
+   * `channels` tells the server which Android channels this build created, so
+   * it never targets one the handset does not have — Android drops those.
+   */
+  registerPushToken: (token: string, platform: 'ios' | 'android', channels?: string[]) =>
+    api.post<{ success: boolean }>('/notifications/push-token', {
+      token,
+      platform,
+      ...(channels?.length ? { channels } : {}),
+    }),
   unregisterPushToken: (token: string) =>
     api.del<{ success: boolean }>('/notifications/push-token', { token }),
 };
