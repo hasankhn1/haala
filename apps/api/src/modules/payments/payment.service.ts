@@ -3,6 +3,7 @@ import { AppError } from '../../common/errors';
 import { logger } from '../../common/logger';
 import { db, type Executor } from '../../db/client';
 import type { Payment } from '../../db/schema';
+import { notificationService } from '../notifications/notification.service';
 import { paymentRepository } from './payment.repository';
 import type {
   CheckoutHandoff,
@@ -79,8 +80,9 @@ export const paymentService = {
 
     const provider = paymentRegistry.get(payment.provider);
     const { status } = await provider.verifyPayment({ orderId, providerRef: payment.providerRef });
-    const updated = await paymentRepository.updateStatus(payment.id, status);
-    return updated ?? payment;
+    const moved = await paymentRepository.transitionStatus(payment.id, status);
+    if (moved) void notificationService.notifyPaymentOutcome(moved);
+    return moved ?? payment;
   },
 
   /** Process a verified provider webhook and reconcile the payment status. */
@@ -146,10 +148,15 @@ export const paymentService = {
       return { handled: true };
     }
 
-    await paymentRepository.updateStatus(payment.id, result.status, {
+    const patch = {
       providerRef: result.providerRef ?? payment.providerRef,
       rawPayload: safeJson(webhook.rawBody),
-    });
+    };
+    // A retried delivery of a status we already hold still records its payload,
+    // but only a real transition is announced to the customer.
+    const moved = await paymentRepository.transitionStatus(payment.id, result.status, patch);
+    if (moved) void notificationService.notifyPaymentOutcome(moved);
+    else await paymentRepository.updateStatus(payment.id, result.status, patch);
     return { handled: true };
   },
 
@@ -183,6 +190,8 @@ export const paymentService = {
       payment.id,
       isFull ? PaymentStatus.Refunded : PaymentStatus.PartiallyRefunded,
     );
+    // A refund the gateway refused needs a human, not a "Refund issued" push.
+    if (result.status !== 'failed') void notificationService.notifyRefund(orderId, amount);
   },
 
   /** Called by the Delivery flow when a rider collects COD. */

@@ -20,7 +20,8 @@ export interface PushMessage {
   title: string;
   body: string;
   data?: Record<string, unknown>;
-  sound?: 'default';
+  /** `null` is silent; iOS reads this, Android takes it from the channel. */
+  sound?: 'default' | null;
   /** Android channel; must match one registered by the app. */
   channelId?: string;
 }

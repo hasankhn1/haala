@@ -116,10 +116,11 @@ were all found — none of them was visible in the diff.
   system, Railway, and brands stocking shared dark stores. The reasoning is in
   `ONBOARDING.md`; reopening them costs a day and lands in the same place.
 - **Work from a cached copy of the design.** Re-fetch every time — a stale copy
-  once went a whole screen out of date. There are now four files:
+  once went a whole screen out of date. There are now five files:
   `Grocery App.dc.html` (the department shell), `Auth & Checkout.dc.html`,
-  `Haala Home.dc.html` (the marketplace home), and `Haala Splash.dc.html` (the
-  launch loader).
+  `Haala Home.dc.html` (the marketplace home), `Haala Splash.dc.html` (the
+  launch loader), and `Haala Notifications.dc.html` (push, banner, inbox,
+  settings, permission priming).
 - **Substitute a layout for the comp's.** The marketplace home was first built
   with full-width stacked cards where the comp draws a 210px horizontal rail,
   and with a "Coming soon" section the design does not have. If the comp cannot

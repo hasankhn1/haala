@@ -15,6 +15,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ToastProvider, setImageBaseUrl, theme } from '@haala/ui';
 import { AuthProvider, useAuth } from '../src/auth/AuthContext';
+import { InAppBanner } from '../src/components/InAppBanner';
 import { SplashOverlay } from '../src/components/SplashLoader';
 import { usePushRegistration } from '../src/lib/usePushRegistration';
 import { API_URL } from '../src/config';
@@ -88,7 +89,17 @@ export default function RootLayout() {
                     contentStyle: { backgroundColor: theme.colors.background },
                     animation: 'slide_from_right',
                   }}
-                />
+                >
+                  {/* Declared here, not inside the screen: iOS decides how to
+                      present a route before the route renders. */}
+                  <Stack.Screen
+                    name="enable-notifications"
+                    options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+                  />
+                </Stack>
+                {/* After the Stack so it draws over every screen. iOS presents
+                    native modals above this tree, so it sits beneath those. */}
+                <InAppBanner />
               </SplashGate>
             </AuthProvider>
           </ToastProvider>

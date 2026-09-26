@@ -24,7 +24,10 @@ export const qk = {
   addresses: ['addresses'] as const,
   orders: ['orders'] as const,
   promo: (code: string) => ['promo', code] as const,
+  /** Every inbox query starts with this, so invalidating it refreshes them all. */
   notifications: ['notifications'] as const,
   paymentMethods: ['payment-methods'] as const,
+  notificationsIn: (category: string) => ['notifications', category] as const,
+  notificationPreferences: ['notification-preferences'] as const,
   order: (id: string) => ['order', id] as const,
 };

@@ -120,6 +120,13 @@
       "when": 1790344254573,
       "tag": "0016_safepay_customer",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790361807489,
+      "tag": "0017_notifications",
+      "breakpoints": true
     }
   ]
 }

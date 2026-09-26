@@ -61,13 +61,7 @@ const emitDelivery = (assignment: DeliveryAssignment, customerUserId: string): v
   // moment worth a buzz that never sent one — the rider is at the door and the
   // customer may be inside with the phone in their pocket.
   if (assignment.status === DeliveryStatus.Arrived) {
-    void notificationService.create({
-      userId: customerUserId,
-      title: 'Your rider has arrived',
-      body: 'They are outside with your order.',
-      type: 'order_update',
-      data: { orderId: assignment.orderId, status: assignment.status },
-    });
+    void notificationService.notifyArrived(customerUserId, assignment.orderId, assignment.riderId);
   }
 };
 
@@ -241,6 +235,7 @@ export const deliveryService = {
     });
 
     emitDelivery(assignment, order.userId);
+    void notificationService.notifyRiderAssigned(order, riderUserId);
     emitToUser(order.userId, RealtimeEvents.OrderAssigned, {
       orderId: order.id,
       at: new Date().toISOString(),

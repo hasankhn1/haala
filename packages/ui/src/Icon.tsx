@@ -45,6 +45,7 @@ import Plus from 'lucide-react-native/dist/esm/icons/plus.mjs';
 import Receipt from 'lucide-react-native/dist/esm/icons/receipt.mjs';
 import Search from 'lucide-react-native/dist/esm/icons/search.mjs';
 import Share2 from 'lucide-react-native/dist/esm/icons/share-2.mjs';
+import SlidersHorizontal from 'lucide-react-native/dist/esm/icons/sliders-horizontal.mjs';
 import ShoppingBag from 'lucide-react-native/dist/esm/icons/shopping-bag.mjs';
 import ShoppingBasket from 'lucide-react-native/dist/esm/icons/shopping-basket.mjs';
 import ShoppingCart from 'lucide-react-native/dist/esm/icons/shopping-cart.mjs';
@@ -145,6 +146,7 @@ const ICONS = {
   'navigate-outline': Navigation,
   'notifications': Bell,
   'notifications-outline': Bell,
+  'options-outline': SlidersHorizontal,
   'pencil': Pencil,
   'person': User,
   'person-outline': User,

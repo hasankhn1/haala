@@ -46,7 +46,7 @@ const CANCELLABLE: ReadonlySet<OrderStatusT> = new Set([
 const generateOrderNumber = (): string =>
   `HAALA-${randomBytes(4).readUInt32BE(0).toString(36).toUpperCase().padStart(6, '0').slice(-6)}`;
 
-const emitStatus = (order: Pick<Order, 'id' | 'userId' | 'status' | 'orderNumber'>): void => {
+const emitStatus = (order: Order): void => {
   const payload = { orderId: order.id, status: order.status, at: new Date().toISOString() };
   emitToUser(order.userId, RealtimeEvents.OrderStatusUpdated, payload);
   emitToOrder(order.id, RealtimeEvents.OrderStatusUpdated, payload);
@@ -55,12 +55,7 @@ const emitStatus = (order: Pick<Order, 'id' | 'userId' | 'status' | 'orderNumber
   // and Expo being slow must never hold up — or roll back — a delivered order.
   // `notifyOrderStatus` swallows its own errors and is silent for statuses with
   // no customer-facing copy.
-  void notificationService.notifyOrderStatus(
-    order.userId,
-    order.id,
-    order.orderNumber,
-    order.status,
-  );
+  void notificationService.notifyOrderStatus(order);
 };
 
 export const orderService = {

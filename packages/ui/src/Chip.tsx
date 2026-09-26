@@ -13,18 +13,36 @@ export interface ChipProps {
    * set of controls.
    */
   shape?: 'chip' | 'pill';
+  /**
+   * Fill when selected. `accent` (the contrast surface) is for filters that
+   * sit beside ember content — the notification inbox's category row, where an
+   * ember chip would compete with the order tiles beneath it.
+   */
+  tone?: 'primary' | 'accent';
 }
 
-export function Chip({ label, selected = false, onPress, shape = 'chip' }: ChipProps) {
+export function Chip({
+  label,
+  selected = false,
+  onPress,
+  shape = 'chip',
+  tone = 'primary',
+}: ChipProps) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected }}
+      // React Native Web drops `accessibilityState`, so the label carries it too.
+      accessibilityLabel={selected ? `${label}, selected` : label}
       onPress={onPress}
       style={({ pressed }) => [
         styles.chip,
         shape === 'pill' ? styles.pill : styles.rect,
-        selected ? styles.selected : styles.unselected,
+        selected
+          ? tone === 'accent'
+            ? styles.selectedAccent
+            : styles.selected
+          : styles.unselected,
         pressed && { opacity: 0.85 },
       ]}
     >
@@ -45,6 +63,11 @@ const styles = StyleSheet.create({
   rect: { borderRadius: theme.radii.xs },
   pill: { borderRadius: theme.radii.pill },
   selected: { backgroundColor: theme.colors.primary, borderWidth: 1, borderColor: 'transparent' },
+  selectedAccent: {
+    backgroundColor: theme.colors.accent,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
   unselected: {
     backgroundColor: theme.colors.surface,
     borderWidth: 1,

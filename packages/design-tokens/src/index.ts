@@ -3,7 +3,14 @@ export * from './spacing';
 export * from './typography';
 export * from './elevation';
 
-import { colors, departmentTintMuted, departmentTints, palette, statusColors } from './colors';
+import {
+  colors,
+  departmentTintMuted,
+  departmentTints,
+  notificationTints,
+  palette,
+  statusColors,
+} from './colors';
 import { spacing, radii, space, layout, touchTarget, controlHeight } from './spacing';
 import {
   fontFamily,
@@ -33,6 +40,8 @@ export const theme = {
   /** Department identity colours, by business-type key. See `colors.ts`. */
   departmentTints,
   departmentTintMuted,
+  /** Notification category tiles, by category key. See `colors.ts`. */
+  notificationTints,
 } as const;
 
 export type Theme = typeof theme;

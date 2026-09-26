@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, notInArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, notInArray } from 'drizzle-orm';
 import { DeliveryStatus, OrderStatus, type DeliveryStatus as DeliveryStatusT } from '@haala/shared';
 import { db, type Executor } from '../../db/client';
 import {
@@ -43,6 +43,19 @@ export const isCarryingForCustomer = (assignment: {
 }): boolean => assignment.pickedUpAt !== null && assignment.deliveredAt === null;
 
 export const deliveryRepository = {
+  /**
+   * Claim the one "Arriving" notification for an assignment. True for exactly
+   * one caller, however many location pings race for it.
+   */
+  async markArrivingNotified(id: string, ex: Executor = db): Promise<boolean> {
+    const rows = await ex
+      .update(deliveryAssignments)
+      .set({ arrivingNotifiedAt: new Date() })
+      .where(and(eq(deliveryAssignments.id, id), isNull(deliveryAssignments.arrivingNotifiedAt)))
+      .returning({ id: deliveryAssignments.id });
+    return rows.length > 0;
+  },
+
   async create(data: NewDeliveryAssignment, ex: Executor = db): Promise<DeliveryAssignment> {
     const [row] = await ex.insert(deliveryAssignments).values(data).returning();
     return row as DeliveryAssignment;

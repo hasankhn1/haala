@@ -1,4 +1,4 @@
-import type { PushRegistration } from './pushToken';
+import type { PushChannel, PushOptions, PushRegistration, ReceivedPush } from './pushToken';
 
 /**
  * Web no-op. Browser push needs a service worker and a VAPID key pair, which is
@@ -9,10 +9,19 @@ import type { PushRegistration } from './pushToken';
  * point: a runtime `Platform.OS` guard would still pull `expo-notifications`
  * into the web bundle and fail there.
  */
-export const configureForegroundNotifications = (): void => {};
+export const configureForegroundNotifications = (_options?: { showAlert?: boolean }): void => {};
 
-export const getExpoPushToken = async (): Promise<PushRegistration | null> => null;
+export const canAskForPush = async (): Promise<boolean> => false;
 
-export const onNotificationTapped = (): (() => void) => () => {};
+export const getExpoPushToken = async (_options?: PushOptions): Promise<PushRegistration | null> =>
+  null;
 
-export type { PushRegistration };
+export const onNotificationTapped =
+  (_handler: (data: Record<string, unknown>) => void): (() => void) =>
+  () => {};
+
+export const onNotificationReceived =
+  (_handler: (push: ReceivedPush) => void): (() => void) =>
+  () => {};
+
+export type { PushChannel, PushOptions, PushRegistration, ReceivedPush };

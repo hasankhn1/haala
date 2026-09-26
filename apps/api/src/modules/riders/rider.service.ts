@@ -14,6 +14,7 @@ import type { Rider, User } from '../../db/schema';
 import { RealtimeEvents } from '../../realtime/events';
 import { emitToOrder, emitToUser } from '../../realtime/gateway';
 import { deliveryRepository, isCarryingForCustomer } from '../delivery/delivery.repository';
+import { notificationService } from '../notifications/notification.service';
 import { orderRepository } from '../orders/order.repository';
 import { storeRepository } from '../stores/store.repository';
 import { userRepository } from '../users/user.repository';
@@ -152,7 +153,10 @@ export const riderService = {
       };
       emitToOrder(active.orderId, RealtimeEvents.RiderLocationUpdated, payload);
       const order = await orderRepository.findById(active.orderId);
-      if (order) emitToUser(order.userId, RealtimeEvents.RiderLocationUpdated, payload);
+      if (order) {
+        emitToUser(order.userId, RealtimeEvents.RiderLocationUpdated, payload);
+        void notificationService.notifyIfArriving(order, active, input);
+      }
     }
 
     return this.viewFor(updated, user);

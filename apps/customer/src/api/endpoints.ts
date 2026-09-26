@@ -15,8 +15,10 @@ import type {
   LinkedProvider,
   LoginInput,
   MergeCartInput,
+  NotificationCategory,
   NotificationListView,
   SavedCardListView,
+  NotificationPreferencesView,
   OrderSummaryView,
   OrderView,
   Paginated,
@@ -28,6 +30,7 @@ import type {
   PromoQuoteView,
   RegisterInput,
   StoreView,
+  UpdateNotificationPreferencesInput,
 } from '@haala/shared';
 import { api } from './client';
 
@@ -115,7 +118,13 @@ export const addressesApi = {
 };
 
 export const notificationsApi = {
+  /** Takes no arguments on purpose: it is handed to `useQuery` as `queryFn`. */
   list: () => api.get<NotificationListView>('/notifications'),
+  listIn: (category: NotificationCategory) =>
+    api.get<NotificationListView>(`/notifications${qs({ category })}`),
+  preferences: () => api.get<NotificationPreferencesView>('/notifications/preferences'),
+  updatePreferences: (input: UpdateNotificationPreferencesInput) =>
+    api.patch<NotificationPreferencesView>('/notifications/preferences', input),
   markRead: (id: string) => api.post<{ success: boolean }>(`/notifications/${id}/read`),
   markAllRead: () => api.post<{ success: boolean; count: number }>('/notifications/read-all'),
   registerPushToken: (token: string, platform: 'ios' | 'android') =>
