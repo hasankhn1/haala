@@ -24,6 +24,12 @@ export interface PushMessage {
   sound?: 'default' | null;
   /** Android channel; must match one registered by the app. */
   channelId?: string;
+  /**
+   * Action-button set; must match a category the app registered with
+   * `setNotificationCategoryAsync`. An unknown id is not an error — the
+   * notification simply renders without buttons.
+   */
+  categoryId?: string;
 }
 
 export interface PushOutcome {

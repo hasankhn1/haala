@@ -72,6 +72,40 @@ const ensureAndroidChannels = async (channels: readonly PushChannel[]): Promise<
   );
 };
 
+/** One action button on a notification. */
+export interface PushAction {
+  /** Comes back as `actionIdentifier` when tapped. */
+  id: string;
+  title: string;
+}
+
+/**
+ * Register the action buttons a category shows.
+ *
+ * Android renders these under the notification; the push must carry the
+ * matching `categoryId`. Re-registering is safe and idempotent, unlike a
+ * channel — a category is owned by the app, not the OS, so its buttons can be
+ * changed in a later build.
+ */
+export const ensureNotificationCategories = async (
+  categories: Record<string, readonly PushAction[]>,
+): Promise<void> => {
+  await Promise.all(
+    Object.entries(categories).map(([id, actions]) =>
+      Notifications.setNotificationCategoryAsync(
+        id,
+        actions.map((a) => ({
+          identifier: a.id,
+          buttonTitle: a.title,
+          // Bring the app forward rather than handling it in the background:
+          // every action we have is "show me this screen".
+          options: { opensAppToForeground: true },
+        })),
+      ).catch(() => undefined),
+    ),
+  );
+};
+
 export interface PushRegistration {
   token: string;
   platform: 'ios' | 'android';
@@ -148,10 +182,20 @@ export interface ReceivedPush {
 
 /** Subscribe to notification taps. Returns an unsubscribe function. */
 export const onNotificationTapped = (
-  handler: (data: Record<string, unknown>) => void,
+  /**
+   * `action` is the id of the button pressed, or `null` when the body of the
+   * notification was tapped. Expo reports the latter as
+   * `DEFAULT_ACTION_IDENTIFIER`, which is an implementation detail the app
+   * should not have to know.
+   */
+  handler: (data: Record<string, unknown>, action: string | null) => void,
 ): (() => void) => {
   const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-    handler((response.notification.request.content.data ?? {}) as Record<string, unknown>);
+    const id = response.actionIdentifier;
+    handler(
+      (response.notification.request.content.data ?? {}) as Record<string, unknown>,
+      id === Notifications.DEFAULT_ACTION_IDENTIFIER ? null : id,
+    );
   });
   return () => sub.remove();
 };

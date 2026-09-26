@@ -3,11 +3,14 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import {
   activeNotificationCategories,
+  NOTIFICATION_ACTION,
+  NOTIFICATION_CATEGORY_ID,
   NOTIFICATION_CHANNEL,
   type NotificationCategory,
 } from '@haala/shared';
 import {
   configureForegroundNotifications,
+  ensureNotificationCategories,
   getExpoPushToken,
   onNotificationReceived,
   onNotificationTapped,
@@ -20,6 +23,18 @@ import { qk } from '../api/queryKeys';
 // arrive — doing it inside an effect races the first push. No OS alert while
 // the app is open: `InAppBanner` shows it instead.
 configureForegroundNotifications({ showAlert: false });
+
+/*
+ * The comp puts a "Track order" button under an order notification. Registered
+ * at module scope alongside the foreground handler, because a category has to
+ * exist before a push carrying its id arrives — a push for an unregistered
+ * category renders with no buttons and nothing says why.
+ */
+void ensureNotificationCategories({
+  [NOTIFICATION_CATEGORY_ID.order as string]: [
+    { id: NOTIFICATION_ACTION.Track, title: 'Track order' },
+  ],
+});
 
 /**
  * One Android channel per category, as the design's spec sheet sets them.
@@ -114,7 +129,7 @@ export function usePushRegistration(isAuthenticated: boolean): void {
   // A tap lands on the order it is about; anything else lands in the inbox.
   useEffect(
     () =>
-      onNotificationTapped((data) => {
+      onNotificationTapped((data, action) => {
         if (typeof data.notificationId === 'string') {
           notificationsApi
             .markRead(data.notificationId)
@@ -122,6 +137,15 @@ export function usePushRegistration(isAuthenticated: boolean): void {
             .catch(() => undefined);
         }
         const orderId = typeof data.orderId === 'string' ? data.orderId : null;
+        /*
+         * "Track order" and a tap on the body go to the same place — the order
+         * screen is where tracking lives, and it carries the call button too.
+         * Kept as an explicit branch so a second action lands cleanly.
+         */
+        if (action === NOTIFICATION_ACTION.Track && orderId) {
+          router.push(`/order/${orderId}`);
+          return;
+        }
         router.push(orderId ? `/order/${orderId}` : '/notifications');
       }),
     [router, qc],

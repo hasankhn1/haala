@@ -88,6 +88,33 @@ export const notificationTypesIn = (category: NotificationCategory): string[] =>
   Object.keys(CATEGORY_BY_TYPE).filter((t) => CATEGORY_BY_TYPE[t] === category);
 
 /**
+ * Action buttons on a push, per the comp's "Track order" / "Call rider" row.
+ *
+ * The identifier is sent as `categoryId` on the push and must match a category
+ * the app registered with `setNotificationCategoryAsync` — an unknown one
+ * simply renders no buttons, which is why this list is shared rather than
+ * written out on each side.
+ *
+ * Only `order` has actions. Payments and offers have none yet: the comp draws
+ * "Try again" and "Add to cart", and neither has a destination in the app — a
+ * button that opens a screen which cannot do the thing is worse than no button.
+ */
+export const NOTIFICATION_CATEGORY_ID: Partial<Record<NotificationCategory, string>> = {
+  order: 'haala.order',
+};
+
+/**
+ * What the buttons do. `track` is the only one with a real destination today:
+ * the order screen, which already carries the call button — so "Call rider"
+ * stays off the notification rather than putting a rider's personal number
+ * into a payload that persists in the shade.
+ */
+export const NOTIFICATION_ACTION = {
+  Track: 'track',
+} as const;
+export type NotificationAction = (typeof NOTIFICATION_ACTION)[keyof typeof NOTIFICATION_ACTION];
+
+/**
  * Categories that can actually carry a notification today.
  *
  * `brand` is declared everywhere — inbox filter, preference switch, Android

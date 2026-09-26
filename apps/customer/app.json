@@ -41,6 +41,7 @@
           "defaultChannel": "default"
         }
       ],
+      "./plugins/withLargeNotificationIcon",
       "@react-native-google-signin/google-signin"
     ],
     "ios": {

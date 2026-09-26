@@ -1,13 +1,14 @@
 import {
   DeliveryStatus,
   NOTIFICATION_CATEGORIES,
+  NOTIFICATION_CATEGORY_ID,
   NOTIFICATION_CHANNEL,
   NotificationCategory,
-  notificationCategory,
-  notificationTypesIn,
   OrderStatus,
   PaymentMethod,
   PaymentStatus,
+  notificationCategory,
+  notificationTypesIn,
   type NotificationPreferencesView,
   type NotificationView,
   type UpdateNotificationPreferencesInput,
@@ -144,6 +145,14 @@ export const notificationService = {
             category: view.category,
           },
           channelId: NOTIFICATION_CHANNEL[view.category],
+          /*
+           * The comp's action row. Only `order` has one; `NOTIFICATION_CATEGORY_ID`
+           * is undefined for the rest, and an absent `categoryId` renders a
+           * plain notification rather than an empty button bar.
+           */
+          ...(NOTIFICATION_CATEGORY_ID[view.category]
+            ? { categoryId: NOTIFICATION_CATEGORY_ID[view.category] }
+            : {}),
           // Offers are the one silent category, on iOS as on Android's channel.
           sound: view.category === NotificationCategory.Offer ? null : 'default',
         });
