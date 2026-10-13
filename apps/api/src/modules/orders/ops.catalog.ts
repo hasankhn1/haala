@@ -114,7 +114,10 @@ export const opsCatalogService = {
         productId: product.id,
         name: product.name,
         slug: product.slug,
-        unit: variant.unit,
+        // A clothing variant's unit is its label ("XS / red"), already shown
+        // beside the name, so it shows the product's subtitle instead. Grocery
+        // variants (no size option) keep their own unit.
+        unit: variant.options.size ? product.unit : variant.unit,
         brandId: brand.id,
         brandName: brand.name,
         categoryId: category.id,

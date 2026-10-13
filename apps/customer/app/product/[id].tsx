@@ -399,9 +399,12 @@ const styles = StyleSheet.create({
   scroll: { paddingBottom: 120 },
 
   sizes: { marginTop: theme.spacing.xl, gap: theme.spacing.md },
-  sizeRow: { flexDirection: 'row', gap: theme.spacing.md },
+  // Wraps three to a line: clothing can have 20+ size × colour rows, and a
+  // single flex:1 row crushed each card to one character wide.
+  sizeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.md },
   sizeCard: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '30%',
     borderRadius: theme.radii.sm,
     borderWidth: 2,
     borderColor: theme.colors.border,

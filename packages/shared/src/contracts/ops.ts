@@ -53,6 +53,7 @@ export interface OpsCatalogRow {
   productId: string;
   name: string;
   slug: string;
+  /** Shown under the name: the variant's unit, or the product's subtitle for a sized (clothing) variant. */
   unit: string;
   /** The shop that owns the product — staff stock one shop's delivery at a time. */
   brandId: string;

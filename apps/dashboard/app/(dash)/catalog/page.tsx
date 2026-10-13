@@ -211,7 +211,7 @@ export default function CatalogPage() {
                         · {r.variantLabel}
                       </span>
                     </div>
-                    <div className="muted">{r.unit}</div>
+                    {r.unit !== r.variantLabel ? <div className="muted">{r.unit}</div> : null}
                   </td>
                   <td className="muted">{r.categoryName}</td>
 
