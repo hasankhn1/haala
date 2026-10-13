@@ -1,4 +1,4 @@
-import type { PushChannel, PushOptions, PushRegistration, ReceivedPush } from './pushToken';
+import type { PushAction, PushChannel, PushOptions, PushRegistration, ReceivedPush } from './pushToken';
 
 /**
  * Web no-op. Browser push needs a service worker and a VAPID key pair, which is
@@ -10,6 +10,10 @@ import type { PushChannel, PushOptions, PushRegistration, ReceivedPush } from '.
  * into the web bundle and fail there.
  */
 export const configureForegroundNotifications = (_options?: { showAlert?: boolean }): void => {};
+
+export const ensureNotificationCategories = async (
+  _categories: Record<string, readonly PushAction[]>,
+): Promise<void> => {};
 
 export const canAskForPush = async (): Promise<boolean> => false;
 
@@ -24,4 +28,4 @@ export const onNotificationReceived =
   (_handler: (push: ReceivedPush) => void): (() => void) =>
   () => {};
 
-export type { PushChannel, PushOptions, PushRegistration, ReceivedPush };
+export type { PushAction, PushChannel, PushOptions, PushRegistration, ReceivedPush };

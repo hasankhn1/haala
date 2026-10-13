@@ -134,6 +134,34 @@
       "when": 1790423017505,
       "tag": "0018_push_token_channels",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791791353969,
+      "tag": "0019_drop_clothing_care_season_collection",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1791791977518,
+      "tag": "0020_drop_clothing_work_wearer",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1791796544040,
+      "tag": "0021_drop_clothing_includes",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1791881665721,
+      "tag": "0022_backfill_clothing_variant_size",
+      "breakpoints": true
     }
   ]
 }

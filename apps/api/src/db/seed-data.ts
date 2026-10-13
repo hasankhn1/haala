@@ -59,6 +59,8 @@ export interface SeedVariant {
    * is read rather than assumed.
    */
   priceDelta?: number;
+  /** The picker axes, e.g. `{ size: 'M' }`. Absent for grocery's "250 g". */
+  options?: Record<string, string>;
 }
 
 export interface SeedCategory {
@@ -1002,10 +1004,9 @@ export const SEED_PROMOTIONS = [
  * `apps/api/public/products`, and inventing paths would render as broken images
  * rather than as the neutral `Thumb` placeholder the apps already fall back to.
  *
- * `unit` carries the size, because that is what a variant's label is for a
- * garment — the same field grocery uses for "250 g". Sizes and colours as
- * separate axes are a real change to `product_variants.options`, and a seed file
- * is the wrong place to pretend they exist.
+ * Each size is both the variant's label and `options.size`, as the dashboard
+ * writes it — without `options.size` the product page treats a garment as
+ * having no sizes yet and blocks Save.
  *
  * Prices are whole rupees, converted to paisa by `seed.ts` like everything else.
  */
@@ -1020,37 +1021,43 @@ export const SEED_PROMOTIONS = [
  * sizes cost the same, but not all do, and a seed where every variant is the
  * same price cannot tell a per-variant price from a per-product one.
  */
+const size = (label: string, priceDelta?: number): SeedVariant => ({
+  label,
+  priceDelta,
+  options: { size: label },
+});
+
 const APPAREL_SIZES: SeedVariant[] = [
-  { label: 'S' },
-  { label: 'M' },
-  { label: 'L' },
-  { label: 'XL', priceDelta: 200 },
+  size('S'),
+  size('M'),
+  size('L'),
+  size('XL', 200),
 ];
 
 const KIDS_SIZES: SeedVariant[] = [
-  { label: '2-3y' },
-  { label: '4-5y' },
-  { label: '6-7y' },
-  { label: '8-9y' },
-  { label: '10-12y', priceDelta: 150 },
+  size('2-3y'),
+  size('4-5y'),
+  size('6-7y'),
+  size('8-9y'),
+  size('10-12y', 150),
 ];
 
 const MENS_SHOE_SIZES: SeedVariant[] = [
-  { label: '39' },
-  { label: '40' },
-  { label: '41' },
-  { label: '42' },
-  { label: '43' },
+  size('39'),
+  size('40'),
+  size('41'),
+  size('42'),
+  size('43'),
 ];
 
 const WOMENS_SHOE_SIZES: SeedVariant[] = [
-  { label: '36' },
-  { label: '37' },
-  { label: '38' },
-  { label: '39' },
+  size('36'),
+  size('37'),
+  size('38'),
+  size('39'),
 ];
 
-const UNSTITCHED_LENGTHS: SeedVariant[] = [{ label: '2.5 m' }, { label: '3 m', priceDelta: 400 }];
+const UNSTITCHED_LENGTHS: SeedVariant[] = [size('2.5 m'), size('3 m', 400)];
 
 export const SEED_CLOTHING_BRAND: SeedBrand = {
   slug: 'gul-ahmed-corner',
@@ -1074,11 +1081,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Stitched',
             pieces: '2 piece',
-            wearer: 'Men',
             fabric: 'Cotton',
-            includes: ['Kameez', 'Shalwar'],
-            season: 'Summer',
-            careInstructions: 'Machine wash cold, tumble dry low.',
           },
         },
         {
@@ -1092,11 +1095,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Stitched',
             pieces: '2 piece',
-            wearer: 'Men',
             fabric: 'Poly-cotton blend',
-            includes: ['Kameez', 'Shalwar'],
-            season: 'All season',
-            careInstructions: 'Machine wash, drip dry. No ironing needed.',
           },
         },
         {
@@ -1110,11 +1109,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Ready to wear',
             pieces: '1 piece',
-            wearer: 'Men',
             fabric: 'Jacquard',
-            includes: ['Waistcoat'],
-            collection: 'Eid ’26',
-            careInstructions: 'Dry clean only.',
           },
         },
         {
@@ -1128,10 +1123,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Ready to wear',
             pieces: '1 piece',
-            wearer: 'Men',
             fabric: 'Combed cotton',
-            includes: ['Polo shirt'],
-            season: 'Summer',
           },
         },
         {
@@ -1145,10 +1137,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Unstitched',
             pieces: '2 piece',
-            wearer: 'Men',
             fabric: 'Lawn',
-            includes: ['Shirt piece', 'Trouser piece'],
-            season: 'Summer',
           },
         },
         {
@@ -1162,11 +1151,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Stitched',
             pieces: '2 piece',
-            wearer: 'Men',
             fabric: 'Khaddar',
-            includes: ['Kurta', 'Shalwar'],
-            season: 'Winter',
-            careInstructions: 'Hand wash cold.',
           },
         },
       ],
@@ -1187,12 +1172,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Stitched',
             pieces: '3 piece',
-            wearer: 'Women',
             fabric: 'Chiffon',
-            includes: ['Shirt', 'Trouser', 'Dupatta'],
-            work: 'Hand-embroidered neckline',
-            collection: 'Eid ’26',
-            careInstructions: 'Dry clean only.',
           },
         },
         {
@@ -1206,10 +1186,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Unstitched',
             pieces: '3 piece',
-            wearer: 'Women',
             fabric: 'Lawn',
-            includes: ['Shirt piece', 'Trouser piece', 'Dupatta'],
-            season: 'Summer',
           },
         },
         {
@@ -1223,10 +1200,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Ready to wear',
             pieces: '1 piece',
-            wearer: 'Women',
             fabric: 'Viscose',
-            includes: ['Kurti'],
-            season: 'All season',
           },
         },
         {
@@ -1240,10 +1214,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Ready to wear',
             pieces: '2 piece',
-            wearer: 'Women',
             fabric: 'Nida',
-            includes: ['Abaya', 'Scarf'],
-            careInstructions: 'Hand wash, hang to dry.',
           },
         },
         {
@@ -1257,12 +1228,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Semi-stitched',
             pieces: '3 piece',
-            wearer: 'Women',
             fabric: 'Velvet',
-            includes: ['Shirt', 'Trouser', 'Shawl'],
-            work: 'Zari on the border',
-            season: 'Winter',
-            careInstructions: 'Dry clean only.',
           },
         },
         {
@@ -1276,9 +1242,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Ready to wear',
             pieces: '1 piece',
-            wearer: 'Women',
             fabric: 'Cotton',
-            includes: ['Trouser'],
           },
         },
       ],
@@ -1299,10 +1263,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Stitched',
             pieces: '2 piece',
-            wearer: 'Boys',
             fabric: 'Cotton',
-            includes: ['Kameez', 'Shalwar'],
-            careInstructions: 'Machine wash warm.',
           },
         },
         {
@@ -1316,11 +1277,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Ready to wear',
             pieces: '1 piece',
-            wearer: 'Girls',
             fabric: 'Net',
-            includes: ['Frock'],
-            collection: 'Eid ’26',
-            careInstructions: 'Hand wash cold.',
           },
         },
         {
@@ -1334,10 +1291,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Ready to wear',
             pieces: '1 piece',
-            wearer: 'Unisex',
             fabric: 'Fleece',
-            includes: ['Hoodie'],
-            season: 'Winter',
           },
         },
         {
@@ -1351,10 +1305,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Ready to wear',
             pieces: '1 piece',
-            wearer: 'Unisex',
             fabric: 'Twill',
-            includes: ['Trouser'],
-            careInstructions: 'Machine wash warm, warm iron.',
           },
         },
       ],
@@ -1373,10 +1324,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           imageUrl: null,
           variants: WOMENS_SHOE_SIZES,
           attributes: {
-            wearer: 'Women',
             fabric: 'Leather',
-            includes: ['Pair of khussa'],
-            work: 'Tilla embroidery',
           },
         },
         {
@@ -1388,10 +1336,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           imageUrl: null,
           variants: MENS_SHOE_SIZES,
           attributes: {
-            wearer: 'Men',
             fabric: 'Leather',
-            includes: ['Pair of chappal'],
-            careInstructions: 'Wipe with a dry cloth. Keep out of the rain.',
           },
         },
         {
@@ -1403,9 +1348,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           imageUrl: null,
           variants: MENS_SHOE_SIZES,
           attributes: {
-            wearer: 'Unisex',
             fabric: 'Canvas',
-            includes: ['Pair of sneakers'],
           },
         },
         {
@@ -1415,12 +1358,9 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           price: 1400,
           description: 'Washable sandals with a velcro strap.',
           imageUrl: null,
-          variants: [{ label: '26' }, { label: '28' }, { label: '30' }, { label: '32' }],
+          variants: [size('26'), size('28'), size('30'), size('32')],
           attributes: {
-            wearer: 'Unisex',
             fabric: 'EVA',
-            includes: ['Pair of sandals'],
-            careInstructions: 'Rinse under a tap.',
           },
         },
       ],
@@ -1441,9 +1381,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Ready to wear',
             pieces: '1 piece',
-            wearer: 'Unisex',
             fabric: 'Polyester knit',
-            includes: ['T-shirt'],
           },
         },
         {
@@ -1457,9 +1395,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Ready to wear',
             pieces: '1 piece',
-            wearer: 'Unisex',
             fabric: 'Polyester',
-            includes: ['Shorts'],
           },
         },
         {
@@ -1473,10 +1409,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Ready to wear',
             pieces: '2 piece',
-            wearer: 'Unisex',
             fabric: 'Brushed polyester',
-            includes: ['Jacket', 'Joggers'],
-            season: 'Winter',
           },
         },
         {
@@ -1490,9 +1423,7 @@ export const SEED_CLOTHING_BRAND: SeedBrand = {
           attributes: {
             suitType: 'Ready to wear',
             pieces: '1 piece',
-            wearer: 'Women',
             fabric: 'Nylon-elastane',
-            includes: ['Leggings'],
           },
         },
       ],

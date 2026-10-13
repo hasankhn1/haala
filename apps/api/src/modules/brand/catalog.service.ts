@@ -333,7 +333,8 @@ export const brandCatalogService = {
   /**
    * `product_variants_default_uq` allows exactly one variant per product at
    * `sort_order = 0`, because the customer catalogue joins on that row to
-   * resolve the price shown on a card. So a new size goes to the end unless the
+   * resolve the price shown on a card (for clothing, only as the fallback when
+   * the store has none of its sizes — see `cardVariant`). So a new size goes to the end unless the
    * caller insists otherwise — defaulting to 0 would collide with the product's
    * existing default and surface as a 500.
    */
@@ -405,8 +406,9 @@ export const brandCatalogService = {
     }
 
     // Removing the default would leave the product with nothing at
-    // `sort_order = 0`, and the catalogue card resolves its price from exactly
-    // that row — the product would still exist and stop being shoppable. So the
+    // `sort_order = 0`, and the catalogue card resolves its price from that row
+    // (clothing falls back to it) — the product would still exist and stop being
+    // shoppable. So the
     // next size is promoted in the same transaction.
     const removing = variants.find((v) => v.id === variantId);
     const promote =

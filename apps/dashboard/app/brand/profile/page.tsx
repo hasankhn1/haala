@@ -5,6 +5,7 @@ import { type FormEvent, useEffect, useState } from 'react';
 import type { BrandProfileView } from '@haala/shared';
 import { ImageUploader } from '@/components/ImageUploader';
 import { ApiError, api } from '@/lib/api';
+import { FieldTag } from '@/components/FieldTag';
 
 /**
  * The shop's own details.
@@ -97,7 +98,9 @@ export default function BrandProfilePage() {
           <h2>Yours to change</h2>
 
           <div className="field">
-            <label htmlFor="s-desc">About the shop</label>
+            <label htmlFor="s-desc">
+              About the shop <FieldTag />
+            </label>
             <textarea
               id="s-desc"
               rows={4}
@@ -109,6 +112,7 @@ export default function BrandProfilePage() {
 
           <ImageUploader
             kind="brand"
+            optional
             label="Logo"
             value={form.logoUrl}
             onChange={(url) => setForm({ ...form, logoUrl: url })}
@@ -117,6 +121,7 @@ export default function BrandProfilePage() {
 
           <ImageUploader
             kind="brand"
+            optional
             label="Cover photo"
             value={form.coverUrl}
             onChange={(url) => setForm({ ...form, coverUrl: url })}
@@ -124,7 +129,9 @@ export default function BrandProfilePage() {
           />
 
           <div className="field">
-            <label htmlFor="s-phone">Contact phone</label>
+            <label htmlFor="s-phone">
+              Contact phone <FieldTag />
+            </label>
             <input
               id="s-phone"
               value={form.contactPhone}
@@ -134,7 +141,9 @@ export default function BrandProfilePage() {
           </div>
 
           <div className="field">
-            <label htmlFor="s-email">Contact email</label>
+            <label htmlFor="s-email">
+              Contact email <FieldTag />
+            </label>
             <input
               id="s-email"
               type="email"

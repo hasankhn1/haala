@@ -7,6 +7,7 @@ import { type FormEvent, useState } from 'react';
 import type { BrandCategoryView, BrandProductView, BrandProfileView } from '@haala/shared';
 import { coreLabelsFor } from '@haala/shared';
 import { ApiError, api, money, toPaisa } from '@/lib/api';
+import { FieldTag } from '@/components/FieldTag';
 
 /**
  * Everything the shop sells.
@@ -105,7 +106,9 @@ export default function BrandProductsPage() {
             <h2>New product</h2>
 
             <div className="field">
-              <label htmlFor="p-cat">Category</label>
+              <label htmlFor="p-cat">
+                Category <FieldTag required />
+              </label>
               <select
                 id="p-cat"
                 value={form.categoryId}
@@ -121,30 +124,36 @@ export default function BrandProductsPage() {
             </div>
 
             <div className="field">
-              <label htmlFor="p-name">{words.name}</label>
+              <label htmlFor="p-name">
+                {words.name} <FieldTag required />
+              </label>
               <input
                 id="p-name"
                 value={form.name}
-                placeholder={words.name === 'Suit title' ? 'Embroidered lawn 3-piece' : 'Chocolate fudge cake'}
+                placeholder={words.namePlaceholder}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </div>
 
             <div className="field">
-              <label htmlFor="p-unit">{words.unit}</label>
+              <label htmlFor="p-unit">
+                {words.unit} <FieldTag required />
+              </label>
               <input
                 id="p-unit"
                 value={form.unit}
-                placeholder="1 kg"
+                placeholder={words.unitPlaceholder}
                 onChange={(e) => setForm({ ...form, unit: e.target.value })}
               />
               <span className="muted" style={{ fontSize: 12 }}>
-                How much the customer gets for the price below.
+                {words.unitHelp}
               </span>
             </div>
 
             <div className="field">
-              <label htmlFor="p-price">Now price (Rs)</label>
+              <label htmlFor="p-price">
+                Now price (Rs) <FieldTag required />
+              </label>
               <input
                 id="p-price"
                 inputMode="decimal"

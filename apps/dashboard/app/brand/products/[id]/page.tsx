@@ -10,10 +10,11 @@ import type {
   BrandProfileView,
   BrandVariantView,
 } from '@haala/shared';
-import { businessTypeSpecs, coreLabelsFor, isBusinessTypeKey } from '@haala/shared';
+import { businessTypeSpecs, coreLabelsFor, isBusinessTypeKey, picksSizes } from '@haala/shared';
 import { ImageGallery } from '@/components/ImageGallery';
 import { type Attributes, TypedProductFields } from '@/components/TypedProductFields';
-import { ApiError, api, money, toPaisa } from '@/lib/api';
+import { ApiError, api, toPaisa } from '@/lib/api';
+import { FieldTag } from '@/components/FieldTag';
 
 /**
  * One product, in full.
@@ -35,6 +36,7 @@ export default function BrandProductPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [needSizes, setNeedSizes] = useState(false);
 
   const profile = useQuery({
     queryKey: ['brand', 'profile'],
@@ -123,11 +125,15 @@ export default function BrandProductPage() {
   });
 
   const p = product.data;
-  if (product.isLoading) return <div className="empty">Loading…</div>;
+  // The profile decides the size charts, which `Variants` reads once on mount.
+  if (product.isLoading || profile.isLoading) return <div className="empty">Loading…</div>;
   if (!p) return <div className="error-banner">Product not found.</div>;
 
   const typeKey = profile.data?.businessType.key ?? '';
   const variantNoun = isBusinessTypeKey(typeKey) ? businessTypeSpecs[typeKey].variantNoun : 'Sizes';
+  // Clothing is the one type with a colour axis: its options are picked from
+  // size chips and a colour list rather than typed one at a time.
+  const pickAxes = picksSizes(typeKey);
   // A boutique calls it a suit title; a baker calls it what they baked. Same
   // column, different word on the form.
   const words = coreLabelsFor(typeKey);
@@ -166,6 +172,15 @@ export default function BrandProductPage() {
       <form
         onSubmit={(e: FormEvent) => {
           e.preventDefault();
+          // Until a size exists, the only row is the automatic one named after
+          // "Sold as" — a clothing product is not finished without real sizes.
+          if (pickAxes && !p.variants.some((v) => v.options.size)) {
+            setNeedSizes(true);
+            document
+              .getElementById('sizes')
+              ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+          }
           save.mutate();
         }}
         style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) 340px', gap: 24 }}
@@ -175,7 +190,9 @@ export default function BrandProductPage() {
             <h2>What it is</h2>
 
             <div className="field">
-              <label htmlFor="f-name">{words.name}</label>
+              <label htmlFor="f-name">
+                {words.name} <FieldTag required />
+              </label>
               <input
                 id="f-name"
                 value={form.name}
@@ -184,7 +201,9 @@ export default function BrandProductPage() {
             </div>
 
             <div className="field">
-              <label htmlFor="f-cat">Category</label>
+              <label htmlFor="f-cat">
+                Category <FieldTag required />
+              </label>
               <select
                 id="f-cat"
                 value={form.categoryId}
@@ -199,24 +218,34 @@ export default function BrandProductPage() {
             </div>
 
             <div className="field">
-              <label htmlFor="f-desc">{words.description}</label>
+              <label htmlFor="f-desc">
+                {words.description} <FieldTag />
+              </label>
               <textarea
                 id="f-desc"
                 rows={4}
                 value={form.description}
-                placeholder="What makes it worth buying."
+                placeholder={words.descriptionPlaceholder}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
               />
             </div>
 
-            <ImageGallery label={words.images} value={images} onChange={setImages} />
+            <ImageGallery optional label={words.images} value={images} onChange={setImages} />
           </div>
 
           <div className="card">
             <TypedProductFields typeKey={typeKey} value={attributes} onChange={setAttributes} />
           </div>
 
-          <Variants productId={id} variants={p.variants} noun={variantNoun} onChanged={invalidate} />
+          <Variants
+            productId={id}
+            variants={p.variants}
+            noun={variantNoun}
+            pickAxes={pickAxes}
+            sizeSets={isBusinessTypeKey(typeKey) ? (businessTypeSpecs[typeKey].sizeSets ?? {}) : {}}
+            needSizes={needSizes}
+            onChanged={invalidate}
+          />
         </div>
 
         <div style={{ display: 'grid', gap: 24, alignSelf: 'start' }}>
@@ -224,16 +253,27 @@ export default function BrandProductPage() {
             <h2>Price</h2>
 
             <div className="field">
-              <label htmlFor="f-unit">{words.unit}</label>
+              <label htmlFor="f-unit">
+                {words.unit} <FieldTag required />
+              </label>
               <input
                 id="f-unit"
                 value={form.unit}
+                placeholder={pickAxes ? words.unitPlaceholder : undefined}
                 onChange={(e) => setForm({ ...form, unit: e.target.value })}
               />
+              {/* Clothing renames this field, so it says what the line is for. */}
+              {pickAxes ? (
+                <span className="muted" style={{ fontSize: 12 }}>
+                  {words.unitHelp}
+                </span>
+              ) : null}
             </div>
 
             <div className="field">
-              <label htmlFor="f-price">Now price (Rs)</label>
+              <label htmlFor="f-price">
+                Now price (Rs) <FieldTag required />
+              </label>
               <input
                 id="f-price"
                 inputMode="decimal"
@@ -243,7 +283,9 @@ export default function BrandProductPage() {
             </div>
 
             <div className="field">
-              <label htmlFor="f-was">Was price (Rs)</label>
+              <label htmlFor="f-was">
+                Was price (Rs) <FieldTag />
+              </label>
               <input
                 id="f-was"
                 inputMode="decimal"
@@ -253,17 +295,19 @@ export default function BrandProductPage() {
                 }
               />
               <span className="muted" style={{ fontSize: 12 }}>
-                Optional, and must be higher than the now price. Shown struck through, so
-                customers see the saving.
+                Must be higher than the now price. Shown struck through, so customers see the
+                saving.
               </span>
             </div>
 
             <div className="field">
-              <label htmlFor="f-sku">Your reference</label>
+              <label htmlFor="f-sku">
+                Your reference <FieldTag />
+              </label>
               <input
                 id="f-sku"
                 value={form.sku}
-                placeholder="Optional"
+                placeholder="SKU-1042"
                 onChange={(e) => setForm({ ...form, sku: e.target.value })}
               />
             </div>
@@ -295,44 +339,140 @@ export default function BrandProductPage() {
   );
 }
 
+// A clothing row's label doubles as its `unit`, which the API caps at 40:
+// "<size> / <colour>" must fit, or a batch fails halfway. Chart sizes are
+// at most 10 ("Unstitched"), so 15 + 3 + 20 = 38.
+const MAX_SIZE = 15;
+const MAX_COLOUR = 20;
+
 /**
  * The sizes, colours or weights a product comes in.
  *
  * Every product has at least one, because stock and baskets are counted per
  * variant rather than per product — a product with none could not be bought,
  * which is why the last one cannot be removed.
+ *
+ * Clothing (`pickAxes`) adds every picked size × colour pair at once, and
+ * records the pair in `options` so the customer app can offer two pickers.
+ * Sizes come from a chart (clothing, shoes, kids — see `sizeSets`) or are
+ * typed, for the odd one no chart lists.
  */
 function Variants({
   productId,
   variants,
   noun,
+  pickAxes,
+  sizeSets,
+  needSizes,
   onChanged,
 }: {
   productId: string;
   variants: BrandVariantView[];
   noun: string;
+  pickAxes: boolean;
+  sizeSets: Record<string, string[]>;
+  needSizes: boolean;
   onChanged: () => void;
 }) {
   const [label, setLabel] = useState('');
   const [unit, setUnit] = useState('');
+  const chartNames = Object.keys(sizeSets);
+  const [chart, setChart] = useState(chartNames[0] ?? '');
+  const [sizes, setSizes] = useState<string[]>([]);
+  const [sizeDraft, setSizeDraft] = useState('');
+  const [colours, setColours] = useState<string[]>([]);
+  const [draft, setDraft] = useState('');
   const [price, setPrice] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  // A colour typed but not yet committed with Enter still counts.
+  const withDraft = (list: string[], text: string) => {
+    const c = text.trim();
+    return c && !list.some((x) => x.toLowerCase() === c.toLowerCase()) ? [...list, c] : list;
+  };
+  // A typed "red" or "xl" takes the spelling already in use — this product's
+  // own rows first, then the size charts — so the customer's picker shows one
+  // Red rather than "Red" and "red" as two colours.
+  const spelling = new Map<string, string>();
+  for (const s of Object.values(sizeSets).flat()) spelling.set(s.toLowerCase(), s);
+  for (const v of variants) {
+    for (const s of [v.options.size, v.options.color]) if (s) spelling.set(s.toLowerCase(), s);
+  }
+  const canon = (s: string) => spelling.get(s.toLowerCase()) ?? s;
+  const colourList = withDraft(colours, draft).map(canon);
+  const sizeList = withDraft(sizes, sizeDraft).map(canon);
+  // Case-insensitive, so "red" beside an existing "M / Red" is not a second row.
+  const taken = new Set(variants.map((v) => v.label.toLowerCase()));
+  const combos = sizeList
+    .flatMap((size) =>
+      colourList.length
+        ? colourList.map((color) => ({ label: `${size} / ${color}`, options: { size, color } }))
+        : [{ label: size, options: { size } }],
+    )
+    .filter((c) => !taken.has(c.label.toLowerCase()))
+    // "xl" typed and "XL" clicked are one size; a repeat would fail the batch
+    // halfway on the unique label.
+    .filter(
+      (c, i, all) => all.findIndex((x) => x.label.toLowerCase() === c.label.toLowerCase()) === i,
+    );
+  // Set by a blocked save; clears itself once a real size exists.
+  const missing = pickAxes && needSizes && !variants.some((v) => v.options.size);
+  const red = missing ? { borderColor: 'var(--red-600)' } : undefined;
+  // Clothing's automatic row from quick-create, named after the subtitle. It
+  // is not a size, so it is hidden from the table and renamed by the first Add.
+  const placeholder =
+    pickAxes && variants.length === 1 && Object.keys(variants[0]!.options).length === 0;
+
   const add = useMutation({
-    mutationFn: () =>
-      api.post<BrandProductView>(`/brand/products/${productId}/variants`, {
-        label: label.trim(),
-        unit: unit.trim() || label.trim(),
-        basePrice: toPaisa(price),
-      }),
+    mutationFn: async () => {
+      if (!pickAxes) {
+        return api.post<BrandProductView>(`/brand/products/${productId}/variants`, {
+          label: label.trim(),
+          unit: unit.trim() || label.trim(),
+          basePrice: toPaisa(price),
+        });
+      }
+      // The automatic row from quick-create ("1 piece") becomes the first pair
+      // rather than sitting beside the sizes. Renamed, not deleted: it holds
+      // sort_order 0, which the catalogue prices the card from. Safe because
+      // the API refuses stock on a sizeless clothing row, so nothing is
+      // attached to it for the rename to carry over.
+      const [only] = variants;
+      const rest = placeholder ? combos.slice(1) : combos;
+      if (rest !== combos && only && combos[0]) {
+        await api.patch<BrandProductView>(`/brand/products/${productId}/variants/${only.id}`, {
+          label: combos[0].label,
+          unit: combos[0].label,
+          basePrice: toPaisa(price),
+          options: combos[0].options,
+        });
+      }
+      // ponytail: one request per pair; a bulk endpoint if vendors add 50+ at once.
+      for (const c of rest) {
+        await api.post<BrandProductView>(`/brand/products/${productId}/variants`, {
+          label: c.label,
+          unit: c.label,
+          basePrice: toPaisa(price),
+          options: c.options,
+        });
+      }
+    },
     onSuccess: () => {
       setLabel('');
       setUnit('');
+      setSizes([]);
+      setSizeDraft('');
+      setColours([]);
+      setDraft('');
       setPrice('');
       setError(null);
       onChanged();
     },
-    onError: (e: unknown) => setError(e instanceof ApiError ? e.message : 'Could not add'),
+    // A failure halfway through a batch has still added the pairs before it.
+    onError: (e: unknown) => {
+      setError(e instanceof ApiError ? e.message : 'Could not add');
+      onChanged();
+    },
   });
 
   const remove = useMutation({
@@ -345,8 +485,20 @@ function Variants({
     onError: (e: unknown) => setError(e instanceof ApiError ? e.message : 'Could not remove'),
   });
 
+  const reprice = useMutation({
+    mutationFn: ({ v, basePrice }: { v: BrandVariantView; basePrice: number }) =>
+      api.patch<BrandProductView>(`/brand/products/${productId}/variants/${v.id}`, { basePrice }),
+    onSuccess: () => {
+      setError(null);
+      onChanged();
+    },
+    onError: (e: unknown) => setError(e instanceof ApiError ? e.message : 'Could not save price'),
+  });
+
+  const canAdd = pickAxes ? combos.length > 0 : label.trim().length > 0;
+
   return (
-    <div className="card">
+    <div className="card" id="sizes">
       <h2>{noun}</h2>
       <p className="muted">
         Each one is priced and counted separately. Customers pick between them on the product page.
@@ -358,88 +510,299 @@ function Variants({
         </div>
       ) : null}
 
-      <div className="table-wrap" style={{ marginTop: 12 }}>
-        <table>
-          <thead>
-            <tr>
-              <th>Option</th>
-              <th>Sold as</th>
-              <th style={{ textAlign: 'right' }}>Price</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {variants.map((v) => (
-              <tr key={v.id}>
-                <td>{v.label}</td>
-                <td className="muted">{v.unit}</td>
-                <td style={{ textAlign: 'right' }}>{money(v.basePrice)}</td>
-                <td style={{ textAlign: 'right' }}>
-                  <button
-                    className="btn ghost"
-                    type="button"
-                    disabled={variants.length === 1 || remove.isPending}
-                    title={
-                      variants.length === 1
-                        ? 'A product needs at least one option'
-                        : 'Remove this option'
-                    }
-                    onClick={() => remove.mutate(v)}
-                  >
-                    Remove
-                  </button>
-                </td>
+      {placeholder ? (
+        <p className="muted" style={{ marginTop: 12 }}>
+          No sizes yet — pick sizes below.
+        </p>
+      ) : (
+        <div className="table-wrap" style={{ marginTop: 12 }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Option</th>
+                {pickAxes ? null : <th>Sold as</th>}
+                <th style={{ textAlign: 'right' }}>Price (Rs)</th>
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {variants.map((v) => (
+                <tr key={v.id}>
+                  <td>{v.label}</td>
+                  {pickAxes ? null : <td className="muted">{v.unit}</td>}
+                  <td style={{ textAlign: 'right' }}>
+                    <PriceCell
+                      paisa={v.basePrice}
+                      disabled={reprice.isPending}
+                      onSave={(basePrice) => reprice.mutate({ v, basePrice })}
+                    />
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <button
+                      className="btn ghost"
+                      type="button"
+                      disabled={variants.length === 1 || remove.isPending}
+                      title={
+                        variants.length === 1
+                          ? 'A product needs at least one option'
+                          : 'Remove this option'
+                      }
+                      onClick={() => remove.mutate(v)}
+                    >
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr 1fr auto',
-          gap: 10,
-          alignItems: 'end',
-          marginTop: 14,
-        }}
-      >
-        <div className="field">
-          <label htmlFor="v-label">Option</label>
-          <input
-            id="v-label"
-            value={label}
-            placeholder="500 g"
-            onChange={(e) => setLabel(e.target.value)}
-          />
+      {pickAxes ? (
+        <div style={{ display: 'grid', gap: 12, marginTop: 14 }}>
+          <div className="field">
+            <label htmlFor="v-chart">
+              Sizes <FieldTag required />
+            </label>
+            {chartNames.length > 1 ? (
+              <select
+                id="v-chart"
+                value={chart}
+                style={{ maxWidth: 200 }}
+                onChange={(e) => setChart(e.target.value)}
+              >
+                {chartNames.map((n) => (
+                  <option key={n} value={n}>
+                    {n} sizes
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {/* Picked sizes from another chart or typed by hand stay visible. */}
+              {[
+                ...(sizeSets[chart] ?? []),
+                ...sizes.filter((s) => !sizeSets[chart]?.includes(s)),
+              ].map((s) => {
+                const on = sizes.includes(s);
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    className={on ? 'btn' : 'btn ghost'}
+                    aria-pressed={on}
+                    aria-label={`${s}${on ? ', selected' : ''}`}
+                    style={on ? undefined : red}
+                    onClick={() => setSizes(on ? sizes.filter((x) => x !== s) : [...sizes, s])}
+                  >
+                    {s}
+                  </button>
+                );
+              })}
+              <input
+                aria-label="Other size"
+                value={sizeDraft}
+                placeholder="Other size"
+                maxLength={MAX_SIZE}
+                style={{ width: 120 }}
+                onChange={(e) => setSizeDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    setSizes(withDraft(sizes, sizeDraft));
+                    setSizeDraft('');
+                  }
+                }}
+              />
+            </div>
+            {missing ? (
+              <span role="alert" style={{ color: 'var(--red-600)', fontSize: 12 }}>
+                Add at least one size before saving.
+              </span>
+            ) : null}
+          </div>
+          <div className="field">
+            <label htmlFor="v-colours">
+              Colours <FieldTag />
+            </label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+              {colours.map((c) => (
+                <span
+                  key={c}
+                  className="btn ghost"
+                  style={{
+                    display: 'inline-flex',
+                    gap: 6,
+                    alignItems: 'center',
+                    cursor: 'default',
+                  }}
+                >
+                  {c}
+                  <button
+                    type="button"
+                    aria-label={`Remove ${c}`}
+                    style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer' }}
+                    onClick={() => setColours(colours.filter((x) => x !== c))}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              <input
+                id="v-colours"
+                value={draft}
+                placeholder={colours.length ? 'Add another' : 'Red'}
+                maxLength={MAX_COLOUR}
+                style={{ flex: 1, minWidth: 140 }}
+                onChange={(e) => {
+                  // A comma commits too, so a pasted "Red, Navy" still splits.
+                  const parts = e.target.value.split(',');
+                  const last = parts.pop() ?? '';
+                  setColours(parts.reduce(withDraft, colours));
+                  setDraft(last);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    // Inside the product form, Enter would otherwise submit it.
+                    e.preventDefault();
+                    setColours(withDraft(colours, draft));
+                    setDraft('');
+                  } else if (e.key === 'Backspace' && draft === '' && colours.length) {
+                    setColours(colours.slice(0, -1));
+                  }
+                }}
+              />
+              <button
+                type="button"
+                // Blue once there is a colour to add, grey while the box is empty.
+                className={draft.trim() === '' ? 'btn ghost' : 'btn blue'}
+                disabled={draft.trim() === ''}
+                onClick={() => {
+                  setColours(withDraft(colours, draft));
+                  setDraft('');
+                }}
+              >
+                Add colour
+              </button>
+            </div>
+            <span className="muted" style={{ fontSize: 12 }}>
+              Press Enter or Add colour after each colour. Each colour gets its own row at this
+              price.
+            </span>
+          </div>
+          <div
+            style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'end' }}
+          >
+            <div className="field">
+              <label htmlFor="v-price">
+                Price (Rs) <FieldTag required />
+              </label>
+              <input
+                id="v-price"
+                inputMode="decimal"
+                value={price}
+                style={red}
+                onChange={(e) => setPrice(e.target.value.replace(/[^\d.]/g, ''))}
+              />
+            </div>
+            <button
+              className="btn"
+              type="button"
+              disabled={!canAdd || !(Number(price) > 0) || add.isPending}
+              onClick={() => add.mutate()}
+            >
+              {add.isPending
+                ? 'Adding…'
+                : sizeList.length === 0
+                  ? 'Pick a size'
+                  : `Add ${combos.length} option${combos.length === 1 ? '' : 's'}`}
+            </button>
+          </div>
         </div>
-        <div className="field">
-          <label htmlFor="v-unit">Sold as</label>
-          <input
-            id="v-unit"
-            value={unit}
-            placeholder="same as option"
-            onChange={(e) => setUnit(e.target.value)}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="v-price">Price (Rs)</label>
-          <input
-            id="v-price"
-            inputMode="decimal"
-            value={price}
-            onChange={(e) => setPrice(e.target.value.replace(/[^\d.]/g, ''))}
-          />
-        </div>
-        <button
-          className="btn"
-          type="button"
-          disabled={label.trim().length < 1 || Number(price) <= 0 || add.isPending}
-          onClick={() => add.mutate()}
+      ) : (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr 1fr auto',
+            gap: 10,
+            alignItems: 'end',
+            marginTop: 14,
+          }}
         >
-          {add.isPending ? 'Adding…' : 'Add'}
-        </button>
-      </div>
+          <div className="field">
+            <label htmlFor="v-label">
+              Option <FieldTag required />
+            </label>
+            <input
+              id="v-label"
+              value={label}
+              placeholder="500 g"
+              onChange={(e) => setLabel(e.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="v-unit">
+              Sold as <FieldTag />
+            </label>
+            <input
+              id="v-unit"
+              value={unit}
+              placeholder="same as option"
+              onChange={(e) => setUnit(e.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="v-price">
+              Price (Rs) <FieldTag required />
+            </label>
+            <input
+              id="v-price"
+              inputMode="decimal"
+              value={price}
+              onChange={(e) => setPrice(e.target.value.replace(/[^\d.]/g, ''))}
+            />
+          </div>
+          <button
+            className="btn"
+            type="button"
+            disabled={!canAdd || !(Number(price) > 0) || add.isPending}
+            onClick={() => add.mutate()}
+          >
+            {add.isPending ? 'Adding…' : 'Add'}
+          </button>
+        </div>
+      )}
     </div>
+  );
+}
+
+/** A row's price, saved when the field loses focus — only if it changed and is above zero. */
+function PriceCell({
+  paisa,
+  disabled,
+  onSave,
+}: {
+  paisa: number;
+  disabled: boolean;
+  onSave: (paisa: number) => void;
+}) {
+  const [value, setValue] = useState(rupees(paisa));
+  useEffect(() => setValue(rupees(paisa)), [paisa]);
+
+  return (
+    <input
+      aria-label="Price in rupees"
+      inputMode="decimal"
+      style={{ width: 110, textAlign: 'right' }}
+      value={value}
+      disabled={disabled}
+      onChange={(e) => setValue(e.target.value.replace(/[^\d.]/g, ''))}
+      onBlur={() => {
+        const next = Number(value) > 0 ? toPaisa(value) : paisa;
+        if (next !== paisa) onSave(next);
+        else setValue(rupees(paisa));
+      }}
+    />
   );
 }

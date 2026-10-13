@@ -19,6 +19,7 @@ export default function CatalogPage() {
   const qc = useQueryClient();
   const [storeId, setStoreId] = useState<string>('');
   const [search, setSearch] = useState('');
+  const [brand, setBrand] = useState('all');
   const [category, setCategory] = useState('all');
   const [error, setError] = useState<string | null>(null);
 
@@ -69,17 +70,33 @@ export default function CatalogPage() {
   });
 
   const rows = catalog.data ?? [];
-  const categories = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.categoryName))).sort(),
+  const brands = useMemo(
+    () =>
+      Array.from(new Map(rows.map((r) => [r.brandId, r.brandName])))
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
     [rows],
+  );
+  // Only the chosen shop's categories — "Kids" in one shop is not "Kids" in another.
+  const categories = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          rows.filter((r) => brand === 'all' || r.brandId === brand).map((r) => r.categoryName),
+        ),
+      ).sort(),
+    [rows, brand],
   );
   const visible = rows.filter(
     (r) =>
+      (brand === 'all' || r.brandId === brand) &&
       (category === 'all' || r.categoryName === category) &&
       (search.trim() === '' || r.name.toLowerCase().includes(search.trim().toLowerCase())),
   );
-  const outOfStock = rows.filter((r) => r.availableToSell === 0).length;
-  const onOffer = rows.filter((r) => r.storePrice !== null).length;
+  // The cards describe the chosen shop, like the category count beside them.
+  const ofBrand = rows.filter((r) => brand === 'all' || r.brandId === brand);
+  const outOfStock = ofBrand.filter((r) => r.availableToSell === 0).length;
+  const onOffer = ofBrand.filter((r) => r.storePrice !== null).length;
 
   return (
     <>
@@ -100,7 +117,7 @@ export default function CatalogPage() {
 
       <div className="stat-row">
         <div className="stat">
-          <div className="value">{rows.length}</div>
+          <div className="value">{ofBrand.length}</div>
           <div className="label">Products</div>
         </div>
         <div className="stat">
@@ -122,6 +139,20 @@ export default function CatalogPage() {
           {(stores.data ?? []).map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
+            </option>
+          ))}
+        </select>
+        <select
+          value={brand}
+          onChange={(e) => {
+            setBrand(e.target.value);
+            setCategory('all');
+          }}
+        >
+          <option value="all">All brands</option>
+          {brands.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
             </option>
           ))}
         </select>
