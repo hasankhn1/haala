@@ -2,6 +2,7 @@
 
 import type { AttributeField, BusinessTypeKey } from '@haala/shared';
 import { businessTypeSpecs, isBusinessTypeKey } from '@haala/shared';
+import { FieldTag } from './FieldTag';
 
 /**
  * The part of the product form that depends on what kind of shop this is.
@@ -115,6 +116,8 @@ function AttributeInput({
       <label htmlFor={id}>
         {field.label}
         {field.suffix ? <span className="muted"> ({field.suffix})</span> : null}
+        {/* Every type-specific attribute is optional in its schema. */}
+        <FieldTag />
       </label>
 
       {field.kind === 'select' ? (

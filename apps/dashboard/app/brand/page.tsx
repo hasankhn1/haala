@@ -76,10 +76,10 @@ export default function BrandHome() {
 
       {noStock.length > 0 ? (
         <div className="card" style={{ marginTop: 24 }}>
-          <h2>Not sellable right now</h2>
+          <h2>Waiting for stock</h2>
           <p className="muted">
-            These are switched on, but Haala has none in the store — so customers cannot buy them.
-            Stock is counted by Haala, not here; get in touch when you have delivered more.
+            These products are on sale, but Haala’s store doesn’t have any yet, so customers can’t
+            buy them. Drop them off at the Haala store and we’ll update the count for you.
           </p>
           <div className="table-wrap" style={{ marginTop: 12 }}>
             <table>

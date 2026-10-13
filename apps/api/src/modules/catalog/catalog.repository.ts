@@ -53,6 +53,37 @@ const availableExpr = sql<number>`case when coalesce(${inventory.isAvailable}, t
  */
 const sellableBrand = eq(brands.status, 'active');
 
+/**
+ * Which size a product card stands for at a store — the one it prices, shows
+ * stock for, and quick-adds.
+ *
+ * Grocery and the rest: the first size (`sort_order = 0`, one per product by
+ * `product_variants_default_uq`). Clothing: the first size *this store has*,
+ * in-stock sizes ahead of sold-out ones. Otherwise a suit whose first row was
+ * never delivered vanished from the shop with "M / Navy" on the shelf.
+ *
+ * ponytail: grocery still uses the first size only, so a sold-out 500 g hides
+ * an in-stock 1 kg behind "out of stock"; drop the `case` to fix it everywhere.
+ *
+ * ponytail: `cardVariant` is a correlated subquery run per product in both the
+ * listing and its count. Fine at today's catalogue size; if listing slows,
+ * `EXPLAIN ANALYZE` it on a large catalogue and precompute the card variant
+ * per store instead.
+ *
+ * Columns are qualified by hand — Drizzle only qualifies inside `sql` when the
+ * outer query joins, and a correlated subquery that self-compares fails
+ * silently. Every caller joins `business_types` before `product_variants`.
+ */
+const firstSize = sql`(select pv.id from product_variants pv
+  where pv.product_id = "products"."id" and pv.sort_order = 0)`;
+const cardVariant = (storeId: string) => sql`case when "business_types"."key" = 'clothing' then (
+    select pv.id from product_variants pv
+    join inventory i on i.variant_id = pv.id and i.store_id = ${storeId}
+    where pv.product_id = "products"."id" and pv.is_active = true
+    order by (i.is_available and i.quantity_available - i.quantity_reserved > 0) desc, pv.sort_order
+    limit 1
+  ) else ${firstSize} end`;
+
 export const catalogRepository = {
   /**
    * Departments — the business types, as the marketplace home shows them.
@@ -161,38 +192,40 @@ export const catalogRepository = {
    * and so a change in the apps.
    */
   async listCategories(department?: string, ex: Executor = db): Promise<Category[]> {
-    return ex
-      .select({
-        id: categories.id,
-        brandId: categories.brandId,
-        name: categories.name,
-        slug: categories.slug,
-        imageUrl: categories.imageUrl,
-        sortOrder: categories.sortOrder,
-        isActive: categories.isActive,
-        createdAt: categories.createdAt,
-        updatedAt: categories.updatedAt,
-      })
-      .from(categories)
-      .innerJoin(brands, eq(brands.id, categories.brandId))
-      // Joined unconditionally so the filter below can be conditional. The
-      // brand's business type is what makes a category belong to a department;
-      // without this the Clothing screen listed the grocery aisles too.
-      .innerJoin(businessTypes, eq(businessTypes.id, brands.businessTypeId))
-      .where(
-        and(
-          eq(categories.isActive, true),
-          sellableBrand,
-          ...(department ? [eq(businessTypes.key, department)] : []),
-          sql`exists (
+    return (
+      ex
+        .select({
+          id: categories.id,
+          brandId: categories.brandId,
+          name: categories.name,
+          slug: categories.slug,
+          imageUrl: categories.imageUrl,
+          sortOrder: categories.sortOrder,
+          isActive: categories.isActive,
+          createdAt: categories.createdAt,
+          updatedAt: categories.updatedAt,
+        })
+        .from(categories)
+        .innerJoin(brands, eq(brands.id, categories.brandId))
+        // Joined unconditionally so the filter below can be conditional. The
+        // brand's business type is what makes a category belong to a department;
+        // without this the Clothing screen listed the grocery aisles too.
+        .innerJoin(businessTypes, eq(businessTypes.id, brands.businessTypeId))
+        .where(
+          and(
+            eq(categories.isActive, true),
+            sellableBrand,
+            ...(department ? [eq(businessTypes.key, department)] : []),
+            sql`exists (
             select 1 from products
             join product_variants on product_variants.product_id = products.id
             join inventory on inventory.variant_id = product_variants.id
             where products.category_id = categories.id and products.is_active = true
           )`,
-        ),
-      )
-      .orderBy(asc(categories.sortOrder), asc(categories.name));
+          ),
+        )
+        .orderBy(asc(categories.sortOrder), asc(categories.name))
+    );
   },
 
   /**
@@ -210,9 +243,8 @@ export const catalogRepository = {
     const where = and(...conditions);
 
     /**
-     * A card shows one price and one stock figure, so the listing resolves each
-     * product's **default variant**: `sortOrder = 0`, of which a partial unique
-     * index guarantees exactly one per product. Loading every variant here
+     * A card shows one price and one stock figure, so the listing resolves one
+     * variant per product — see `cardVariant`. Loading every variant here
      * would multiply each product row by its variant count; the PDP fetches the
      * full set on its own.
      */
@@ -220,10 +252,7 @@ export const catalogRepository = {
       eq(inventory.variantId, productVariants.id),
       eq(inventory.storeId, query.storeId),
     );
-    const defaultVariantOn = and(
-      eq(productVariants.productId, products.id),
-      eq(productVariants.sortOrder, 0),
-    );
+    const defaultVariantOn = sql`${productVariants.id} = ${cardVariant(query.storeId)}`;
 
     /**
      * Both joins are inner, which is a change in meaning worth being explicit
@@ -302,37 +331,36 @@ export const catalogRepository = {
     if (ids.length === 0) return [];
 
     const joinOn = and(eq(inventory.variantId, productVariants.id), eq(inventory.storeId, storeId));
-    const defaultVariantOn = and(
-      eq(productVariants.productId, products.id),
-      eq(productVariants.sortOrder, 0),
-    );
+    const defaultVariantOn = sql`${productVariants.id} = ${cardVariant(storeId)}`;
 
-    return ex
-      .select({
-        id: products.id,
-        brandName: brands.name,
-        brandSlug: brands.slug,
-        departmentKey: businessTypes.key,
-        name: products.name,
-        slug: products.slug,
-        unit: products.unit,
-        description: products.description,
-        imageUrl: products.imageUrl,
-        categoryId: products.categoryId,
-        basePrice: products.basePrice,
-        defaultVariantId: productVariants.id,
-        price: priceExpr,
-        availableQty: availableExpr,
-      })
-      .from(products)
-      .innerJoin(brands, eq(brands.id, products.brandId))
-      .innerJoin(businessTypes, eq(businessTypes.id, brands.businessTypeId))
-      .innerJoin(productVariants, defaultVariantOn)
-      .innerJoin(inventory, joinOn)
-      // Inner joins and the same two filters as the listing: a product the
-      // shopper once bought from a brand since suspended, or that this store no
-      // longer carries, drops out rather than appearing untappable.
-      .where(and(inArray(products.id, ids), eq(products.isActive, true), sellableBrand));
+    return (
+      ex
+        .select({
+          id: products.id,
+          brandName: brands.name,
+          brandSlug: brands.slug,
+          departmentKey: businessTypes.key,
+          name: products.name,
+          slug: products.slug,
+          unit: products.unit,
+          description: products.description,
+          imageUrl: products.imageUrl,
+          categoryId: products.categoryId,
+          basePrice: products.basePrice,
+          defaultVariantId: productVariants.id,
+          price: priceExpr,
+          availableQty: availableExpr,
+        })
+        .from(products)
+        .innerJoin(brands, eq(brands.id, products.brandId))
+        .innerJoin(businessTypes, eq(businessTypes.id, brands.businessTypeId))
+        .innerJoin(productVariants, defaultVariantOn)
+        .innerJoin(inventory, joinOn)
+        // Inner joins and the same two filters as the listing: a product the
+        // shopper once bought from a brand since suspended, or that this store no
+        // longer carries, drops out rather than appearing untappable.
+        .where(and(inArray(products.id, ids), eq(products.isActive, true), sellableBrand))
+    );
   },
 
   async findProductForStore(
@@ -364,9 +392,11 @@ export const catalogRepository = {
       .from(products)
       .innerJoin(brands, eq(brands.id, products.brandId))
       .innerJoin(businessTypes, eq(businessTypes.id, brands.businessTypeId))
+      // Falls back to the first size, so a product this store has none of
+      // still opens as sold out.
       .leftJoin(
         productVariants,
-        and(eq(productVariants.productId, products.id), eq(productVariants.sortOrder, 0)),
+        sql`${productVariants.id} = coalesce(${cardVariant(storeId)}, ${firstSize})`,
       )
       .leftJoin(
         inventory,
@@ -398,7 +428,11 @@ export const catalogRepository = {
         and(eq(inventory.variantId, productVariants.id), eq(inventory.storeId, storeId)),
       )
       .where(
-        and(eq(productVariants.productId, productId), eq(productVariants.isActive, true), sellableBrand),
+        and(
+          eq(productVariants.productId, productId),
+          eq(productVariants.isActive, true),
+          sellableBrand,
+        ),
       )
       .orderBy(asc(productVariants.sortOrder));
   },

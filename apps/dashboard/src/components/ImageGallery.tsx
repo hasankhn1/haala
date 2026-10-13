@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { ApiError, api } from '@/lib/api';
+import { FieldTag } from './FieldTag';
 
 /**
  * A product's photos.
@@ -62,10 +63,13 @@ async function uploadOne(file: File): Promise<string> {
 
 export function ImageGallery({
   label,
+  optional,
   value,
   onChange,
 }: {
   label: string;
+  /** Marks the field as optional with a tag after the label. */
+  optional?: boolean;
   value: string[];
   onChange: (next: string[]) => void;
 }) {
@@ -121,7 +125,10 @@ export function ImageGallery({
 
   return (
     <div className="field">
-      <span className="metric-label">{label}</span>
+      <span className="metric-label">
+        {label}
+        {optional ? <FieldTag /> : null}
+      </span>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 4 }}>
         {value.map((url, i) => (

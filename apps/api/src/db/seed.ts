@@ -347,10 +347,17 @@ const seed = async (): Promise<void> => {
             unit: item.unit,
             basePrice: variantPrice,
             sortOrder: order,
+            options: variant.options ?? {},
           })
           .onConflictDoUpdate({
             target: [productVariants.productId, productVariants.label],
-            set: { unit: item.unit, basePrice: variantPrice, sortOrder: order, isActive: true },
+            set: {
+              unit: item.unit,
+              basePrice: variantPrice,
+              sortOrder: order,
+              isActive: true,
+              options: variant.options ?? {},
+            },
           });
 
         const [variantRow] = await db

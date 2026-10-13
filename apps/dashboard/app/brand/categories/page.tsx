@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useState } from 'react';
 import type { BrandCategoryView } from '@haala/shared';
 import { ApiError, api } from '@/lib/api';
+import { FieldTag } from '@/components/FieldTag';
 
 /**
  * Categories — how a shop arranges itself for customers.
@@ -108,7 +109,9 @@ export default function BrandCategoriesPage() {
         >
           <h2>New category</h2>
           <div className="field">
-            <label htmlFor="cat-name">Name</label>
+            <label htmlFor="cat-name">
+              Name <FieldTag required />
+            </label>
             <input
               id="cat-name"
               value={name}

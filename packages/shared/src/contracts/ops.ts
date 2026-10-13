@@ -54,6 +54,9 @@ export interface OpsCatalogRow {
   name: string;
   slug: string;
   unit: string;
+  /** The shop that owns the product — staff stock one shop's delivery at a time. */
+  brandId: string;
+  brandName: string;
   categoryId: string;
   categoryName: string;
   imageUrl: string | null;

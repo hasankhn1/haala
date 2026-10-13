@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { ApiError, api } from '@/lib/api';
+import { FieldTag } from './FieldTag';
 
 /**
  * Pick a photo, and have it end up in the catalogue.
@@ -59,6 +60,7 @@ export function ImageUploader({
   onChange,
   onKeyChange,
   label,
+  optional,
   hint,
 }: {
   kind: 'products' | 'categories' | 'brand' | 'home-banner';
@@ -71,6 +73,8 @@ export function ImageUploader({
    */
   onKeyChange?: (key: string) => void;
   label: string;
+  /** Marks the field as optional with a tag after the label. */
+  optional?: boolean;
   hint?: string;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -120,7 +124,10 @@ export function ImageUploader({
 
   return (
     <div className="field">
-      <span className="metric-label">{label}</span>
+      <span className="metric-label">
+        {label}
+        {optional ? <FieldTag /> : null}
+      </span>
 
       <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
         <div

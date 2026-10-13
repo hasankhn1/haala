@@ -7,10 +7,19 @@ import type {
   OpsUpdateProductInput,
   UpdateStoreInput,
 } from '@haala/shared';
+import { picksSizes } from '@haala/shared';
 import { AppError } from '../../common/errors';
 import { logger } from '../../common/logger';
 import { db } from '../../db/client';
-import { categories, inventory, productVariants, products, stores } from '../../db/schema';
+import {
+  brands,
+  businessTypes,
+  categories,
+  inventory,
+  productVariants,
+  products,
+  stores,
+} from '../../db/schema';
 import { availableToSell } from '../inventory/inventory.repository';
 
 /**
@@ -72,8 +81,15 @@ export const opsCatalogService = {
    */
   async catalogForStore(storeId: string): Promise<OpsCatalogRow[]> {
     const rows = await db
-      .select({ product: products, category: categories, variant: productVariants, inv: inventory })
+      .select({
+        product: products,
+        brand: brands,
+        category: categories,
+        variant: productVariants,
+        inv: inventory,
+      })
       .from(products)
+      .innerJoin(brands, eq(brands.id, products.brandId))
       .innerJoin(categories, eq(categories.id, products.categoryId))
       // One row per sellable size — stock and price overrides are per variant,
       // so an operator has to be able to set them per variant.
@@ -82,9 +98,15 @@ export const opsCatalogService = {
         inventory,
         and(eq(inventory.variantId, productVariants.id), eq(inventory.storeId, storeId)),
       )
-      .orderBy(asc(categories.sortOrder), asc(products.name), asc(productVariants.sortOrder));
+      // Brand first, so one shop's rows stay together.
+      .orderBy(
+        asc(brands.name),
+        asc(categories.sortOrder),
+        asc(products.name),
+        asc(productVariants.sortOrder),
+      );
 
-    return rows.map(({ product, category, variant, inv }) => {
+    return rows.map(({ product, brand, category, variant, inv }) => {
       const storePrice = inv?.price ?? null;
       return {
         variantId: variant.id,
@@ -93,6 +115,8 @@ export const opsCatalogService = {
         name: product.name,
         slug: product.slug,
         unit: variant.unit,
+        brandId: brand.id,
+        brandName: brand.name,
         categoryId: category.id,
         categoryName: category.name,
         imageUrl: product.imageUrl,
@@ -110,7 +134,10 @@ export const opsCatalogService = {
     });
   },
 
-  async updateProduct(productId: string, input: OpsUpdateProductInput): Promise<OpsCatalogRow | null> {
+  async updateProduct(
+    productId: string,
+    input: OpsUpdateProductInput,
+  ): Promise<OpsCatalogRow | null> {
     const [updated] = await db
       .update(products)
       .set({ ...input, updatedAt: new Date() })
@@ -133,12 +160,23 @@ export const opsCatalogService = {
   ): Promise<void> {
     const store = await db.select().from(stores).where(eq(stores.id, storeId)).limit(1);
     if (store.length === 0) throw AppError.notFound('Store not found');
-    const variant = await db
-      .select()
+    const [variant] = await db
+      .select({ options: productVariants.options, typeKey: businessTypes.key })
       .from(productVariants)
+      .innerJoin(products, eq(products.id, productVariants.productId))
+      .innerJoin(brands, eq(brands.id, products.brandId))
+      .innerJoin(businessTypes, eq(businessTypes.id, brands.businessTypeId))
       .where(eq(productVariants.id, variantId))
       .limit(1);
-    if (variant.length === 0) throw AppError.notFound('Variant not found');
+    if (!variant) throw AppError.notFound('Variant not found');
+
+    // A garment with no size cannot be shelved or priced. This is also what
+    // makes the vendor dashboard's rename of the automatic "1 piece" row into
+    // the first size safe: no inventory row exists on it — not stock, not a
+    // zero count, not a price override — so the rename carries nothing over.
+    if (picksSizes(variant.typeKey) && !variant.options.size) {
+      throw AppError.conflict('Add sizes to this product first — this row has no size');
+    }
 
     await db
       .insert(inventory)

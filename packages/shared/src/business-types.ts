@@ -64,8 +64,13 @@ export interface AttributeField {
  */
 export interface CoreLabels {
   name?: string;
+  namePlaceholder?: string;
   description?: string;
   unit?: string;
+  unitPlaceholder?: string;
+  descriptionPlaceholder?: string;
+  /** The hint under the unit field. */
+  unitHelp?: string;
   /** What the picture is *of*, e.g. "Photos of the suit". */
   images?: string;
 }
@@ -81,6 +86,11 @@ export interface BusinessTypeSpec {
   variantAxes: string[];
   /** The variant word shown in the UI: "Sizes", "Weights". */
   variantNoun: string;
+  /**
+   * Size charts the dashboard offers as one-click buttons, by name. A vendor
+   * can still type a size no chart lists.
+   */
+  sizeSets?: Record<string, string[]>;
   labels?: CoreLabels;
   fields: AttributeField[];
   /** Validates `products.attributes`. Strict: unknown keys are rejected. */
@@ -99,7 +109,6 @@ const oneOf = (values: string[]) => z.enum(values as [string, ...string[]]).opti
 const STORAGE = ['Room temperature', 'Keep refrigerated', 'Keep frozen'];
 const SUIT_TYPES = ['Unstitched', 'Semi-stitched', 'Stitched', 'Ready to wear'];
 const PIECES = ['1 piece', '2 piece', '3 piece'];
-const WEARER = ['Women', 'Men', 'Girls', 'Boys', 'Unisex'];
 
 export const businessTypeSpecs: Record<BusinessTypeKey, BusinessTypeSpec> = {
   [BusinessTypeKey.Grocery]: {
@@ -182,40 +191,34 @@ export const businessTypeSpecs: Record<BusinessTypeKey, BusinessTypeSpec> = {
     name: 'Clothing',
     variantAxes: ['size', 'color'],
     variantNoun: 'Sizes and colours',
+    sizeSets: {
+      Clothing: ['Unstitched', 'XS', 'S', 'M', 'L', 'XL', 'XXL'],
+      Shoes: ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45'],
+      Kids: ['2-3y', '4-5y', '6-7y', '8-9y', '10-11y', '12-13y'],
+    },
     labels: {
-      name: 'Suit title',
+      name: 'Product title',
+      namePlaceholder: 'Gul-Ahmed Summer collection',
       description: 'Suit description',
-      unit: 'Sold as',
+      // The details that used to be their own fields (collection, season,
+      // work, wearer, contents, care) now live in the description.
+      descriptionPlaceholder:
+        'Part of our Eid ’26 summer collection. A 3-piece lawn suit for women with a hand-embroidered neckline. Includes shirt, trouser and chiffon dupatta. Dry clean only.',
+      unit: 'Subtitle',
+      unitPlaceholder: '3-piece lawn suit',
+      unitHelp: 'Shown under the product name in the shop.',
       images: 'Photos of the suit',
     },
     fields: [
       { key: 'suitType', label: 'Suit type', kind: 'select', options: SUIT_TYPES, half: true },
       { key: 'pieces', label: 'Pieces', kind: 'select', options: PIECES, half: true },
-      { key: 'wearer', label: 'Made for', kind: 'select', options: WEARER, half: true },
-      { key: 'fabric', label: 'Fabric', kind: 'text', placeholder: 'Lawn', half: true },
-      {
-        key: 'includes',
-        label: 'What is included',
-        kind: 'tags',
-        placeholder: 'Shirt, Trouser, Dupatta',
-        help: 'Comma separated.',
-      },
-      { key: 'work', label: 'Work / embroidery', kind: 'text', placeholder: 'Hand-embroidered neckline' },
-      { key: 'collection', label: 'Collection', kind: 'text', placeholder: 'Eid ’26', half: true },
-      { key: 'season', label: 'Season', kind: 'text', placeholder: 'Summer', half: true },
-      { key: 'careInstructions', label: 'Care', kind: 'textarea', placeholder: 'Dry clean only' },
+      { key: 'fabric', label: 'Fabric', kind: 'text', placeholder: 'Lawn' },
     ],
     schema: z
       .object({
         suitType: oneOf(SUIT_TYPES),
         pieces: oneOf(PIECES),
-        wearer: oneOf(WEARER),
         fabric: text,
-        includes: tags,
-        work: text,
-        collection: text,
-        season: text,
-        careInstructions: longText,
       })
       .strict(),
   },
@@ -393,13 +396,25 @@ export const departmentCopy: Record<BusinessTypeKey, DepartmentCopy> = {
 export const isBusinessTypeKey = (v: string): v is BusinessTypeKey =>
   Object.hasOwn(businessTypeSpecs, v);
 
+/**
+ * Clothing-style types: variants are size × colour pairs that carry
+ * `options.size`. The dashboard picks sizes from chips for these, and ops may
+ * not stock one of their rows until it has a size.
+ */
+export const picksSizes = (key: string): boolean =>
+  isBusinessTypeKey(key) && businessTypeSpecs[key].variantAxes.includes('color');
+
 /** The wording a type uses for the fields every product has. */
 export function coreLabelsFor(typeKey: string): Required<CoreLabels> {
   const spec = isBusinessTypeKey(typeKey) ? businessTypeSpecs[typeKey] : null;
   return {
     name: spec?.labels?.name ?? 'Name',
+    namePlaceholder: spec?.labels?.namePlaceholder ?? 'Chocolate fudge cake',
     description: spec?.labels?.description ?? 'Description',
     unit: spec?.labels?.unit ?? 'Sold as',
+    unitPlaceholder: spec?.labels?.unitPlaceholder ?? '1 kg',
+    descriptionPlaceholder: spec?.labels?.descriptionPlaceholder ?? 'What makes it worth buying.',
+    unitHelp: spec?.labels?.unitHelp ?? 'How much the customer gets for the price below.',
     images: spec?.labels?.images ?? 'Photos',
   };
 }
