@@ -66,8 +66,12 @@ export const createProductSchema = z
      */
     images: z.array(z.string().url().max(600)).max(12).optional(),
     unit: z.string().trim().min(1).max(40),
-    /** What the customer pays, in paisa. */
-    basePrice: price,
+    /**
+     * What the customer pays, in paisa. Optional only for clothing, which
+     * prices every size × colour on its own row and has no product-level
+     * price to give — the service still requires it for every other type.
+     */
+    basePrice: price.optional(),
     /** The struck-through "was" price. Must exceed `basePrice` to mean anything. */
     compareAtPrice: price.nullable().optional(),
     sku: z.string().trim().max(60).nullable().optional(),
@@ -88,6 +92,8 @@ export const createVariantSchema = z
     label: z.string().trim().min(1).max(60),
     unit: z.string().trim().min(1).max(40),
     basePrice: price,
+    /** The struck-through "was" price for this size. Must exceed `basePrice`. */
+    compareAtPrice: price.nullable().optional(),
     /** The axes this variant sits on, e.g. `{"size":"M","color":"Red"}`. */
     options: z.record(z.string().trim().max(60)).optional(),
     sku: z.string().trim().max(60).nullable().optional(),
@@ -117,6 +123,7 @@ export interface BrandVariantView {
   label: string;
   unit: string;
   basePrice: number;
+  compareAtPrice: number | null;
   options: Record<string, string>;
   sku: string | null;
   sortOrder: number;
@@ -147,6 +154,12 @@ export interface BrandProductView {
    * something the vendor can set.
    */
   stockOnHand: number;
+  /**
+   * What `stockOnHand` is worth at the brand's now prices, in paisa: each
+   * size × colour row's units times its own price, summed. The was price
+   * never counts.
+   */
+  stockValue: number;
 }
 
 /** The brand's own record, as it sees itself. */

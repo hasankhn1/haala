@@ -11,7 +11,7 @@ import { FieldTag } from '@/components/FieldTag';
  * The shop's own details.
  *
  * A vendor edits how they are presented — the blurb, the logo, how to reach
- * them. Not their name, their web address, their business type or their status:
+ * them. Not their name, their business type or their status:
  * those are Haala's, and changing any of them is a decision rather than an edit.
  * A shop renaming itself would break links customers already hold; a shop
  * lifting its own suspension would make suspension meaningless.
@@ -162,7 +162,6 @@ export default function BrandProfilePage() {
           <p className="muted">Ask us if any of these need to change.</p>
           <dl style={{ display: 'grid', gap: 12, marginTop: 14 }}>
             <Fixed label="Shop name" value={p?.name} />
-            <Fixed label="Web address" value={p ? `haala.pk/${p.slug}` : undefined} />
             <Fixed label="Business type" value={p?.businessType.name} />
             <Fixed label="Status" value={p?.status} />
           </dl>

@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BusinessTypeKey, departmentCopy, formatPKR } from '@haala/shared';
+import { BusinessTypeKey, type CartItemView, departmentCopy, formatPKR } from '@haala/shared';
 import {
   Button,
   EmptyState,
@@ -43,6 +43,21 @@ import { useCurrentStore } from '../../src/store/useCurrentStore';
  * not been taught yet still holds real items, and an unnamed tab is far better
  * than a basket the customer cannot reach.
  */
+/**
+ * Which one of a garment a line is — "Size: S   Color: Red" — so two sizes of
+ * the same kurta read as two different things. Other non-grocery types, whose
+ * axis is a weight or a variant, fall back to the line's own label. Grocery
+ * says nothing, as before.
+ */
+const variantParts = (item: CartItemView): string[] => {
+  if (item.departmentKey === BusinessTypeKey.Grocery) return [];
+  const o = item.options ?? {};
+  const parts = [o.size && `Size: ${o.size}`, o.color && `Color: ${o.color}`].filter(
+    (x): x is string => !!x,
+  );
+  return parts.length > 0 ? parts : item.unit ? [item.unit] : [];
+};
+
 const departmentName = (key: string): string =>
   departmentCopy[key as BusinessTypeKey]?.cta?.replace(/^Shop /, '') ?? key;
 
@@ -225,7 +240,8 @@ export default function CartScreen() {
 
           <View style={styles.items}>
             {data?.items.map((item) => (
-              <View key={item.productId} style={styles.itemCard}>
+              // Keyed by size: two sizes of one product are two lines.
+              <View key={item.variantId} style={styles.itemCard}>
                 <View style={styles.itemThumb}>
                   <Thumb imageUrl={item.imageUrl} name={item.name} fill radius={theme.radii.sm} />
                 </View>
@@ -242,6 +258,15 @@ export default function CartScreen() {
                     >
                       <Icon name="close" size={18} color={theme.colors.textTertiary} />
                     </Pressable>
+                  </View>
+
+                  {/* Separate pieces with a gap: web collapses a run of spaces. */}
+                  <View style={styles.variantRow}>
+                    {variantParts(item).map((part) => (
+                      <Text key={part} variant="caption" color="textSecondary">
+                        {part}
+                      </Text>
+                    ))}
                   </View>
 
                   <View style={styles.itemBottom}>
@@ -406,6 +431,7 @@ function SummaryRow({
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.background },
+  variantRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: theme.spacing.md },
   flex: { flex: 1 },
   capitalize: { textTransform: 'capitalize' },
   content: {

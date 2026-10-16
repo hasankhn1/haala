@@ -42,6 +42,7 @@ export const toProductView = (p: ProductWithStock): ProductView => ({
   basePrice: p.basePrice,
   availableQty: Number(p.availableQty),
   defaultVariantId: p.defaultVariantId ?? null,
+  defaultVariantOptions: p.defaultVariantOptions ?? {},
   inStock: Number(p.availableQty) > 0,
 });
 
@@ -177,6 +178,8 @@ export const catalogService = {
     const variants = await catalogRepository.variantsForProduct(productId, storeId);
     return {
       ...toProductView(row),
+      images: row.images,
+      attributes: row.attributes,
       variants: variants.map((v) => ({
         id: v.id,
         label: v.label,
@@ -185,6 +188,8 @@ export const catalogService = {
         price: Number(v.price),
         availableQty: Number(v.availableQty),
         inStock: Number(v.availableQty) > 0,
+        options: v.options,
+        compareAtPrice: v.compareAtPrice,
       })),
     };
   },

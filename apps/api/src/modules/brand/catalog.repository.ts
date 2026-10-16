@@ -42,6 +42,18 @@ const stockForProduct = sql<number>`(
   join product_variants pv on pv.id = i.variant_id
   where pv.product_id = products.id
 )`;
+/**
+ * What that same stock is worth at the brand's own price: each size × colour
+ * row's units times its now price (`base_price`, never the was price), summed.
+ * Paisa, as bigint — a busy shop passes int4's Rs 21 million — so it arrives
+ * as a string and the service converts it.
+ */
+const stockValueForProduct = sql<string>`(
+  select coalesce(sum((i.quantity_available - i.quantity_reserved)::bigint * pv.base_price), 0)::bigint
+  from inventory i
+  join product_variants pv on pv.id = i.variant_id
+  where pv.product_id = products.id
+)`;
 
 export const brandCatalogRepository = {
   // ── Profile ───────────────────────────────────────────────────────────────
@@ -164,6 +176,7 @@ export const brandCatalogRepository = {
         product: products,
         categoryName: categories.name,
         stockOnHand: stockForProduct,
+        stockValue: stockValueForProduct,
       })
       .from(products)
       .innerJoin(categories, eq(categories.id, products.categoryId))
@@ -177,6 +190,7 @@ export const brandCatalogRepository = {
         product: products,
         categoryName: categories.name,
         stockOnHand: stockForProduct,
+        stockValue: stockValueForProduct,
       })
       .from(products)
       .innerJoin(categories, eq(categories.id, products.categoryId))

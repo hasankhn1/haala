@@ -162,6 +162,13 @@
       "when": 1791881665721,
       "tag": "0022_backfill_clothing_variant_size",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792054316187,
+      "tag": "0023_variant_compare_at_price",
+      "breakpoints": true
     }
   ]
 }

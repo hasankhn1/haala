@@ -31,6 +31,13 @@ export const productVariants = pgTable(
     unit: text().notNull(),
     basePrice: integer().notNull(),
     /**
+     * The struck-through "was" price for this size, in paisa. Per variant
+     * because sizes are priced separately — one "was" for the whole product
+     * would claim a saving on a size that never cost that. Must exceed
+     * `basePrice`; the service enforces it.
+     */
+    compareAtPrice: integer(),
+    /**
      * The axes this variant sits on, e.g. `{"size":"M","color":"Red"}`.
      *
      * `label` stays the single string a customer reads ("M / Red"); this is the

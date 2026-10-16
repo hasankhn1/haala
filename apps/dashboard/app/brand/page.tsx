@@ -30,18 +30,14 @@ export default function BrandHome() {
   const all = products.data ?? [];
   const live = all.filter((p) => p.isActive);
   const noStock = live.filter((p) => p.stockOnHand <= 0);
-  const catalogueValue = all.reduce((sum, p) => sum + p.basePrice, 0);
+  const stockValue = all.reduce((sum, p) => sum + p.stockValue, 0);
 
   return (
     <>
       <div className="page-head">
         <div>
           <h1>{profile.data?.name ?? 'Your shop'}</h1>
-          <p>
-            {profile.data
-              ? `${profile.data.businessType.name} · haala.pk/${profile.data.slug}`
-              : 'Loading…'}
-          </p>
+          <p>{profile.data ? profile.data.businessType.name : 'Loading…'}</p>
         </div>
       </div>
 
@@ -49,8 +45,9 @@ export default function BrandHome() {
         <Metric label="Products" value={String(all.length)} sub={`${live.length} switched on`} />
         <Metric label="Categories" value={String((categories.data ?? []).length)} />
         <Metric
-          label="Average price"
-          value={all.length ? money(Math.round(catalogueValue / all.length)) : '—'}
+          label="Total stock value"
+          value={money(stockValue)}
+          sub="Haala’s stock of yours, at your prices"
         />
         <Metric
           label="Waiting on stock"

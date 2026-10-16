@@ -19,7 +19,10 @@ import {
  */
 export type CartItemWithProduct = CartItem & {
   product: Pick<Product, 'id' | 'name' | 'imageUrl'>;
-  variant: Pick<ProductVariant, 'id' | 'label' | 'unit' | 'basePrice'>;
+  variant: Pick<
+    ProductVariant,
+    'id' | 'label' | 'unit' | 'basePrice' | 'compareAtPrice' | 'options'
+  >;
 };
 
 export const cartRepository = {
@@ -132,6 +135,8 @@ export const cartRepository = {
           label: productVariants.label,
           unit: productVariants.unit,
           basePrice: productVariants.basePrice,
+          compareAtPrice: productVariants.compareAtPrice,
+          options: productVariants.options,
         },
       })
       .from(cartItems)

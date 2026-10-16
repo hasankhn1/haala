@@ -1,5 +1,5 @@
 import { and, asc, count, eq, ilike, inArray, sql } from 'drizzle-orm';
-import type { ProductsQuery } from '@haala/shared';
+import { BusinessTypeKey, type ProductsQuery } from '@haala/shared';
 import { db, type Executor } from '../../db/client';
 import {
   brands,
@@ -27,6 +27,7 @@ export interface ProductWithStock {
   price: number;
   availableQty: number;
   defaultVariantId: string | null;
+  defaultVariantOptions: Record<string, string> | null;
 }
 
 /** Effective price = store override if present, else base price. */
@@ -37,6 +38,19 @@ export interface ProductWithStock {
  * every query using this expression to join `products`.
  */
 const priceExpr = sql<number>`coalesce(${inventory.price}, ${productVariants.basePrice})`;
+
+/**
+ * The "was" side of a card's strikethrough.
+ *
+ * Clothing has no product-level price — every size × colour is priced on its
+ * own row, with its own "was" — so its card reads the variant it stands for.
+ * Reading `products.base_price` there compared a size against whatever was
+ * typed when the product was created, and advertised savings that weren't.
+ * Every other department keeps the product's catalogue price.
+ */
+const cardBasePriceExpr = sql<number>`case when ${businessTypes.key} = ${BusinessTypeKey.Clothing}
+  then coalesce(${productVariants.compareAtPrice}, ${productVariants.basePrice}, ${products.basePrice})
+  else ${products.basePrice} end`;
 // SQL mirror of `availableToSell` (inventory.repository.ts): a line ops has
 // suspended reads as zero stock, so `inStock` goes false across listing, search
 // and product detail from this one expression.
@@ -276,8 +290,9 @@ export const catalogRepository = {
         description: products.description,
         imageUrl: products.imageUrl,
         categoryId: products.categoryId,
-        basePrice: products.basePrice,
+        basePrice: cardBasePriceExpr,
         defaultVariantId: productVariants.id,
+        defaultVariantOptions: productVariants.options,
         price: priceExpr,
         availableQty: availableExpr,
       })
@@ -346,8 +361,9 @@ export const catalogRepository = {
           description: products.description,
           imageUrl: products.imageUrl,
           categoryId: products.categoryId,
-          basePrice: products.basePrice,
+          basePrice: cardBasePriceExpr,
           defaultVariantId: productVariants.id,
+        defaultVariantOptions: productVariants.options,
           price: priceExpr,
           availableQty: availableExpr,
         })
@@ -367,7 +383,7 @@ export const catalogRepository = {
     productId: string,
     storeId: string,
     ex: Executor = db,
-  ): Promise<ProductWithStock | undefined> {
+  ): Promise<(ProductWithStock & { images: string[]; attributes: Record<string, unknown> }) | undefined> {
     // Inventory stays a **left** join here, unlike the listing: someone
     // following a link to a product this store has run out of should see it
     // marked sold out, not a 404. The brand join is inner, because a suspended
@@ -383,9 +399,12 @@ export const catalogRepository = {
         unit: products.unit,
         description: products.description,
         imageUrl: products.imageUrl,
+        images: products.images,
+        attributes: products.attributes,
         categoryId: products.categoryId,
-        basePrice: products.basePrice,
+        basePrice: cardBasePriceExpr,
         defaultVariantId: productVariants.id,
+        defaultVariantOptions: productVariants.options,
         price: priceExpr,
         availableQty: availableExpr,
       })
@@ -417,6 +436,8 @@ export const catalogRepository = {
         unit: productVariants.unit,
         basePrice: productVariants.basePrice,
         sortOrder: productVariants.sortOrder,
+        options: productVariants.options,
+        compareAtPrice: productVariants.compareAtPrice,
         price: priceExpr,
         availableQty: availableExpr,
       })

@@ -1,9 +1,10 @@
 import { and, asc, desc, eq, ilike, sql } from 'drizzle-orm';
-import type {
-  CreateFeaturedProductInput,
-  FeaturedProductView,
-  ProductPickerRow,
-  UpdateFeaturedProductInput,
+import {
+  BusinessTypeKey,
+  type CreateFeaturedProductInput,
+  type FeaturedProductView,
+  type ProductPickerRow,
+  type UpdateFeaturedProductInput,
 } from '@haala/shared';
 import { AppError } from '../../common/errors';
 import { db } from '../../db/client';
@@ -26,6 +27,18 @@ import { brands, businessTypes, categories, homeProducts, products } from '../..
 /** A product is sellable when it is on sale and its shop is not suspended. */
 const sellableExpr = sql<boolean>`${products.isActive} and ${brands.status} = 'active'`;
 
+/**
+ * The price an admin sees beside a product. Clothing has no product-level
+ * price — each size × colour row has its own, and new clothing stores 0 on the
+ * product — so it shows its cheapest priced size customers can still buy. Column names are written by
+ * hand: Drizzle only qualifies them inside a join, and an unqualified
+ * correlated subquery silently compares the inner table with itself.
+ */
+const listPriceExpr = sql<number>`case when ${businessTypes.key} = ${BusinessTypeKey.Clothing}
+  then coalesce((select min(pv.base_price) from product_variants pv
+    where pv.product_id = "products"."id" and pv.is_active and pv.base_price > 0), "products"."base_price")
+  else "products"."base_price" end`;
+
 export const featuredService = {
   /**
    * The curated list for the dashboard, including features that are currently
@@ -44,7 +57,7 @@ export const featuredService = {
         categoryName: categories.name,
         departmentKey: businessTypes.key,
         imageUrl: products.imageUrl,
-        basePrice: products.basePrice,
+        basePrice: listPriceExpr,
         sellable: sellableExpr,
       })
       .from(homeProducts)
@@ -82,7 +95,7 @@ export const featuredService = {
         categoryName: categories.name,
         departmentKey: businessTypes.key,
         imageUrl: products.imageUrl,
-        basePrice: products.basePrice,
+        basePrice: listPriceExpr,
       })
       .from(products)
       .innerJoin(categories, eq(categories.id, products.categoryId))

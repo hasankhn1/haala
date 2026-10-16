@@ -53,6 +53,8 @@ interface Actor {
 }
 let A: Actor;
 let B: Actor;
+/** A clothing brand, made only by the was-price tests. */
+let C: Actor | undefined;
 let superToken = '';
 
 type Json = Record<string, any>;
@@ -83,11 +85,11 @@ function expectOk(r: { status: number; json: Json }, what: string): Json {
   return r.json.data as Json;
 }
 
-async function makeBrand(name: string, phone: string): Promise<Actor> {
+async function makeBrand(name: string, phone: string, businessTypeKey = 'bakery'): Promise<Actor> {
   const brand = expectOk(
     await call('POST', '/api/v1/admin/brands', {
       token: superToken,
-      body: { name, businessTypeKey: 'bakery' },
+      body: { name, businessTypeKey },
     }),
     `create brand ${name}`,
   );
@@ -154,7 +156,7 @@ before(async () => {
 after(async () => {
   // Products and categories cascade from the brand; the logins do not, and the
   // FK is ON DELETE RESTRICT, so users go first.
-  for (const actor of [A, B]) {
+  for (const actor of [A, B, C]) {
     if (!actor) continue;
     await db.execute(`delete from users where brand_id = '${actor.brandId}'` as never);
     await db.execute(`delete from brands where id = '${actor.brandId}'` as never);
@@ -649,5 +651,98 @@ describe('business-type fields are validated per trade', () => {
       body: { attributes: { suitType: 'Unstitched' } },
     });
     assert.equal(r.status, 400, 'a bakery has no suit type');
+  });
+});
+
+describe('a was price belongs to a size, not the product', () => {
+  const variantsPath = () => `/api/v1/brand/products/${A.productId}/variants`;
+
+  it('stores one on a size and returns it', async () => {
+    const p = expectOk(
+      await call('POST', variantsPath(), {
+        token: A.token,
+        body: { label: `Half ${SUFFIX}`, unit: '500 g', basePrice: 150_000, compareAtPrice: 180_000 },
+      }),
+      'a size with a was price',
+    );
+    const half = (p.variants as Json[]).find((v) => v.label === `Half ${SUFFIX}`);
+    assert.equal(half?.compareAtPrice, 180_000);
+  });
+
+  it('refuses a was price that is not above the price', async () => {
+    const r = await call('POST', variantsPath(), {
+      token: A.token,
+      body: { label: `Equal ${SUFFIX}`, unit: '1 kg', basePrice: 150_000, compareAtPrice: 150_000 },
+    });
+    assert.equal(r.status, 400);
+  });
+
+  it('refuses raising a price over its own was price', async () => {
+    const p = expectOk(await call('GET', `/api/v1/brand/products/${A.productId}`, { token: A.token }), 'read');
+    const half = (p.variants as Json[]).find((v) => v.label === `Half ${SUFFIX}`)!;
+    const r = await call('PATCH', `${variantsPath()}/${half.id}`, {
+      token: A.token,
+      body: { basePrice: 200_000 },
+    });
+    assert.equal(r.status, 400, 'Rs 2,000 "was" Rs 1,800 is not a saving');
+  });
+
+  it('still requires a product price outside clothing', async () => {
+    const r = await call('POST', '/api/v1/brand/products', {
+      token: A.token,
+      body: { categoryId: A.categoryId, name: 'No price', unit: '1 kg' },
+    });
+    assert.equal(r.status, 400, 'a bakery prices the product itself');
+  });
+
+  it('lets clothing create a product with no price — its sizes carry them', async () => {
+    C = await makeBrand(`Isolation C ${SUFFIX}`, phoneFor('2'), 'clothing');
+    expectOk(
+      await call('POST', '/api/v1/brand/products', {
+        token: C.token,
+        body: { categoryId: C.categoryId, name: 'Lawn suit', unit: '3-piece lawn suit' },
+      }),
+      'a clothing product without a price',
+    );
+  });
+});
+
+describe('stock value counts every size at its own now price', () => {
+  it('sums units × now price per size, and ignores the was price', async () => {
+    const created = expectOk(
+      await call('POST', '/api/v1/brand/products', {
+        token: A.token,
+        body: { categoryId: A.categoryId, name: `Stock value ${SUFFIX}`, unit: 'Small', basePrice: 100_000 },
+      }),
+      'product',
+    );
+    const withLarge = expectOk(
+      await call('POST', `/api/v1/brand/products/${created.id}/variants`, {
+        token: A.token,
+        body: { label: 'Large', unit: 'Large', basePrice: 250_000, compareAtPrice: 300_000 },
+      }),
+      'second size',
+    );
+    const [small, large] = withLarge.variants as Json[];
+    const stores = expectOk(
+      await call('GET', '/api/v1/ops/stores', { token: superToken }),
+      'stores',
+    ) as unknown as Json[];
+    for (const [v, qty] of [[small, 3], [large, 2]] as const) {
+      expectOk(
+        await call('PATCH', `/api/v1/ops/stores/${stores[0].id}/inventory/${v!.id}`, {
+          token: superToken,
+          body: { quantityAvailable: qty },
+        }),
+        `stock ${v!.label}`,
+      );
+    }
+
+    const after = expectOk(
+      await call('GET', `/api/v1/brand/products/${created.id}`, { token: A.token }),
+      'read back',
+    );
+    // 3 × Rs 1,000 + 2 × Rs 2,500 = Rs 8,000. At the was price it would be Rs 9,000.
+    assert.equal(after.stockValue, 800_000);
   });
 });

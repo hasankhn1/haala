@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { CartItemView, ProductVariantView, ProductView } from '@haala/shared';
+import { BusinessTypeKey, type CartItemView, type ProductVariantView, type ProductView } from '@haala/shared';
 import { useToast } from '@haala/ui';
 import { messageFor } from '../api/client';
 import { haptics } from '../lib/haptics';
@@ -23,6 +23,7 @@ const lineFromProduct = (p: ProductView): LineSnapshot => ({
   name: p.name,
   unit: p.unit,
   imageUrl: p.imageUrl,
+  options: p.defaultVariantOptions,
   unitPrice: p.price,
   basePrice: p.basePrice,
   inStock: p.inStock,
@@ -37,8 +38,11 @@ const lineFromVariant = (p: ProductView, v: ProductVariantView): LineSnapshot =>
   name: p.name,
   unit: v.label,
   imageUrl: p.imageUrl,
+  options: v.options,
   unitPrice: v.price,
-  basePrice: v.basePrice,
+  // Matches what the server's line will say, so the saving doesn't flicker.
+  basePrice:
+    p.departmentKey === BusinessTypeKey.Clothing ? (v.compareAtPrice ?? v.basePrice) : v.basePrice,
   inStock: v.inStock,
 });
 
