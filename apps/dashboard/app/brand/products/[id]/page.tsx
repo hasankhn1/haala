@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { type FormEvent, useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import type {
   BrandCategoryView,
   BrandProductView,
@@ -29,6 +29,29 @@ import { FieldTag } from '@/components/FieldTag';
  * field the vendor could change would be a lie about who controls it.
  */
 const rupees = (paisa: number | null): string => (paisa == null ? '' : String(paisa / 100));
+
+/**
+ * A clothing size row as the form edits it, in rupees. Held as a draft and
+ * sent only when Save changes is pressed, with the rest of the product.
+ */
+type RowDraft = { price: string; was: string; sku: string };
+const rowFrom = (v: BrandVariantView): RowDraft => ({
+  price: rupees(v.basePrice),
+  was: rupees(v.compareAtPrice),
+  sku: v.sku ?? '',
+});
+
+/** The editable fields as the server holds them — the form's starting point. */
+const formFrom = (p: BrandProductView) => ({
+  categoryId: p.categoryId,
+  name: p.name,
+  description: p.description ?? '',
+  unit: p.unit,
+  price: rupees(p.basePrice),
+  compareAt: rupees(p.compareAtPrice),
+  sku: p.sku ?? '',
+  isActive: p.isActive,
+});
 
 export default function BrandProductPage() {
   const { id } = useParams<{ id: string }>();
@@ -63,24 +86,30 @@ export default function BrandProductPage() {
   });
   const [attributes, setAttributes] = useState<Attributes>({});
   const [images, setImages] = useState<string[]>([]);
+  const [rows, setRows] = useState<Record<string, RowDraft>>({});
+  // Only rows that differ from the server; typing a value back undoes the edit.
+  const changedRows = (product.data?.variants ?? []).filter(
+    (v) => rows[v.id] && JSON.stringify(rows[v.id]) !== JSON.stringify(rowFrom(v)),
+  );
 
-  // Seed the form once the product arrives, and again if it is refetched after
-  // a save, so the inputs never drift from what the server actually holds.
+  // Seed the form from the server, but only while it holds nothing unsaved.
+  // Adding, removing or repricing a size refetches the product, and that must
+  // not overwrite edits the vendor hasn't saved yet. `seeded` is the form as the
+  // server last had it — set on load, and again on a save to what was saved.
+  const seeded = useRef<string | null>(null);
   useEffect(() => {
     const p = product.data;
     if (!p) return;
-    setForm({
-      categoryId: p.categoryId,
-      name: p.name,
-      description: p.description ?? '',
-      unit: p.unit,
-      price: rupees(p.basePrice),
-      compareAt: rupees(p.compareAtPrice),
-      sku: p.sku ?? '',
-      isActive: p.isActive,
-    });
+    const untouched =
+      seeded.current === null || seeded.current === JSON.stringify([form, attributes, images]);
+    if (!untouched) return;
+    const next = formFrom(p);
+    setForm(next);
     setAttributes(p.attributes ?? {});
     setImages(p.images ?? []);
+    seeded.current = JSON.stringify([next, p.attributes ?? {}, p.images ?? []]);
+    // Reads the form only to compare it; re-running on every keystroke would be wrong.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product.data]);
 
   const invalidate = () => {
@@ -88,31 +117,65 @@ export default function BrandProductPage() {
     qc.invalidateQueries({ queryKey: ['brand', 'products'] });
     qc.invalidateQueries({ queryKey: ['brand', 'categories'] });
   };
+  // Clothing's toast clears itself; every other type keeps its banner.
+  const toasts = picksSizes(profile.data?.businessType.key ?? '');
+  useEffect(() => {
+    if (!toasts || (!saved && !error)) return;
+    const t = setTimeout(() => {
+      setSaved(false);
+      setError(null);
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [toasts, saved, error]);
   const onError = (e: unknown) => {
     setSaved(false);
     setError(e instanceof ApiError ? e.message : 'Could not save');
   };
 
   const save = useMutation({
-    mutationFn: () =>
-      api.patch<BrandProductView>(`/brand/products/${id}`, {
+    mutationFn: async () => {
+      await api.patch<BrandProductView>(`/brand/products/${id}`, {
         categoryId: form.categoryId,
         name: form.name.trim(),
         description: form.description.trim() || null,
         images,
         unit: form.unit.trim(),
-        basePrice: toPaisa(form.price),
-        compareAtPrice: form.compareAt.trim() ? toPaisa(form.compareAt) : null,
-        sku: form.sku.trim() || null,
+        // Clothing prices, was-prices and SKUs live on each size × colour row.
+        ...(pickAxes
+          ? {}
+          : {
+              basePrice: toPaisa(form.price),
+              compareAtPrice: form.compareAt.trim() ? toPaisa(form.compareAt) : null,
+              sku: form.sku.trim() || null,
+            }),
         attributes,
         isActive: form.isActive,
-      }),
+      });
+      // ponytail: one request per changed row; a bulk endpoint if vendors edit dozens at once.
+      for (const v of changedRows) {
+        const r = rows[v.id]!;
+        await api.patch<BrandProductView>(`/brand/products/${id}/variants/${v.id}`, {
+          basePrice: toPaisa(r.price),
+          compareAtPrice: r.was.trim() ? toPaisa(r.was) : null,
+          sku: r.sku.trim() || null,
+        });
+      }
+    },
     onSuccess: () => {
       setError(null);
       setSaved(true);
+      setRows({});
+      // What was just saved is now the server's copy; a refetch that differs
+      // (the server trims, say) reseeds, and a later edit is protected.
+      seeded.current = JSON.stringify([form, attributes, images]);
       invalidate();
     },
-    onError,
+    // A row that failed halfway leaves the ones before it saved; refetching
+    // shows that, and the drafts that did not go through stay in their boxes.
+    onError: (e: unknown) => {
+      onError(e);
+      invalidate();
+    },
   });
 
   const remove = useMutation({
@@ -138,6 +201,36 @@ export default function BrandProductPage() {
   // column, different word on the form.
   const words = coreLabelsFor(typeKey);
 
+  const unitField = (
+    <div className="field">
+      <label htmlFor="f-unit">
+        {words.unit} <FieldTag required />
+      </label>
+      <input
+        id="f-unit"
+        value={form.unit}
+        placeholder={pickAxes ? words.unitPlaceholder : undefined}
+        onChange={(e) => setForm({ ...form, unit: e.target.value })}
+      />
+      {/* Clothing renames this field, so it says what the line is for. */}
+      {pickAxes ? (
+        <span className="muted" style={{ fontSize: 12 }}>
+          {words.unitHelp}
+        </span>
+      ) : null}
+    </div>
+  );
+  // Nothing to save until the form differs from what the server holds.
+  const dirty =
+    changedRows.length > 0 ||
+    JSON.stringify([form, attributes, images]) !==
+      JSON.stringify([formFrom(p), p.attributes ?? {}, p.images ?? []]);
+  const saveButton = (
+    <button className="btn" type="submit" disabled={save.isPending || (pickAxes && !dirty)}>
+      {save.isPending ? 'Saving…' : 'Save changes'}
+    </button>
+  );
+
   return (
     <>
       <div className="page-head">
@@ -162,12 +255,24 @@ export default function BrandProductPage() {
         </label>
       </div>
 
-      {error ? <div className="error-banner">{error}</div> : null}
-      {saved && !error ? (
-        <div className="card" style={{ padding: 12 }}>
-          Saved.
-        </div>
-      ) : null}
+      {/* Clothing's Save sits at the foot of a long page, where a banner up
+          here would never be seen — so it answers with a toast instead. */}
+      {pickAxes ? (
+        error || saved ? (
+          <div role={error ? 'alert' : 'status'} className={error ? 'toast error' : 'toast'}>
+            {error ?? 'Changes saved'}
+          </div>
+        ) : null
+      ) : (
+        <>
+          {error ? <div className="error-banner">{error}</div> : null}
+          {saved && !error ? (
+            <div className="card" style={{ padding: 12 }}>
+              Saved.
+            </div>
+          ) : null}
+        </>
+      )}
 
       <form
         onSubmit={(e: FormEvent) => {
@@ -181,11 +286,19 @@ export default function BrandProductPage() {
               ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             return;
           }
+          if (changedRows.some((v) => !(Number(rows[v.id]!.price) > 0))) {
+            setError('Every size needs a price above zero');
+            return;
+          }
           save.mutate();
         }}
         style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1fr) 340px', gap: 24 }}
       >
-        <div style={{ display: 'grid', gap: 24 }}>
+        {/* minmax(0, 1fr) holds the column to its track: a wide sizes table
+            scrolls inside its card instead of sliding under the right column. */}
+        <div
+          style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 24, minWidth: 0 }}
+        >
           <div className="card" style={{ display: 'grid', gap: 14 }}>
             <h2>What it is</h2>
 
@@ -199,6 +312,8 @@ export default function BrandProductPage() {
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </div>
+
+            {pickAxes ? unitField : null}
 
             <div className="field">
               <label htmlFor="f-cat">
@@ -245,77 +360,71 @@ export default function BrandProductPage() {
             sizeSets={isBusinessTypeKey(typeKey) ? (businessTypeSpecs[typeKey].sizeSets ?? {}) : {}}
             needSizes={needSizes}
             onChanged={invalidate}
+            drafts={rows}
+            onDraft={(v, patch) =>
+              setRows((r) => ({ ...r, [v.id]: { ...(r[v.id] ?? rowFrom(v)), ...patch } }))
+            }
           />
+          {/* Clothing saves after the sizes, the last thing a vendor fills in. */}
+          {pickAxes ? saveButton : null}
         </div>
 
         <div style={{ display: 'grid', gap: 24, alignSelf: 'start' }}>
-          <div className="card" style={{ display: 'grid', gap: 14 }}>
-            <h2>Price</h2>
+          {/* Clothing has no product-level price: each size × colour row in
+              Sizes and colours carries its own price, was price and SKU. */}
+          {pickAxes ? null : (
+            <div className="card" style={{ display: 'grid', gap: 14 }}>
+              <h2>Price</h2>
 
-            <div className="field">
-              <label htmlFor="f-unit">
-                {words.unit} <FieldTag required />
-              </label>
-              <input
-                id="f-unit"
-                value={form.unit}
-                placeholder={pickAxes ? words.unitPlaceholder : undefined}
-                onChange={(e) => setForm({ ...form, unit: e.target.value })}
-              />
-              {/* Clothing renames this field, so it says what the line is for. */}
-              {pickAxes ? (
+              {unitField}
+
+              <div className="field">
+                <label htmlFor="f-price">
+                  Now price (Rs) <FieldTag required />
+                </label>
+                <input
+                  id="f-price"
+                  inputMode="decimal"
+                  value={form.price}
+                  onChange={(e) =>
+                    setForm({ ...form, price: e.target.value.replace(/[^\d.]/g, '') })
+                  }
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="f-was">
+                  Was price (Rs) <FieldTag />
+                </label>
+                <input
+                  id="f-was"
+                  inputMode="decimal"
+                  value={form.compareAt}
+                  onChange={(e) =>
+                    setForm({ ...form, compareAt: e.target.value.replace(/[^\d.]/g, '') })
+                  }
+                />
                 <span className="muted" style={{ fontSize: 12 }}>
-                  {words.unitHelp}
+                  Must be higher than the now price. Shown struck through, so customers see the
+                  saving.
                 </span>
-              ) : null}
-            </div>
+              </div>
 
-            <div className="field">
-              <label htmlFor="f-price">
-                Now price (Rs) <FieldTag required />
-              </label>
-              <input
-                id="f-price"
-                inputMode="decimal"
-                value={form.price}
-                onChange={(e) => setForm({ ...form, price: e.target.value.replace(/[^\d.]/g, '') })}
-              />
-            </div>
+              <div className="field">
+                <label htmlFor="f-sku">
+                  Your reference <FieldTag />
+                </label>
+                <input
+                  id="f-sku"
+                  value={form.sku}
+                  placeholder="SKU-1042"
+                  onChange={(e) => setForm({ ...form, sku: e.target.value })}
+                />
+              </div>
 
-            <div className="field">
-              <label htmlFor="f-was">
-                Was price (Rs) <FieldTag />
-              </label>
-              <input
-                id="f-was"
-                inputMode="decimal"
-                value={form.compareAt}
-                onChange={(e) =>
-                  setForm({ ...form, compareAt: e.target.value.replace(/[^\d.]/g, '') })
-                }
-              />
-              <span className="muted" style={{ fontSize: 12 }}>
-                Must be higher than the now price. Shown struck through, so customers see the
-                saving.
-              </span>
+              {saveButton}
             </div>
-
-            <div className="field">
-              <label htmlFor="f-sku">
-                Your reference <FieldTag />
-              </label>
-              <input
-                id="f-sku"
-                value={form.sku}
-                placeholder="SKU-1042"
-                onChange={(e) => setForm({ ...form, sku: e.target.value })}
-              />
-            </div>
-
-            <button className="btn" type="submit" disabled={save.isPending}>
-              {save.isPending ? 'Saving…' : 'Save changes'}
-            </button>
-          </div>
+          )}
 
           <div className="card">
             <h2>Remove</h2>
@@ -338,6 +447,9 @@ export default function BrandProductPage() {
     </>
   );
 }
+
+/** A header carrying a Required/Optional tag wraps it under the label, so the table fits its card. */
+const headTag = { textAlign: 'right', whiteSpace: 'normal', lineHeight: 1.9 } as const;
 
 // A clothing row's label doubles as its `unit`, which the API caps at 40:
 // "<size> / <colour>" must fit, or a batch fails halfway. Chart sizes are
@@ -365,6 +477,8 @@ function Variants({
   sizeSets,
   needSizes,
   onChanged,
+  drafts,
+  onDraft,
 }: {
   productId: string;
   variants: BrandVariantView[];
@@ -373,6 +487,9 @@ function Variants({
   sizeSets: Record<string, string[]>;
   needSizes: boolean;
   onChanged: () => void;
+  /** Clothing only: unsaved row edits, sent by the page's Save changes. */
+  drafts: Record<string, RowDraft>;
+  onDraft: (v: BrandVariantView, patch: Partial<RowDraft>) => void;
 }) {
   const [label, setLabel] = useState('');
   const [unit, setUnit] = useState('');
@@ -383,7 +500,10 @@ function Variants({
   const [colours, setColours] = useState<string[]>([]);
   const [draft, setDraft] = useState('');
   const [price, setPrice] = useState('');
+  const [was, setWas] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // One was-price for the batch, like the price; each row can differ afterwards.
+  const compareAtPrice = was.trim() ? toPaisa(was) : null;
 
   // A colour typed but not yet committed with Enter still counts.
   const withDraft = (list: string[], text: string) => {
@@ -444,6 +564,7 @@ function Variants({
           label: combos[0].label,
           unit: combos[0].label,
           basePrice: toPaisa(price),
+          compareAtPrice,
           options: combos[0].options,
         });
       }
@@ -453,6 +574,7 @@ function Variants({
           label: c.label,
           unit: c.label,
           basePrice: toPaisa(price),
+          compareAtPrice,
           options: c.options,
         });
       }
@@ -465,6 +587,7 @@ function Variants({
       setColours([]);
       setDraft('');
       setPrice('');
+      setWas('');
       setError(null);
       onChanged();
     },
@@ -486,8 +609,13 @@ function Variants({
   });
 
   const reprice = useMutation({
-    mutationFn: ({ v, basePrice }: { v: BrandVariantView; basePrice: number }) =>
-      api.patch<BrandProductView>(`/brand/products/${productId}/variants/${v.id}`, { basePrice }),
+    mutationFn: ({
+      v,
+      patch,
+    }: {
+      v: BrandVariantView;
+      patch: Partial<Pick<BrandVariantView, 'basePrice' | 'compareAtPrice' | 'sku'>>;
+    }) => api.patch<BrandProductView>(`/brand/products/${productId}/variants/${v.id}`, patch),
     onSuccess: () => {
       setError(null);
       onChanged();
@@ -521,7 +649,21 @@ function Variants({
               <tr>
                 <th>Option</th>
                 {pickAxes ? null : <th>Sold as</th>}
-                <th style={{ textAlign: 'right' }}>Price (Rs)</th>
+                {pickAxes ? (
+                  <>
+                    <th style={headTag}>
+                      Price (Rs) <FieldTag required />
+                    </th>
+                    <th style={headTag}>
+                      Was price (Rs) <FieldTag />
+                    </th>
+                    <th style={{ ...headTag, textAlign: 'left' }}>
+                      SKU <FieldTag />
+                    </th>
+                  </>
+                ) : (
+                  <th style={{ textAlign: 'right' }}>Price (Rs)</th>
+                )}
                 <th />
               </tr>
             </thead>
@@ -530,13 +672,20 @@ function Variants({
                 <tr key={v.id}>
                   <td>{v.label}</td>
                   {pickAxes ? null : <td className="muted">{v.unit}</td>}
-                  <td style={{ textAlign: 'right' }}>
-                    <PriceCell
-                      paisa={v.basePrice}
-                      disabled={reprice.isPending}
-                      onSave={(basePrice) => reprice.mutate({ v, basePrice })}
+                  {pickAxes ? (
+                    <ClothingRowCells
+                      draft={drafts[v.id] ?? rowFrom(v)}
+                      onChange={(patch) => onDraft(v, patch)}
                     />
-                  </td>
+                  ) : (
+                    <td style={{ textAlign: 'right' }}>
+                      <PriceCell
+                        paisa={v.basePrice}
+                        disabled={reprice.isPending}
+                        onSave={(basePrice) => reprice.mutate({ v, patch: { basePrice } })}
+                      />
+                    </td>
+                  )}
                   <td style={{ textAlign: 'right' }}>
                     <button
                       className="btn ghost"
@@ -688,11 +837,17 @@ function Variants({
             </div>
             <span className="muted" style={{ fontSize: 12 }}>
               Press Enter or Add colour after each colour. Each colour gets its own row at this
-              price.
+              price. Set a was price to show a saving; edit any row, and add SKUs, in the table
+              above.
             </span>
           </div>
           <div
-            style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'end' }}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr auto',
+              gap: 10,
+              alignItems: 'end',
+            }}
           >
             <div className="field">
               <label htmlFor="v-price">
@@ -704,6 +859,17 @@ function Variants({
                 value={price}
                 style={red}
                 onChange={(e) => setPrice(e.target.value.replace(/[^\d.]/g, ''))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="v-was">
+                Was price (Rs) <FieldTag />
+              </label>
+              <input
+                id="v-was"
+                inputMode="decimal"
+                value={was}
+                onChange={(e) => setWas(e.target.value.replace(/[^\d.]/g, ''))}
               />
             </div>
             <button
@@ -804,5 +970,50 @@ function PriceCell({
         else setValue(rupees(paisa));
       }}
     />
+  );
+}
+
+/**
+ * A clothing row's price, was price and SKU. Plain controlled inputs: nothing
+ * is sent until the page's Save changes, unlike every other type's price cell.
+ */
+function ClothingRowCells({
+  draft,
+  onChange,
+}: {
+  draft: RowDraft;
+  onChange: (patch: Partial<RowDraft>) => void;
+}) {
+  const digits = (text: string) => text.replace(/[^\d.]/g, '');
+  return (
+    <>
+      <td style={{ textAlign: 'right' }}>
+        <input
+          aria-label="Price in rupees"
+          inputMode="decimal"
+          style={{ width: 88, textAlign: 'right' }}
+          value={draft.price}
+          onChange={(e) => onChange({ price: digits(e.target.value) })}
+        />
+      </td>
+      <td style={{ textAlign: 'right' }}>
+        <input
+          aria-label="Was price in rupees"
+          inputMode="decimal"
+          style={{ width: 88, textAlign: 'right' }}
+          value={draft.was}
+          onChange={(e) => onChange({ was: digits(e.target.value) })}
+        />
+      </td>
+      <td>
+        <input
+          aria-label="SKU"
+          maxLength={60}
+          style={{ width: 88 }}
+          value={draft.sku}
+          onChange={(e) => onChange({ sku: e.target.value })}
+        />
+      </td>
+    </>
   );
 }

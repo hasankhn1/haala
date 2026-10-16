@@ -1,4 +1,5 @@
 import {
+  BusinessTypeKey,
   CART_TTL_DAYS,
   deliveryFeeFor,
   type AddCartItemInput,
@@ -68,12 +69,18 @@ export const cartService = {
       // The size, not the product's catalogue unit — a 1kg line must not
       // render as "500 g" just because that is the product's default.
       unit: i.variant.label,
+      options: i.variant.options,
       imageUrl: i.product.imageUrl,
       unitPrice: i.unitPrice,
       // The catalogue price before any store override or promotion, so the
       // cart can state what the customer is saving. `unitPrice` is what they
       // actually pay and remains the only number used in arithmetic.
-      basePrice: i.variant.basePrice,
+      // Clothing's "was" is the brand's per-size was price, as on the card and
+      // product page — without it the saving shown there vanished in the basket.
+      basePrice:
+        cart.departmentKey === BusinessTypeKey.Clothing
+          ? (i.variant.compareAtPrice ?? i.variant.basePrice)
+          : i.variant.basePrice,
       quantity: i.quantity,
       lineTotal: i.unitPrice * i.quantity,
       inStock: (stockByVariant.get(i.variantId) ?? 0) >= i.quantity,

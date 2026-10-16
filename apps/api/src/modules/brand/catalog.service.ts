@@ -11,6 +11,7 @@ import {
   type UpdateProductInput,
   type UpdateVariantInput,
   parseAttributes,
+  picksSizes,
 } from '@haala/shared';
 import { AppError } from '../../common/errors';
 import type { Category, Product, ProductVariant } from '../../db/schema';
@@ -47,6 +48,7 @@ const toVariantView = (v: ProductVariant): BrandVariantView => ({
   label: v.label,
   unit: v.unit,
   basePrice: v.basePrice,
+  compareAtPrice: v.compareAtPrice,
   options: v.options,
   sku: v.sku,
   sortOrder: v.sortOrder,
@@ -54,7 +56,7 @@ const toVariantView = (v: ProductVariant): BrandVariantView => ({
 });
 
 const toProductView = (
-  r: { product: Product; categoryName: string; stockOnHand: number },
+  r: { product: Product; categoryName: string; stockOnHand: number; stockValue: string },
   variants: ProductVariant[],
 ): BrandProductView => ({
   id: r.product.id,
@@ -74,6 +76,7 @@ const toProductView = (
   isActive: r.product.isActive,
   variants: variants.map(toVariantView),
   stockOnHand: r.stockOnHand,
+  stockValue: Number(r.stockValue),
 });
 
 /** A slug free within this brand. Collisions across brands are fine and expected. */
@@ -99,6 +102,8 @@ async function freeSlug(
  * card, cart line and order item reads.
  */
 const coverOf = (images: string[] | undefined): string | null => images?.[0] ?? null;
+
+const WAS_PRICE_TOO_LOW = 'The was price must be higher than the price';
 
 /** Validate `attributes` against whatever the owning brand's type declares. */
 async function checkAttributes(
@@ -227,7 +232,18 @@ export const brandCatalogService = {
     const category = await repo.findCategory(brandId, input.categoryId);
     if (!category) throw AppError.notFound('Category not found');
 
-    if (input.compareAtPrice != null && input.compareAtPrice <= input.basePrice) {
+    // Clothing prices each size × colour on its own row, so it has no
+    // product-level price to send. Its automatic first row is unpriced until
+    // the first real size renames it — and it can never be stocked meanwhile,
+    // because ops refuse stock on a sizeless clothing row.
+    let basePrice = input.basePrice;
+    if (basePrice === undefined) {
+      if (!picksSizes((await repo.businessTypeKey(brandId)) ?? '')) {
+        throw AppError.badRequest('Give the product a price');
+      }
+      basePrice = 0;
+    }
+    if (input.compareAtPrice != null && input.compareAtPrice <= basePrice) {
       throw AppError.badRequest('The original price must be higher than the price you charge');
     }
 
@@ -251,7 +267,7 @@ export const brandCatalogService = {
       images: input.images ?? [],
       imageUrl: coverOf(input.images),
       unit: input.unit,
-      basePrice: input.basePrice,
+      basePrice,
       compareAtPrice: input.compareAtPrice ?? null,
       sku: input.sku ?? null,
       ...(attributes ? { attributes } : {}),
@@ -264,7 +280,7 @@ export const brandCatalogService = {
     await repo.createVariant(brandId, created.id, {
       label: input.unit,
       unit: input.unit,
-      basePrice: input.basePrice,
+      basePrice,
       sortOrder: 0,
     });
 
@@ -343,6 +359,9 @@ export const brandCatalogService = {
     productId: string,
     input: CreateVariantInput,
   ): Promise<BrandProductView> {
+    if (input.compareAtPrice != null && input.compareAtPrice <= input.basePrice) {
+      throw AppError.badRequest(WAS_PRICE_TOO_LOW);
+    }
     const existing = await repo.listVariants(brandId, productId);
     if (input.sortOrder === 0 && existing.some((v) => v.sortOrder === 0)) {
       throw AppError.conflict(
@@ -356,6 +375,7 @@ export const brandCatalogService = {
       label: input.label,
       unit: input.unit,
       basePrice: input.basePrice,
+      compareAtPrice: input.compareAtPrice ?? null,
       ...(input.options ? { options: input.options } : {}),
       sku: input.sku ?? null,
       sortOrder: nextOrder,
@@ -371,10 +391,20 @@ export const brandCatalogService = {
     variantId: string,
     input: UpdateVariantInput,
   ): Promise<BrandProductView> {
+    // Judged against the row as it will be, so lowering a price under its own
+    // was-price is caught as surely as setting a was-price too low.
+    if (input.basePrice !== undefined || input.compareAtPrice != null) {
+      const current = (await repo.listVariants(brandId, productId)).find((v) => v.id === variantId);
+      if (!current) throw AppError.notFound('Variant not found');
+      const base = input.basePrice ?? current.basePrice;
+      const was = input.compareAtPrice !== undefined ? input.compareAtPrice : current.compareAtPrice;
+      if (was != null && was <= base) throw AppError.badRequest(WAS_PRICE_TOO_LOW);
+    }
     const updated = await repo.updateVariant(brandId, productId, variantId, {
       ...(input.label !== undefined ? { label: input.label } : {}),
       ...(input.unit !== undefined ? { unit: input.unit } : {}),
       ...(input.basePrice !== undefined ? { basePrice: input.basePrice } : {}),
+      ...(input.compareAtPrice !== undefined ? { compareAtPrice: input.compareAtPrice } : {}),
       ...(input.options !== undefined ? { options: input.options } : {}),
       ...(input.sku !== undefined ? { sku: input.sku } : {}),
       ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),

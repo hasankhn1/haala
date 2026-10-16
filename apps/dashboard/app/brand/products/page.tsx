@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useState } from 'react';
 import type { BrandCategoryView, BrandProductView, BrandProfileView } from '@haala/shared';
-import { coreLabelsFor } from '@haala/shared';
+import { coreLabelsFor, picksSizes } from '@haala/shared';
 import { ApiError, api, money, toPaisa } from '@/lib/api';
 import { FieldTag } from '@/components/FieldTag';
 
@@ -44,7 +44,8 @@ export default function BrandProductsPage() {
         categoryId: form.categoryId,
         name: form.name.trim(),
         unit: form.unit.trim(),
-        basePrice: toPaisa(form.price),
+        // Clothing prices each size × colour on the product's page instead.
+        ...(pickAxes ? {} : { basePrice: toPaisa(form.price) }),
       }),
     onSuccess: (p) => {
       setError(null);
@@ -65,13 +66,15 @@ export default function BrandProductsPage() {
 
   const cats = categories.data ?? [];
   const words = coreLabelsFor(profile.data?.businessType.key ?? '');
+  const pickAxes = picksSizes(profile.data?.businessType.key ?? '');
   const rows = (products.data ?? []).filter((p) => !filter || p.categoryId === filter);
-  const priceOk = form.price.trim() !== '' && Number.isFinite(Number(form.price)) && Number(form.price) > 0;
+  const priceOk =
+    form.price.trim() !== '' && Number.isFinite(Number(form.price)) && Number(form.price) > 0;
   const canSubmit =
     form.categoryId !== '' &&
     form.name.trim().length >= 2 &&
     form.unit.trim().length >= 1 &&
-    priceOk &&
+    (pickAxes || priceOk) &&
     !create.isPending;
 
   return (
@@ -150,18 +153,22 @@ export default function BrandProductsPage() {
               </span>
             </div>
 
-            <div className="field">
-              <label htmlFor="p-price">
-                Now price (Rs) <FieldTag required />
-              </label>
-              <input
-                id="p-price"
-                inputMode="decimal"
-                value={form.price}
-                placeholder="2500"
-                onChange={(e) => setForm({ ...form, price: e.target.value.replace(/[^\d.]/g, '') })}
-              />
-            </div>
+            {pickAxes ? null : (
+              <div className="field">
+                <label htmlFor="p-price">
+                  Now price (Rs) <FieldTag required />
+                </label>
+                <input
+                  id="p-price"
+                  inputMode="decimal"
+                  value={form.price}
+                  placeholder="2500"
+                  onChange={(e) =>
+                    setForm({ ...form, price: e.target.value.replace(/[^\d.]/g, '') })
+                  }
+                />
+              </div>
+            )}
 
             <button className="btn" type="submit" disabled={!canSubmit}>
               {create.isPending ? 'Adding…' : 'Add product'}
@@ -216,8 +223,8 @@ export default function BrandProductsPage() {
                       </td>
                       <td className="muted">{p.categoryName}</td>
                       <td style={{ textAlign: 'right' }}>
-                        {money(p.basePrice)}
-                        {p.compareAtPrice ? (
+                        {pickAxes ? <ClothingPrice product={p} /> : money(p.basePrice)}
+                        {!pickAxes && p.compareAtPrice ? (
                           <div className="muted" style={{ fontSize: 12 }}>
                             was {money(p.compareAtPrice)}
                           </div>
@@ -232,7 +239,11 @@ export default function BrandProductsPage() {
                         )}
                       </td>
                       <td style={{ textAlign: 'right' }}>
-                        <button className="btn ghost" type="button" onClick={() => toggle.mutate(p)}>
+                        <button
+                          className="btn ghost"
+                          type="button"
+                          onClick={() => toggle.mutate(p)}
+                        >
                           {p.isActive ? 'Switch off' : 'Switch on'}
                         </button>
                       </td>
@@ -250,4 +261,16 @@ export default function BrandProductsPage() {
       )}
     </>
   );
+}
+
+/**
+ * Clothing has no product price — each size × colour row has its own — so the
+ * list shows where they start. The automatic row of a product with no sizes
+ * yet is unpriced, hence the dash.
+ */
+function ClothingPrice({ product }: { product: BrandProductView }) {
+  const priced = product.variants.map((v) => v.basePrice).filter((n) => n > 0);
+  if (priced.length === 0) return <span className="muted">—</span>;
+  const low = Math.min(...priced);
+  return <>{priced.some((n) => n !== low) ? `from ${money(low)}` : money(low)}</>;
 }

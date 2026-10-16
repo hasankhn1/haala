@@ -82,6 +82,12 @@ export interface CartItemView {
   name: string;
   /** The variant's label, e.g. "500 g". */
   unit: string;
+  /**
+   * The size and colour this line is, e.g. `{"size":"S","color":"Red"}`, so
+   * the basket can say which one was picked. Empty for grocery; absent on a
+   * guest line saved before this existed.
+   */
+  options?: Record<string, string>;
   imageUrl: string | null;
   unitPrice: number; // paisa — what the customer pays
   basePrice: number; // paisa — catalogue price before overrides/promotions

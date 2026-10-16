@@ -21,6 +21,7 @@ import { catalogApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
 import { ETA_MINUTES } from '../../src/config';
 import { useProductActions } from '../../src/hooks/useProductActions';
+import { ClothingProductScreen } from '../../src/screens/clothing/ClothingProductScreen';
 import { useCurrentStore } from '../../src/store/useCurrentStore';
 
 export default function ProductDetailScreen() {
@@ -60,16 +61,6 @@ export default function ProductDetailScreen() {
   });
   const relatedItems = (related.data?.items ?? []).filter((r) => r.id !== id).slice(0, 8);
   const p = product.data;
-  /*
-   * Apparel is shopped by brand: on a clothing PDP the "more like this" rail
-   * becomes "more from {brand}" and shows only that brand's other pieces. Every
-   * other department keeps the aisle rail. Falls back to the aisle if the brand
-   * has nothing else in this category.
-   */
-  const isClothing = p?.departmentKey === 'clothing';
-  const sameBrand = relatedItems.filter((r) => r.brandSlug === p?.brandSlug);
-  const railItems = isClothing && sameBrand.length > 0 ? sameBrand : relatedItems;
-  const railTitle = isClothing && sameBrand.length > 0 ? `More from ${p?.brandName}` : 'More in this aisle';
   const variants = p?.variants ?? [];
   const selected = variants.find((v) => v.id === variantId) ?? variants[0] ?? null;
   const qty = selected ? (qtyByProduct.get(selected.id) ?? 0) : 0;
@@ -89,6 +80,11 @@ export default function ProductDetailScreen() {
       () => undefined,
     );
   };
+
+  // Clothing has its own page; this one stays the grocery PDP.
+  if (p?.departmentKey === 'clothing' && storeId) {
+    return <ClothingProductScreen product={p} storeId={storeId} />;
+  }
 
   return (
     <View style={styles.root}>
@@ -185,12 +181,12 @@ export default function ProductDetailScreen() {
             </View>
           ) : null}
 
-          {railItems.length > 0 ? (
+          {relatedItems.length > 0 ? (
             <View style={styles.related}>
-              <Text variant="h3">{railTitle}</Text>
+              <Text variant="h3">More in this aisle</Text>
               <FlatList
                 horizontal
-                data={railItems}
+                data={relatedItems}
                 keyExtractor={(r) => r.id}
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.relatedRow}
@@ -288,12 +284,6 @@ function ProductBody({ product: p }: { product: ProductView }) {
 
   return (
     <View>
-      {/* Brand-forward on apparel — the field grocery leaves empty. */}
-      {p.departmentKey === 'clothing' && p.brandName ? (
-        <Text variant="labelCaps" color="textSecondary" style={styles.brandEyebrow}>
-          {p.brandName}
-        </Text>
-      ) : null}
       <View style={styles.titleRow}>
         <Text variant="h2" style={styles.title}>
           {p.name}
@@ -474,7 +464,6 @@ const styles = StyleSheet.create({
     minHeight: 420,
   },
 
-  brandEyebrow: { marginBottom: theme.spacing.xs },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.lg },
   title: { flex: 1 },
   priceCol: { alignItems: 'flex-end' },

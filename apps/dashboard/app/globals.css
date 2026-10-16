@@ -514,3 +514,21 @@ input.inline {
   flex-direction: column;
   gap: 18px;
 }
+
+/* A save confirmation that floats over the page, for forms whose button sits
+   far below the top. Clears itself after a few seconds. */
+.toast {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 50;
+  background: var(--text);
+  color: var(--surface);
+  border-radius: var(--radius-sm);
+  padding: 12px 18px;
+  font-weight: 600;
+  box-shadow: var(--shadow-raised);
+}
+.toast.error {
+  background: var(--red-600);
+}

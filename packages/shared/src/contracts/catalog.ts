@@ -35,8 +35,16 @@ export interface ProductVariantView {
   basePrice: number;
   /** What this size costs at the current store, in paisa. */
   price: number;
+  /** The brand's struck-through "was" price for this size, paisa, if any. */
+  compareAtPrice: number | null;
   availableQty: number;
   inStock: boolean;
+  /**
+   * The axes this variant sits on, e.g. `{"size":"M","color":"Rose"}`. Empty
+   * on a grocery pack size. The clothing PDP builds its size row and colour row
+   * from these rather than splitting `label`.
+   */
+  options?: Record<string, string>;
 }
 
 export interface ProductView {
@@ -76,11 +84,25 @@ export interface ProductView {
    */
   defaultVariantId: string | null;
   /**
+   * That variant's axes, e.g. `{"size":"S","color":"Red"}` — so a line added
+   * straight from a card can say which size and colour it is, before the
+   * server's basket answers. Empty for grocery pack sizes.
+   */
+  defaultVariantOptions: Record<string, string>;
+  /**
    * Every sellable size, cheapest-first. Present on the **detail** response
    * only — the listing resolves each product's default variant instead, since
    * loading every size would multiply each row by its variant count.
    */
   variants?: ProductVariantView[];
+  /** Every photo, hero first. Detail response only, like `variants`. */
+  images?: string[];
+  /**
+   * The brand-entered specs, shaped by the department's `businessTypeSpecs`
+   * schema — clothing's `pieces` and `fabric` become chips under the title.
+   * Detail response only.
+   */
+  attributes?: Record<string, unknown>;
 }
 
 /**
