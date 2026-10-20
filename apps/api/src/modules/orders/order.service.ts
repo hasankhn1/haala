@@ -29,7 +29,7 @@ import { availableToSell, inventoryRepository } from '../inventory/inventory.rep
 import { paymentRepository } from '../payments/payment.repository';
 import { paymentService } from '../payments/payment.service';
 import { storeRepository } from '../stores/store.repository';
-import { userRepository } from '../users/user.repository';
+import { contactPhone, userRepository } from '../users/user.repository';
 import { emitToOrder, emitToUser } from '../../realtime/gateway';
 import { RealtimeEvents } from '../../realtime/events';
 import { notificationService } from '../notifications/notification.service';
@@ -257,7 +257,7 @@ export const orderService = {
             // accounts that predate the split. This is the number a rider or a
             // payment provider would actually ring, which is the whole reason
             // `deliveryPhone` exists as a separate column.
-            phone: user.deliveryPhone ?? user.phone,
+            phone: contactPhone(user),
             email: user.email,
             // Who this person already is at the gateway, so a returning
             // customer keeps the cards they saved.

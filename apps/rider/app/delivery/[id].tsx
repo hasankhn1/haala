@@ -244,12 +244,16 @@ function Body({
                   Note: {order.dropoff.notes}
                 </Text>
               ) : null}
+              {/* Empty when the customer never gave a number: a button that opens a
+                  blank dialer is worse than none. */}
+              {order.customerPhone ? (
               <Button
                 label={`Call ${order.customerName.split(' ')[0]}`}
                 variant="secondary"
                 onPress={() => onCall(order.customerPhone)}
                 leadingIcon={<Icon name="call" size={16} color={theme.colors.primary} />}
               />
+              ) : null}
             </>
           )}
         </View>
@@ -300,8 +304,8 @@ function Body({
           <Text variant="labelCaps" color="textSecondary">
             {order.itemCount} {order.itemCount === 1 ? 'item' : 'items'}
           </Text>
-          {order.items.map((item) => (
-            <View key={`${item.name}-${item.unit}`} style={styles.itemRow}>
+          {order.items.map((item, i) => (
+            <View key={`${i}:${item.name}`} style={styles.itemRow}>
               <Text variant="body" style={styles.flex}>
                 {item.quantity} × {item.name}
               </Text>

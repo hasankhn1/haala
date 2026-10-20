@@ -56,3 +56,14 @@ export function toDepartment(d: DepartmentView): Department {
     ...(copy?.flag && d.isLive ? { flag: copy.flag } : {}),
   };
 }
+
+/**
+ * The search tab, scoped to one department, or to every department when no
+ * argument is given.
+ *
+ * It always names `department`, even for "all". Search is a tab, a tab stays
+ * mounted, and a push that leaves the param out can keep the previous
+ * department's scope. `all` is not a department key, so search reads it as
+ * unscoped.
+ */
+export const searchHref = (department = 'all') => `/(tabs)/search?department=${encodeURIComponent(department)}`;

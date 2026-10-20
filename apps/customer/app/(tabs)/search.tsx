@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
 import { FlashList } from '@shopify/flash-list';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { ProductView } from '@haala/shared';
+import { BusinessTypeKey, departmentCopy, isBusinessTypeKey, type ProductView } from '@haala/shared';
 import { Chip, EmptyState, Icon, ProductCard, SearchBar, Skeleton, Text, theme } from '@haala/ui';
 import { catalogApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
@@ -14,32 +14,86 @@ import { useProductActions } from '../../src/hooks/useProductActions';
 import { useSearchStore } from '../../src/store/useSearchStore';
 import { useCurrentStore } from '../../src/store/useCurrentStore';
 
-/** Shown before the user has typed anything, alongside their own history. */
-const POPULAR = ['Milk', 'Eggs', 'Bread', 'Bananas', 'Rice', 'Chicken', 'Yogurt', 'Tomatoes'];
-
 /** Below this length a query isn't specific enough to be worth a round trip. */
 const MIN_QUERY = 2;
 
+/** How many "Popular" chips the all-departments search offers. */
+const MAX_POPULAR = 8;
+
+const NO_RECENTS: string[] = [];
+
 export default function SearchScreen() {
+  // Opened from a department screen, search stays inside that department —
+  // its suggestions and its results. From the marketplace home it spans all.
+  // Any key but `all` scopes the query, including one the apps have not been
+  // taught copy for yet: an unknown department must not search every shop.
+  const params = useLocalSearchParams<{ department?: string }>();
+  const department = params.department && params.department !== 'all' ? params.department : undefined;
+  // Keyed on the scope: the tab stays mounted, so without a fresh instance the
+  // last department's term — and its debounced copy, 300ms behind — would run
+  // against the next department's shop.
+  return <Search key={department ?? 'all'} department={department} />;
+}
+
+function Search({ department }: { department?: string }) {
   const router = useRouter();
+  const scope = department ?? 'all';
   const { storeId } = useCurrentStore();
   const [term, setTerm] = useState('');
   const debounced = useDebouncedValue(term, 300);
-  const { recents, addRecent, removeRecent, clearRecents } = useSearchStore();
+  const recents = useSearchStore((s) => s.recents[scope] ?? NO_RECENTS);
+  const addRecent = useSearchStore((s) => s.addRecent);
+  const removeRecent = useSearchStore((s) => s.removeRecent);
+  const clearRecents = useSearchStore((s) => s.clearRecents);
   const { qtyByProduct, busyVariantId, addProduct, setQty } = useProductActions(storeId);
+
+  // The same cached request the marketplace home made, so no extra round trip.
+  const home = useQuery({
+    queryKey: qk.home(storeId),
+    queryFn: () => catalogApi.home(storeId),
+    staleTime: 5 * 60_000,
+    enabled: !department,
+  });
+
+  /*
+   * Search from the home spans every department, so its chips do too: taken in
+   * turn from each *live* department's own list, so a department going live or
+   * dark changes them without anyone editing this screen. The hint matches the
+   * home's search bar.
+   */
+  const { searchHint, popularSearches } = useMemo(() => {
+    if (department) {
+      return isBusinessTypeKey(department)
+        ? departmentCopy[department]
+        : { searchHint: 'Search this shop', popularSearches: [] };
+    }
+    const lists = (home.data?.departments ?? []).flatMap((d) =>
+      d.isLive && isBusinessTypeKey(d.key) ? [departmentCopy[d.key].popularSearches] : [],
+    );
+    const mixed: string[] = [];
+    for (let i = 0; mixed.length < MAX_POPULAR && lists.some((l) => i < l.length); i++) {
+      for (const l of lists) if (i < l.length && mixed.length < MAX_POPULAR) mixed.push(l[i]);
+    }
+    // Until the home payload arrives (a cold start from a notification) or if it
+    // failed, grocery's list — always live, and better than an empty screen.
+    return {
+      searchHint: 'Search products or shops',
+      popularSearches: mixed.length > 0 ? mixed : departmentCopy[BusinessTypeKey.Grocery].popularSearches,
+    };
+  }, [department, home.data]);
 
   const query = debounced.trim();
   const active = query.length >= MIN_QUERY;
 
   const results = useQuery({
-    queryKey: qk.products(storeId ?? 'none', undefined, query),
-    queryFn: () => catalogApi.products({ storeId: storeId as string, q: query }),
+    queryKey: qk.products(storeId ?? 'none', undefined, query, department),
+    queryFn: () => catalogApi.products({ storeId: storeId as string, q: query, department }),
     enabled: !!storeId && active,
   });
 
   const submit = (value: string) => {
     setTerm(value);
-    addRecent(value);
+    addRecent(scope, value);
   };
 
   const items = results.data?.items ?? [];
@@ -74,7 +128,7 @@ export default function SearchScreen() {
           onChangeText={setTerm}
           onClear={() => setTerm('')}
           autoFocus
-          placeholder="Search for milk, eggs, bread…"
+          placeholder={searchHint}
         />
       </View>
 
@@ -86,7 +140,7 @@ export default function SearchScreen() {
                 <Text variant="labelCaps" color="textSecondary">
                   Recent
                 </Text>
-                <Pressable onPress={clearRecents} hitSlop={8}>
+                <Pressable onPress={() => clearRecents(scope)} hitSlop={8}>
                   <Text variant="label" color="textSecondary">
                     Clear
                   </Text>
@@ -99,7 +153,7 @@ export default function SearchScreen() {
                     {r}
                   </Text>
                   <Pressable
-                    onPress={() => removeRecent(r)}
+                    onPress={() => removeRecent(scope, r)}
                     hitSlop={10}
                     accessibilityLabel={`Remove ${r} from recent searches`}
                   >
@@ -110,16 +164,18 @@ export default function SearchScreen() {
             </View>
           ) : null}
 
-          <View style={styles.block}>
-            <Text variant="labelCaps" color="textSecondary">
-              Popular
-            </Text>
-            <View style={styles.popular}>
-              {POPULAR.map((p) => (
-                <Chip key={p} label={p} onPress={() => submit(p)} />
-              ))}
+          {popularSearches.length > 0 ? (
+            <View style={styles.block}>
+              <Text variant="labelCaps" color="textSecondary">
+                Popular
+              </Text>
+              <View style={styles.popular}>
+                {popularSearches.map((p, i) => (
+                  <Chip key={`${i}:${p}`} label={p} onPress={() => submit(p)} />
+                ))}
+              </View>
             </View>
-          </View>
+          ) : null}
         </View>
       ) : results.isLoading ? (
         <GridSkeleton />
@@ -194,7 +250,7 @@ export default function SearchScreen() {
                   quantity={qtyByProduct.get(item.defaultVariantId ?? "") ?? 0}
                   busy={busyVariantId === item.defaultVariantId}
                   onPress={() => {
-                    addRecent(query);
+                    addRecent(scope, query);
                     router.push(`/product/${item.id}`);
                   }}
                   onAdd={() => addProduct(item)}

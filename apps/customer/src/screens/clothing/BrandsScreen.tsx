@@ -8,6 +8,7 @@ import { Icon, IconButton, SearchBar, StateView, Text, theme } from '@haala/ui';
 import { catalogApi } from '../../api/endpoints';
 import { qk } from '../../api/queryKeys';
 import { useCurrentStore } from '../../store/useCurrentStore';
+import { searchHref } from '../../lib/departments';
 
 interface BrandRow {
   slug: string;
@@ -69,7 +70,7 @@ export function BrandsScreen({ department }: { department: string }) {
             Brands
           </Text>
         </View>
-        <SearchBar onPress={() => router.push('/(tabs)/search')} placeholder="Search brands" />
+        <SearchBar onPress={() => router.push(searchHref(department))} placeholder="Search" />
       </View>
 
       <StateView

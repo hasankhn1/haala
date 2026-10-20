@@ -22,6 +22,7 @@ import { useBasket } from '../hooks/useCart';
 import { useProductActions } from '../hooks/useProductActions';
 import { useAuth } from '../auth/AuthContext';
 import { useCurrentStore } from '../store/useCurrentStore';
+import { searchHref } from '../lib/departments';
 import { ETA_MINUTES, FREE_DELIVERY_THRESHOLD } from '../config';
 
 /** How many category rails Home renders before the user has to tap through. */
@@ -275,7 +276,7 @@ export function DepartmentScreen({ department }: { department: string }) {
               <SearchBar
                   showVoice
                   placeholder={copy?.searchHint}
-                  onPress={() => router.push('/(tabs)/search')}
+                  onPress={() => router.push(searchHref(department))}
                 />
             </View>
 

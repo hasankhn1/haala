@@ -11,7 +11,7 @@ import { useAuth } from '../../src/auth/AuthContext';
 import { DepartmentsSheet } from '../../src/components/DepartmentsSheet';
 import { useSplashDone } from '../../src/components/SplashLoader';
 import { useProductActions } from '../../src/hooks/useProductActions';
-import { toDepartment, type Department } from '../../src/lib/departments';
+import { searchHref, toDepartment, type Department } from '../../src/lib/departments';
 import { useCurrentStore } from '../../src/store/useCurrentStore';
 
 /**
@@ -182,7 +182,7 @@ export default function HomeScreen() {
 
         <Pressable
           style={styles.search}
-          onPress={() => router.push('/(tabs)/search')}
+          onPress={() => router.push(searchHref())}
           accessibilityRole="search"
           accessibilityLabel="Search products or shops"
         >
