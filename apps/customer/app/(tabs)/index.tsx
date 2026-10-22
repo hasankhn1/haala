@@ -63,7 +63,8 @@ import { useCurrentStore } from '../../src/store/useCurrentStore';
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { address, outOfArea, storeId, isLoading: storeLoading } = useCurrentStore();
+  const { outOfArea, needsAddress, loadError, retry, address, storeId, isLoading: storeLoading } =
+    useCurrentStore();
   const [refreshing, setRefreshing] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -192,7 +193,25 @@ export default function HomeScreen() {
           </Text>
         </Pressable>
 
-        {outOfArea ? (
+        {loadError ? (
+          <Pressable style={styles.notice} onPress={retry} accessibilityRole="button">
+            <Icon name="alert-circle-outline" size={17} color={theme.colors.textAlert} />
+            <Text variant="bodySm" style={styles.noticeText}>
+              Couldn’t find your store. Tap to retry.
+            </Text>
+          </Pressable>
+        ) : needsAddress ? (
+          <Pressable
+            style={styles.notice}
+            onPress={() => router.push(user ? '/addresses' : '/login')}
+            accessibilityRole="button"
+          >
+            <Icon name="location-outline" size={17} color={theme.colors.textAlert} />
+            <Text variant="bodySm" style={styles.noticeText}>
+              We couldn’t find a store delivering near DHA Peshawar. Add your address to check yours.
+            </Text>
+          </Pressable>
+        ) : outOfArea ? (
           <View style={styles.notice}>
             <Icon name="alert-circle-outline" size={17} color={theme.colors.textAlert} />
             <Text variant="bodySm" style={styles.noticeText}>

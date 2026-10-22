@@ -1,3 +1,8 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+overrides:
+  # 0.9.11 is deprecated on npm ("critical issues"); 0.9.12 is in plist's own ^0.9.10 range.
+  # Build-time only (iOS prebuild plist edits). Drop once plist resolves 0.9.12+ by itself.
+  "plist>@xmldom/xmldom": "0.9.12"

@@ -15,6 +15,11 @@ export interface StoreView {
   longitude: number;
   /** Distance from the queried point, when a location was provided. */
   distanceMeters?: number;
-  /** Within this store's delivery radius. */
+  /** Inside this store's delivery area: its drawn polygon if it has one, else its radius. */
   isServiceable?: boolean;
+  /**
+   * Inside a drawn delivery boundary, not merely a radius. Only then is the
+   * store's `area` a truthful label for an address at the point.
+   */
+  insideBoundary?: boolean;
 }

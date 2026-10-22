@@ -311,7 +311,8 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.sm,
     paddingBottom: theme.layout.elementGap,
   },
-  filterRail: { flexGrow: 0 },
+  // RN Web's ScrollView shrinks by default, so a long list below squashed the chips.
+  filterRail: { flexGrow: 0, flexShrink: 0 },
   filters: {
     gap: 6,
     paddingHorizontal: theme.layout.margin,

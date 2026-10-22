@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { haversineMeters, isWithinDeliveryArea } from './geo';
+import { hasDrawnBoundary, haversineMeters, isWithinDeliveryArea } from './geo';
 
 /**
  * `isWithinDeliveryArea` is the single definition of "we deliver here": the
@@ -91,5 +91,25 @@ describe('isWithinDeliveryArea', () => {
   it('an empty polygon array falls back to radius', () => {
     const empty = { ...DHA, polygon: [] };
     assert.equal(isWithinDeliveryArea(empty, DHA.latitude, DHA.longitude), true);
+  });
+});
+
+describe('hasDrawnBoundary', () => {
+  // The address picker labels an address with the store's area only when the
+  // store serves it *and* this holds. A radius must not count: it spans
+  // neighbourhoods.
+  it('is true for a polygon of three or more points', () => {
+    const TRIANGLE = [
+      { lat: 33.99, lng: 71.68 },
+      { lat: 33.99, lng: 71.7 },
+      { lat: 33.97, lng: 71.7 },
+    ];
+    assert.equal(hasDrawnBoundary({ polygon: TRIANGLE }), true);
+  });
+
+  it('is false for a radius-only store, and for fewer than three points', () => {
+    assert.equal(hasDrawnBoundary(DHA), false);
+    assert.equal(hasDrawnBoundary({ polygon: null }), false);
+    assert.equal(hasDrawnBoundary({ polygon: [{ lat: 33.99, lng: 71.68 }, { lat: 33.97, lng: 71.7 }] }), false);
   });
 });

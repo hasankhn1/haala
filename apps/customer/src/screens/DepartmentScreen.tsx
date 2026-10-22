@@ -104,7 +104,7 @@ function useTransientBar(itemCount: number, ready: boolean) {
 export function DepartmentScreen({ department }: { department: string }) {
   const router = useRouter();
   const { user } = useAuth();
-  const { store, storeId, outOfArea, address } = useCurrentStore();
+  const { store, storeId, outOfArea, needsAddress, loadError, retry, address } = useCurrentStore();
   const [refreshing, setRefreshing] = useState(false);
 
   const copy = departmentCopy[department as BusinessTypeKey] as DepartmentCopy | undefined;
@@ -223,7 +223,7 @@ export function DepartmentScreen({ department }: { department: string }) {
               </Pressable>
               <Pressable
                 style={styles.location}
-                onPress={() => router.push('/addresses')}
+                onPress={loadError ? retry : () => router.push(user ? '/addresses' : '/login')}
                 accessibilityRole="button"
               >
                 <Icon name="location-outline" size={15} color={theme.colors.onPrimary} />
@@ -233,9 +233,13 @@ export function DepartmentScreen({ department }: { department: string }) {
                 <Text variant="bodyStrong" color="onPrimary" numberOfLines={1}>
                   {store
                     ? (address?.area ?? store.area)
-                    : outOfArea
-                      ? 'Outside our area'
-                      : 'Finding your store…'}
+                    : loadError
+                      ? 'Couldn’t load — retry'
+                      : needsAddress
+                        ? 'Add an address'
+                        : outOfArea
+                          ? 'Outside our area'
+                          : 'Finding your store…'}
                 </Text>
                 <Icon name="chevron-down" size={13} color={theme.colors.onPrimary} />
               </Pressable>
@@ -315,11 +319,28 @@ export function DepartmentScreen({ department }: { department: string }) {
 
         {/* Outside every store's radius is a real answer, not an empty shop —
             show it instead of a promo and category rails that lead nowhere. */}
-        {outOfArea ? (
+        {loadError ? (
+          <EmptyState
+            emoji="📍"
+            title="Couldn’t find your store"
+            subtitle="Check your connection and try again."
+            actionLabel="Try again"
+            onAction={retry}
+          />
+        ) : needsAddress ? (
+          // Nothing saved yet: the default location missed, not their address.
+          <EmptyState
+            emoji="📍"
+            title="Add your delivery address"
+            subtitle="We couldn’t find a store delivering near DHA Peshawar. Add your address to check yours."
+            actionLabel="Add address"
+            onAction={() => router.push(user ? '/addresses' : '/login')}
+          />
+        ) : outOfArea && address ? (
           <EmptyState
             emoji="📍"
             title="We don’t deliver here yet"
-            subtitle={`${address?.area ?? 'This address'} is outside every store’s delivery area. Choose a different delivery address to start shopping.`}
+            subtitle={`${address.area} is outside every store’s delivery area. Choose a different delivery address to start shopping.`}
             actionLabel="Change address"
             onAction={() => router.push('/addresses')}
           />
