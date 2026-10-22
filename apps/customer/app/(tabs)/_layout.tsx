@@ -56,6 +56,15 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="search"
         options={{ title: 'Search', tabBarIcon: tabIcon('search-outline', 'search') }}
+        // The tab bar's Search spans every department. Without this it
+        // reopens with whatever `department` a department screen last pushed —
+        // see `searchHref`. Not when Search is already open: tapping its own
+        // tab would throw someone out of the department they are searching.
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            if (!navigation.isFocused()) navigation.setParams({ department: 'all' });
+          },
+        })}
       />
       <Tabs.Screen
         name="categories"

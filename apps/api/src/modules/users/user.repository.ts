@@ -4,6 +4,14 @@ import { db, type Executor } from '../../db/client';
 import { users, type NewUser, type User } from '../../db/schema';
 
 /**
+ * The number to ring about an order: the delivery contact, falling back to the
+ * identity phone for accounts that predate the split. Never `phone` alone — it
+ * is null for every email, Google and Apple signup.
+ */
+export const contactPhone = (u: Pick<User, 'deliveryPhone' | 'phone'>): string | null =>
+  u.deliveryPhone ?? u.phone;
+
+/**
  * Data access for users. Every method accepts an optional executor so the same
  * code runs standalone or inside a transaction (`repo.create(data, tx)`).
  */

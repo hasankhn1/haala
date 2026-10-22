@@ -132,8 +132,8 @@ export default function OrderDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {o.items.map((it) => (
-                    <tr key={it.productId}>
+                  {o.items.map((it, idx) => (
+                    <tr key={`${it.productId}:${idx}`}>
                       <td>
                         <div style={{ fontWeight: 600 }}>{it.name}</div>
                         <div className="muted">{it.unit}</div>

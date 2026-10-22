@@ -21,6 +21,7 @@ import { qk } from '../../api/queryKeys';
 import { useBasket } from '../../hooks/useCart';
 import { useProductActions } from '../../hooks/useProductActions';
 import { useCurrentStore } from '../../store/useCurrentStore';
+import { searchHref } from '../../lib/departments';
 import { useWishlist } from '../../store/useWishlist';
 import {
   activeChips as buildActiveChips,
@@ -121,7 +122,7 @@ export function ClothingScreen({ initialBrand }: { initialBrand?: string } = {})
 
   const header = (
     <View style={styles.headerBlock}>
-      <SearchBar onPress={() => router.push('/(tabs)/search')} placeholder={copy.searchHint} />
+      <SearchBar onPress={() => router.push(searchHref(DEPARTMENT))} placeholder={copy.searchHint} />
 
       {/* Sort / Filters / Deals / Brands — the pill filter row. */}
       <ScrollView
@@ -253,7 +254,7 @@ export function ClothingScreen({ initialBrand }: { initialBrand?: string } = {})
         <Text variant="h2" numberOfLines={1} style={styles.flex}>
           {title}
         </Text>
-        <IconButton name="search" onPress={() => router.push('/(tabs)/search')} accessibilityLabel="Search" />
+        <IconButton name="search" onPress={() => router.push(searchHref(DEPARTMENT))} accessibilityLabel="Search" />
         <View>
           <IconButton
             name="bag-handle-outline"

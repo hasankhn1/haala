@@ -355,39 +355,47 @@ export interface DepartmentCopy {
    * screen — the shell was grocery's before it was every department's.
    */
   searchHint: string;
+  /** The "Popular" chips on this department's search screen, before typing. */
+  popularSearches: string[];
 }
 
 export const departmentCopy: Record<BusinessTypeKey, DepartmentCopy> = {
   [BusinessTypeKey.Grocery]: {
     searchHint: 'Search for milk, eggs, bread…',
+    popularSearches: ['Milk', 'Eggs', 'Bread', 'Bananas', 'Rice', 'Chicken', 'Yogurt', 'Tomatoes'],
     examples: 'Fresh food · Dairy · Pantry · Household',
     cta: 'Shop Grocery',
     flag: '15 min',
   },
   [BusinessTypeKey.Bakery]: {
     searchHint: 'Search for cakes, bread, pastries…',
+    popularSearches: ['Cake', 'Bread', 'Croissant', 'Cupcakes', 'Cookies', 'Rusk'],
     examples: 'Cakes · Bread · Pastries · Made to order',
     cta: 'Shop Bakery',
     flag: 'Baked today',
   },
   [BusinessTypeKey.Clothing]: {
     searchHint: 'Search for kurtis, shirts, shoes…',
+    popularSearches: ['Kameez Shalwar', 'Kurti', 'Lawn', 'Abaya', 'Polo', 'Chappal', 'Khussa', 'Hoodie'],
     examples: 'Women · Men · Kids · Unstitched · Ready to wear',
     cta: 'Shop Clothing',
     flag: 'New season',
   },
   [BusinessTypeKey.FreshProduce]: {
     searchHint: 'Search for mangoes, tomatoes, herbs…',
+    popularSearches: ['Mangoes', 'Tomatoes', 'Onions', 'Potatoes', 'Apples', 'Mint'],
     examples: 'Fruit · Vegetables · Herbs · Seasonal',
     cta: 'Shop Fresh',
   },
   [BusinessTypeKey.FrozenFood]: {
     searchHint: 'Search for peas, nuggets, ice cream…',
+    popularSearches: ['Nuggets', 'Peas', 'Ice cream', 'Paratha', 'Kebabs', 'Fries'],
     examples: 'Ready meals · Meat · Seafood · Ice cream',
     cta: 'Shop Frozen',
   },
   [BusinessTypeKey.Gifts]: {
     searchHint: 'Search for hampers, cards, flowers…',
+    popularSearches: ['Hampers', 'Flowers', 'Cards', 'Chocolates', 'Balloons'],
     examples: 'Hampers · Flowers · Occasions · Wrapping',
     cta: 'Shop Gifts',
   },

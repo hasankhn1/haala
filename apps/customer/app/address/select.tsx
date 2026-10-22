@@ -128,16 +128,25 @@ export default function SelectAddressScreen() {
 
       if (cancelled || seq !== geocodeSeq.current) return;
 
-      if (place.status === 'fulfilled' && place.value.length > 0) {
-        const p = place.value[0];
-        setResolved({
-          line1: [p.name, p.street].filter(Boolean).join(', ') || 'Pinned location',
-          area: p.district ?? p.subregion ?? p.city ?? '',
-          city: p.city ?? p.region ?? '',
-        });
-      } else {
-        setResolved({ line1: 'Pinned location', area: '', city: '' });
-      }
+      // The geocoder is empty on web (expo-location has none there) and sparse
+      // in Pakistan on Android, so the city falls back to that of the store
+      // that delivers here — every address we accept is inside one's radius.
+      // With a basket that is only the basket's store. The *area* never does:
+      // a 6 km radius spans several phases, and the store's own phase saved on
+      // the address would send the rider to the wrong one. A missing area
+      // becomes the city at save time instead, which is vague but not wrong.
+      const servingStore =
+        stores.status === 'fulfilled'
+          ? stores.value.find((s) => s.isServiceable && (!cartStoreId || s.id === cartStoreId))
+          : undefined;
+      const p = place.status === 'fulfilled' ? place.value[0] : undefined;
+      // `||`, not `??`: Android's geocoder returns '' as often as null. Never
+      // `region`: that is the province, not a city. Save falls back to the area.
+      setResolved({
+        line1: [p?.name, p?.street].filter(Boolean).join(', ') || 'Pinned location',
+        area: p?.district || p?.subregion || p?.city || '',
+        city: p?.city || servingStore?.city || '',
+      });
 
       if (stores.status !== 'fulfilled') {
         setServiceable(null);

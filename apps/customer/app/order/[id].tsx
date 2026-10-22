@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { formatPKR, type OrderView } from '@haala/shared';
+import { formatPKR, OrderStatus, type OrderView } from '@haala/shared';
 import {
   Button,
   Card,
@@ -163,7 +163,7 @@ export default function OrderScreen() {
 
             {/* Tracking sheet */}
             <View style={styles.sheet}>
-              {placed === '1' ? (
+              {placed === '1' && o.status === OrderStatus.Placed ? (
                 <View style={styles.placedBanner}>
                   <Icon name="checkmark-circle" size={18} color={theme.colors.primary} />
                   <Text variant="labelSm">Order placed — we’ve sent it to the store</Text>
@@ -255,7 +255,7 @@ export default function OrderScreen() {
               </Text>
               <Card>
                 {o.items.map((it, idx) => (
-                  <View key={it.productId}>
+                  <View key={`${it.productId}:${idx}`}>
                     <View style={styles.itemRow}>
                       <Text variant="body" style={styles.flex}>
                         {it.quantity} × {it.name}

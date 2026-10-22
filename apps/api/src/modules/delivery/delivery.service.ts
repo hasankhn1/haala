@@ -24,7 +24,7 @@ import { orderRepository } from '../orders/order.repository';
 import { orderService } from '../orders/order.service';
 import { riderRepository } from '../riders/rider.repository';
 import { storeRepository } from '../stores/store.repository';
-import { userRepository } from '../users/user.repository';
+import { contactPhone, userRepository } from '../users/user.repository';
 import { deliveryRepository } from './delivery.repository';
 
 /**
@@ -82,7 +82,9 @@ export const deliveryService = {
       itemCount: items.reduce((n, i) => n + i.quantity, 0),
       items: items.map((i) => ({ name: i.name, unit: i.unit, quantity: i.quantity })),
       customerName: customer?.name ?? 'Customer',
-      customerPhone: customer?.phone ?? '',
+      // Read live, not snapshotted on the order: if the customer fixes their
+      // number after checkout, the rider should ring the corrected one.
+      customerPhone: (customer && contactPhone(customer)) ?? '',
       dropoff: order.deliveryAddress,
       pickup: store
         ? {
