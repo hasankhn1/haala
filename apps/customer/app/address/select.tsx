@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { AddressLabel, CreateAddressInput } from '@haala/shared';
-import { Button, Icon, type IconName, IconButton, Text, theme, useToast } from '@haala/ui';
+import { Button, Icon, type IconName, IconButton, Skeleton, Text, theme, useToast } from '@haala/ui';
 import { messageFor } from '../../src/api/client';
 import { addressesApi, storesApi } from '../../src/api/endpoints';
 import { qk } from '../../src/api/queryKeys';
@@ -49,6 +49,22 @@ const LABELS: Array<{ value: AddressLabel; name: string; icon: IconName }> = [
  * and if the map module is unavailable `MapPicker` renders a panel while manual
  * entry below still works.
  */
+/** Device position, or null when permission is refused. */
+function locateDevice(): Promise<Location.LocationObject | null> {
+  // Neither call has a timeout, and an ignored browser prompt or an indoor GPS
+  // never settles — which kept Confirm disabled forever. Rejects after 10s.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const locate = (async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') return null;
+    return Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+  })();
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('location timeout')), 10_000);
+  });
+  return Promise.race([locate, timeout]).finally(() => clearTimeout(timer));
+}
+
 export default function SelectAddressScreen() {
   const router = useRouter();
   const qc = useQueryClient();
@@ -91,12 +107,10 @@ export default function SelectAddressScreen() {
     let cancelled = false;
     (async () => {
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted' || cancelled) return;
-        const pos = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        if (cancelled) return;
+        // ponytail: a fix landing inside the window can still move a pin already
+        // dragged; guard on a user-moved flag if that shows up in practice.
+        const pos = await locateDevice();
+        if (!pos || cancelled) return;
         setCenter({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
       } catch {
         // Fall through to DEFAULT_LOCATION.
@@ -131,20 +145,28 @@ export default function SelectAddressScreen() {
       // The geocoder is empty on web (expo-location has none there) and sparse
       // in Pakistan on Android, so the city falls back to that of the store
       // that delivers here — every address we accept is inside one's radius.
-      // With a basket that is only the basket's store. The *area* never does:
-      // a 6 km radius spans several phases, and the store's own phase saved on
-      // the address would send the rider to the wrong one. A missing area
-      // becomes the city at save time instead, which is vague but not wrong.
+      // With a basket that is only the basket's store.
+      //
+      // The area is never the city: "Delivering to Peshawar" says nothing. Inside
+      // a store's *drawn* boundary the store's area is the neighbourhood itself,
+      // and the geocoder's districts there are noise. Anywhere else (a radius
+      // spans several) only the geocoder names it, and a missing one saves as
+      // "Unknown area" rather than sending the rider somewhere wrong.
       const servingStore =
         stores.status === 'fulfilled'
           ? stores.value.find((s) => s.isServiceable && (!cartStoreId || s.id === cartStoreId))
           : undefined;
+      // Any store's drawn boundary names the neighbourhood, not only the serving
+      // one's: the nearest server may be radius-only while a farther polygon
+      // contains the pin exactly.
+      const boundaryStore =
+        stores.status === 'fulfilled' ? stores.value.find((s) => s.insideBoundary) : undefined;
       const p = place.status === 'fulfilled' ? place.value[0] : undefined;
       // `||`, not `??`: Android's geocoder returns '' as often as null. Never
       // `region`: that is the province, not a city. Save falls back to the area.
       setResolved({
         line1: [p?.name, p?.street].filter(Boolean).join(', ') || 'Pinned location',
-        area: p?.district || p?.subregion || p?.city || '',
+        area: boundaryStore?.area || p?.district || p?.subregion || '',
         city: p?.city || servingStore?.city || '',
       });
 
@@ -173,12 +195,11 @@ export default function SelectAddressScreen() {
 
   const recenter = useCallback(async () => {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
+      const pos = await locateDevice();
+      if (!pos) {
         toast.show('Location permission is off', 'error');
         return;
       }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       setCenter({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
     } catch {
       toast.show('Could not get your location', 'error');
@@ -203,16 +224,25 @@ export default function SelectAddressScreen() {
       line1: resolved.line1,
       ...(detail.trim() ? { line2: detail.trim() } : {}),
       ...(directions.trim() ? { notes: directions.trim() } : {}),
-      // The API requires both; fall back to the label so validation passes on
-      // sparse geocoder results rather than silently failing.
-      area: resolved.area || resolved.city || 'Unknown area',
+      // The API requires both. Area deliberately never falls back to the city.
+      area: resolved.area || 'Unknown area',
       city: resolved.city || resolved.area || 'Unknown city',
       latitude: debouncedCenter.latitude,
       longitude: debouncedCenter.longitude,
     });
   };
 
-  const blocked = serviceable === false;
+  /*
+   * The verdict is only about the pin once the device location has landed, the
+   * debounce has caught up and the lookup is back. The map opens on
+   * DEFAULT_LOCATION, so judging earlier flashed "We don't deliver here" at a
+   * point the customer never chose.
+   */
+  const checking = locating || resolving || center !== debouncedCenter;
+  const blocked = !checking && serviceable === false;
+  // Skeletons only for the first locate or over a stale "we don't deliver here".
+  // A good spot or a failed lookup keeps the inputs mounted, or the keyboard drops.
+  const pending = checking && (locating || serviceable === false);
 
   return (
     <View style={styles.root}>
@@ -277,7 +307,25 @@ export default function SelectAddressScreen() {
             ) : null}
           </View>
 
-          {blocked ? (
+          {pending ? (
+            <>
+              <View style={styles.labels}>
+                {LABELS.map((l) => (
+                  <View key={l.value} style={styles.flex}>
+                    <Skeleton height={40} radius={12} />
+                  </View>
+                ))}
+              </View>
+              <View style={styles.fields}>
+                <View style={styles.flex}>
+                  <Skeleton height={62} radius={12} />
+                </View>
+                <View style={styles.flex}>
+                  <Skeleton height={62} radius={12} />
+                </View>
+              </View>
+            </>
+          ) : blocked ? (
             <View style={styles.notice}>
               <Icon name="alert-circle-outline" size={20} color={theme.colors.error} />
               <View style={styles.flex}>
@@ -351,7 +399,7 @@ export default function SelectAddressScreen() {
             label={blocked ? 'Move the pin to continue' : 'Confirm this location'}
             onPress={confirm}
             loading={save.isPending}
-            disabled={blocked || resolving || !resolved}
+            disabled={blocked || checking || !resolved}
           />
         </SafeAreaView>
       </KeyboardAvoidingView>

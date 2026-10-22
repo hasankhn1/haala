@@ -38,7 +38,7 @@ export function AddressCard({ label, line, selected, actionLabel, onPress }: Add
         <Text variant="bodyStrong" style={{ textTransform: 'capitalize' }}>
           {label}
         </Text>
-        <Text variant="bodySm" color="textSecondary" numberOfLines={1}>
+        <Text variant="bodySm" color="textSecondary" numberOfLines={2}>
           {line}
         </Text>
       </View>

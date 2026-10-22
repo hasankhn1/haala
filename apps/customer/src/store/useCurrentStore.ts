@@ -35,6 +35,18 @@ export interface CurrentStore {
   outOfArea: boolean;
   /** The address the resolution came from, for "Deliver to …" copy. */
   address: AddressView | null;
+  /**
+   * `outOfArea` with no saved address: the miss was at `DEFAULT_LOCATION`, so
+   * the answer is "add yours", not "yours is outside".
+   */
+  needsAddress: boolean;
+  /**
+   * The first address load failed, or the store lookup did: nothing can be
+   * judged, and without this the screen sat on "Finding your store…" forever.
+   */
+  loadError: boolean;
+  /** Re-runs whichever of the two failed. */
+  retry: () => void;
 }
 
 export function useCurrentStore(): CurrentStore {
@@ -56,13 +68,16 @@ export function useCurrentStore(): CurrentStore {
 
   // Wait for addresses before asking about stores, so we don't resolve against
   // the fallback coordinates and then immediately re-resolve against the real
-  // ones — that flicker would show one store's prices before another's.
-  const addressesSettled = !isAuthenticated || !addresses.isLoading;
+  // ones — that flicker would show one store's prices before another's. A
+  // failed first load waits too: resolving it at DEFAULT_LOCATION would hand a
+  // Hayatabad customer the DHA shelves. Not `addresses.error` — a failed
+  // background refetch keeps the old data, which still stands.
+  const addressesMissing = isAuthenticated && addresses.data === undefined;
 
   const stores = useQuery({
     queryKey: qk.stores(lat, lng),
     queryFn: () => storesApi.nearby(lat, lng),
-    enabled: addressesSettled,
+    enabled: !addressesMissing,
     staleTime: 5 * 60_000,
   });
 
@@ -72,13 +87,20 @@ export function useCurrentStore(): CurrentStore {
   const store: StoreView | null = stores.data?.find((s) => s.isServiceable) ?? null;
 
   const isLoading = (isAuthenticated && addresses.isLoading) || stores.isLoading;
+  const outOfArea =
+    !isLoading && !stores.error && !addressesMissing && stores.data !== undefined && store === null;
+  const addressFailed = addressesMissing && !!addresses.error;
 
   return {
     store,
     storeId: store?.id ?? null,
     isLoading,
     error: stores.error ?? addresses.error,
-    outOfArea: !isLoading && !stores.error && stores.data !== undefined && store === null,
+    outOfArea,
     address,
+    needsAddress: outOfArea && address === null,
+    loadError: addressFailed || (!!stores.error && store === null),
+    // Refetching stores while addresses are missing would resolve at the default.
+    retry: () => void (addressFailed ? addresses.refetch() : stores.refetch()),
   };
 }

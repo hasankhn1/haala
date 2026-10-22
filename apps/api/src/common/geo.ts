@@ -58,8 +58,18 @@ export const isWithinDeliveryArea = (
   lat: number,
   lng: number,
 ): boolean => {
-  if (store.polygon && store.polygon.length >= 3) {
+  if (hasDrawnBoundary(store)) {
     return isInsidePolygon(store.polygon, lat, lng);
   }
   return haversineMeters(lat, lng, store.latitude, store.longitude) <= store.deliveryRadiusMeters;
 };
+
+/**
+ * Whether a store's delivery area is a drawn polygon rather than its radius.
+ * Fewer than 3 points isn't a shape. With one, serviceable means inside a real
+ * neighbourhood, so the store's own `area` is a truthful label for the point;
+ * a 6 km circle spans several.
+ */
+export const hasDrawnBoundary = (store: {
+  polygon?: StorePolygonPoint[] | null;
+}): store is { polygon: StorePolygonPoint[] } => !!store.polygon && store.polygon.length >= 3;

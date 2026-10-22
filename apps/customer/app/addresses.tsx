@@ -63,7 +63,12 @@ export default function AddressesScreen() {
             <AddressCard
               key={a.id}
               label={a.label}
-              line={`${a.line1}, ${a.area}, ${a.city}`}
+              // Floor/unit first: two pins on the same street otherwise read
+              // identically. City is dropped when it repeats the area. Rider
+              // directions stay out — they pushed the area off the card.
+              line={[a.line2, a.line1, a.area, a.city !== a.area && a.city]
+                .filter(Boolean)
+                .join(', ')}
               selected={a.isDefault}
               actionLabel={
                 a.isDefault
